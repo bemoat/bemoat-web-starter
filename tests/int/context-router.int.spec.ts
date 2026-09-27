@@ -183,6 +183,28 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
   }
 }
 
+function reviewHandoff(overrides: Partial<HandoffRecord> = {}) {
+  return strictHandoff({
+    route: 'REVIEW',
+    next_action: { route: 'REVIEW', description: 'Obtain independent exact-head semantic review.' },
+    verified_evidence: [{ kind: 'focused-tests', value: 'Focused tests passed.', url: null }],
+    ...overrides,
+  })
+}
+
+function founderGateHandoff(overrides: Partial<HandoffRecord> = {}) {
+  return strictHandoff({
+    route: 'FOUNDER_GATE',
+    next_action: { route: 'FOUNDER_GATE', description: 'Founder reviews the independent exact-head verdict.' },
+    verified_evidence: [{
+      kind: 'review-verdict',
+      value: 'Independent exact-head review is eligible for Founder review.',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-951',
+    }],
+    ...overrides,
+  })
+}
+
 function handoffReadyDecision(
   latestHandoff: ReturnType<typeof strictHandoff>,
   options: {
@@ -353,6 +375,18 @@ describe('bemoat:context pure routing', () => {
     expect(handoffReadyDecision(strictHandoff(), { handoffs: [strictHandoff(), stop] }).route).toBe('STOP')
   })
 
+  it('keeps a current FIX and STOP pair fail-closed when FIX lacks valid review lineage', () => {
+    const invalidFix = strictHandoff({
+      verified_evidence: [{ kind: 'focused-tests', value: 'No blocking review verdict is linked.', url: null }],
+    })
+    const stop = strictHandoff({
+      route: 'STOP',
+      next_action: { route: 'STOP', description: 'Resolve the current evidence blocker.' },
+    })
+
+    expect(handoffReadyDecision(invalidFix, { handoffs: [invalidFix, stop] }).route).toBe('STOP')
+  })
+
   it('fails closed for two applicable current-head HANDOFF FIX records', () => {
     const secondFix = {
       ...strictHandoff({ objective: 'Apply the same correction from another current record.' }),
@@ -431,6 +465,125 @@ describe('bemoat:context pure routing', () => {
       handoffs: [fix, review],
       historicalResults: [handoffReviewVerdict({ createdAt: '2026-08-04T00:00:00Z' })],
     }).route).toBe('FIX')
+  })
+
+  it('routes a REVIEW handoff and its identity-bound eligible review verdict and FOUNDER_GATE handoff to FOUNDER_GATE regardless of order or timestamps', () => {
+    const review = {
+      ...reviewHandoff(),
+      id: 901,
+      createdAt: '2026-08-03T00:00:00Z',
+    }
+    const founderGate = {
+      ...founderGateHandoff(),
+      id: 902,
+      createdAt: '2026-08-01T00:00:00Z',
+    }
+    const verdict = eligibleHandoffReviewVerdict({ createdAt: '2026-08-04T00:00:00Z' })
+
+    const firstOrdering = handoffReadyDecision(founderGate, {
+      handoffs: [founderGate, review],
+      historicalResults: [verdict],
+    })
+    const secondOrdering = handoffReadyDecision(review, {
+      handoffs: [
+        { ...review, createdAt: '2026-08-01T00:00:00Z' },
+        { ...founderGate, createdAt: '2026-08-03T00:00:00Z' },
+      ],
+      historicalResults: [eligibleHandoffReviewVerdict({ createdAt: '2026-08-02T00:00:00Z' })],
+    })
+
+    expect([firstOrdering.route, secondOrdering.route]).toEqual(['FOUNDER_GATE', 'FOUNDER_GATE'])
+  })
+
+  it('keeps unrelated same-head REVIEW and FOUNDER_GATE handoffs fail-closed', () => {
+    const review = { ...reviewHandoff(), id: 901 }
+    const unrelatedFounderGate = {
+      ...founderGateHandoff({
+        verified_evidence: [{ kind: 'focused-tests', value: 'A separate objective was reviewed.', url: null }],
+      }),
+      id: 902,
+    }
+
+    expect(handoffReadyDecision(unrelatedFounderGate, {
+      handoffs: [review, unrelatedFounderGate],
+      historicalResults: [eligibleHandoffReviewVerdict()],
+    }).route).toBe('STOP')
+  })
+
+  it.each([
+    ['malformed', '## REVIEW_VERDICT\n**Verdict** ELIGIBLE FOR FOUNDER REVIEW'],
+    ['blocking', eligibleHandoffReviewVerdict().body.replace('ELIGIBLE FOR FOUNDER REVIEW', 'CORRECTION REQUIRED')],
+    ['wrong repository', eligibleHandoffReviewVerdict().body.replace('boat1994/bemoat-web-starter', 'other/repository')],
+    ['wrong Issue', eligibleHandoffReviewVerdict().body.replace('#410', '#999')],
+    ['wrong PR', eligibleHandoffReviewVerdict().body.replace('PR #411', 'PR #999')],
+    ['wrong base', eligibleHandoffReviewVerdict().body.replace('`main`', '`dev`')],
+    ['wrong head', eligibleHandoffReviewVerdict().body.replace(headSha, 'c'.repeat(40))],
+    ['superseded', `${eligibleHandoffReviewVerdict().body}\nThis verdict was superseded.`],
+  ])('fails closed when the FOUNDER_GATE lineage has a %s review verdict', (_label, body) => {
+    const review = { ...reviewHandoff(), id: 901 }
+    const founderGate = { ...founderGateHandoff(), id: 902 }
+
+    expect(handoffReadyDecision(founderGate, {
+      handoffs: [review, founderGate],
+      historicalResults: [eligibleHandoffReviewVerdict({ body })],
+    }).route).toBe('STOP')
+  })
+
+  it('fails closed when a FOUNDER_GATE references a missing, duplicate, or different review comment', () => {
+    const review = { ...reviewHandoff(), id: 901 }
+    const founderGate = { ...founderGateHandoff(), id: 902 }
+    const verdict = eligibleHandoffReviewVerdict()
+
+    expect(handoffReadyDecision(founderGate, {
+      handoffs: [review, founderGate],
+      historicalResults: [],
+    }).route).toBe('STOP')
+    expect(handoffReadyDecision(founderGate, {
+      handoffs: [review, founderGate],
+      historicalResults: [verdict, verdict],
+    }).route).toBe('STOP')
+
+    const differentCommentFounderGate = founderGateHandoff({
+      verified_evidence: [{ kind: 'review-verdict', value: 'Independent verdict.', url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-999' }],
+    })
+    expect(handoffReadyDecision(differentCommentFounderGate, {
+      handoffs: [review, differentCommentFounderGate],
+      historicalResults: [verdict],
+    }).route).toBe('STOP')
+  })
+
+  it('does not let a FOUNDER_GATE HANDOFF with wrong current identity supersede REVIEW', () => {
+    const review = { ...reviewHandoff(), id: 901 }
+    const wrongBranch = {
+      ...founderGateHandoff({ branch: 'feature/other-context' }),
+      id: 902,
+    }
+
+    expect(handoffReadyDecision(wrongBranch, {
+      handoffs: [review, wrongBranch],
+      historicalResults: [],
+    }).route).toBe('REVIEW')
+  })
+
+  it.each<[string, Partial<HandoffRecord>]>([
+    ['repository', { repository: 'other/repository' }],
+    ['Issue', { issue_number: '999' }],
+    ['PR', { pr: { number: '999', url: 'https://github.com/boat1994/bemoat-web-starter/pull/999', base: 'main', head: 'feature/410-context', head_sha: headSha } }],
+    ['approved base', { protected_base: { branch: 'dev', sha } }],
+    ['branch', { branch: 'feature/other-context' }],
+    ['exact head', { exact_head: 'c'.repeat(40), pr: { number: '411', url: 'https://github.com/boat1994/bemoat-web-starter/pull/411', base: 'main', head: 'feature/410-context', head_sha: 'c'.repeat(40) } }],
+  ])('does not apply a FOUNDER_GATE HANDOFF with a wrong %s identity', (_label, identity) => {
+    const review = { ...reviewHandoff(), id: 901 }
+    const founderGate = { ...founderGateHandoff(identity), id: 902 }
+
+    expect(handoffReadyDecision(founderGate, {
+      handoffs: [review, founderGate],
+      historicalResults: [],
+    }).route).toBe('REVIEW')
+  })
+
+  it('does not let a lone FOUNDER_GATE HANDOFF satisfy semantic review without an applicable eligible verdict', () => {
+    expect(handoffReadyDecision(founderGateHandoff(), { historicalResults: [] }).route).toBe('REVIEW')
   })
 
   it('keeps unrelated same-head REVIEW and FIX HANDOFFs fail-closed', () => {
@@ -1679,4 +1832,22 @@ function handoffReviewVerdict(overrides: Partial<{
     url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-950',
     ...overrides,
   }
+}
+
+function eligibleHandoffReviewVerdict(overrides: Partial<{
+  id: string | number
+  body: string
+  createdAt: string
+  url: string
+}> = {}) {
+  return handoffReviewVerdict({
+    body: `## REVIEW_VERDICT
+**Task / Issue:** #410
+**Repository:** \`boat1994/bemoat-web-starter\`
+**PR / base / head:** PR #411 · \`main\` · \`${headSha}\`
+**Verdict:** ELIGIBLE FOR FOUNDER REVIEW`,
+    id: 951,
+    url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-951',
+    ...overrides,
+  })
 }

@@ -102,7 +102,7 @@ export interface HandoffResolution {
   applicable: HandoffCandidate[]
   malformedCurrent: RoleEvidence[]
   invalidCurrentFix: HandoffCandidate | null
-  supersedingFix: HandoffCandidate | null
+  superseding: HandoffCandidate | null
 }
 export type HandoffCandidate = { evidence: RoleEvidence; record: HandoffRecord }
 function isExactIssueCommentUrl(
@@ -122,20 +122,19 @@ function isExactIssueCommentUrl(
   }
 }
 
-function hasCurrentBlockingReviewVerdict(
+function hasCurrentReviewVerdict(
   handoff: HandoffRecord,
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  route: 'FIX' | 'FOUNDER_GATE',
+  requiredVerdict: 'CORRECTION REQUIRED' | 'ELIGIBLE FOR FOUNDER REVIEW',
 ): boolean {
   if (
-    handoff.route !== 'FIX' ||
-    handoff.branch !== activePr.headBranch ||
+    handoff.route !== route || handoff.branch !== activePr.headBranch ||
     handoff.protected_base.branch !== activePr.baseBranch ||
     handoff.protected_base.sha.toLowerCase() !== activePr.baseSha.toLowerCase() ||
-    handoff.pr === null ||
-    handoff.pr.base !== activePr.baseBranch ||
-    handoff.pr.head !== activePr.headBranch ||
-    handoff.pr.head_sha.toLowerCase() !== activePr.headSha.toLowerCase()
+    handoff.pr === null || handoff.pr.base !== activePr.baseBranch ||
+    handoff.pr.head !== activePr.headBranch || handoff.pr.head_sha.toLowerCase() !== activePr.headSha.toLowerCase()
   ) return false
 
   const references = handoff.verified_evidence.filter(({ kind }) => kind === 'review-verdict')
@@ -144,19 +143,16 @@ function hasCurrentBlockingReviewVerdict(
   if (!reference?.url) return false
 
   const comments = evidence.durableContext.historicalResults.filter((comment) =>
-    comment.url === reference.url && isExactIssueCommentUrl(reference.url!, comment, evidence),
-  )
+    comment.url === reference.url && isExactIssueCommentUrl(reference.url!, comment, evidence))
   if (comments.length !== 1) return false
   const comment = comments[0]
   if (!comment || !/^##\s+REVIEW_VERDICT\b/i.test(comment.body)) return false
 
   try {
     const verdict = parseProductionMergeReviewVerdict(comment.body, comment.id)
-    return verdict.verdict === 'CORRECTION REQUIRED' &&
-      verdict.non_superseded === true &&
+    return verdict.verdict === requiredVerdict && verdict.non_superseded === true &&
       verdict.repository === evidence.repository.nameWithOwner.toLowerCase() &&
-      String(verdict.issue) === evidence.issue.number &&
-      String(verdict.pr) === activePr.number &&
+      String(verdict.issue) === evidence.issue.number && String(verdict.pr) === activePr.number &&
       verdict.base === activePr.baseBranch &&
       verdict.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()
   } catch {
@@ -165,11 +161,17 @@ function hasCurrentBlockingReviewVerdict(
 }
 
 export function hasBlockingHandoffReview(
-  handoff: HandoffRecord,
-  evidence: NormalizedContextEvidence,
+  handoff: HandoffRecord, evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): boolean {
-  return hasCurrentBlockingReviewVerdict(handoff, evidence, activePr)
+  return hasCurrentReviewVerdict(handoff, evidence, activePr, 'FIX', 'CORRECTION REQUIRED')
+}
+
+function hasEligibleFounderHandoffReview(
+  handoff: HandoffRecord, evidence: NormalizedContextEvidence,
+  activePr: ActivePullRequestEvidence,
+): boolean {
+  return hasCurrentReviewVerdict(handoff, evidence, activePr, 'FOUNDER_GATE', 'ELIGIBLE FOR FOUNDER REVIEW')
 }
 
 export function currentHandoffConflict(
@@ -196,7 +198,7 @@ export function currentHandoffConflict(
       },
     }
   }
-  if (resolution.applicable.length > 1 && !resolution.supersedingFix) {
+  if (resolution.applicable.length > 1 && !resolution.superseding) {
     return {
       reason: `EVIDENCE_CONFLICT: multiple applicable current-head HANDOFF records at ${head}.`,
       nextAction: {
@@ -303,16 +305,14 @@ function handoffIdentityStatus(
   return 'unknown'
 }
 
-function resolveSupersedingFix(
-  applicable: HandoffCandidate[],
-  evidence: NormalizedContextEvidence,
+function resolveSupersedingHandoff(
+  applicable: HandoffCandidate[], evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): HandoffCandidate | null {
-  if (applicable.length !== 2) return null
-  const review = applicable.find(({ record }) => record.route === 'REVIEW')
-  const fix = applicable.find(({ record }) => record.route === 'FIX')
-  if (!review || !fix || !hasBlockingHandoffReview(fix.record, evidence, activePr)) return null
-  return fix
+  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW')) return null
+  return applicable.find(({ record }) => record.route === 'FIX'
+    ? hasBlockingHandoffReview(record, evidence, activePr)
+    : record.route === 'FOUNDER_GATE' && hasEligibleFounderHandoffReview(record, evidence, activePr)) ?? null
 }
 
 export function resolveApplicableHandoffs(
@@ -356,7 +356,7 @@ export function resolveApplicableHandoffs(
     applicable,
     malformedCurrent,
     invalidCurrentFix,
-    supersedingFix: resolveSupersedingFix(applicable, evidence, activePr),
+    superseding: resolveSupersedingHandoff(applicable, evidence, activePr),
   }
 }
 
@@ -372,7 +372,7 @@ export function resolveCurrentHandoff(
   const resolution = resolveApplicableHandoffs(evidence, activePr)
   const conflict = currentHandoffConflict(resolution, activePr.headSha)
   return {
-    record: conflict ? null : resolution.supersedingFix?.record ?? resolution.applicable[0]?.record ?? null,
+    record: conflict ? null : resolution.superseding?.record ?? resolution.applicable[0]?.record ?? null,
     conflict,
   }
 }
@@ -383,9 +383,9 @@ export function parseApplicableHandoff(
 ): HandoffRecord | null {
   const resolution = resolveApplicableHandoffs(evidence, activePr)
   return resolution.malformedCurrent.length === 0 && (
-    resolution.applicable.length === 1 || resolution.supersedingFix !== null
+    resolution.applicable.length === 1 || resolution.superseding !== null
   )
-    ? resolution.supersedingFix?.record ?? resolution.applicable[0]?.record ?? null
+    ? resolution.superseding?.record ?? resolution.applicable[0]?.record ?? null
     : null
 }
 
