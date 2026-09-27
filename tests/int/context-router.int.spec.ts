@@ -7,6 +7,7 @@ import {
   parseProductionMergeReviewVerdict,
   resolveMergeReviewVerdictBinding,
 } from '../../scripts/context/merge-review-verdict.ts'
+import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 
 const sha = 'a'.repeat(40)
 const headSha = 'b'.repeat(40)
@@ -141,6 +142,52 @@ function nativeBlockingReview(overrides: Record<string, unknown> = {}) {
   })
 }
 
+function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
+  const record: HandoffRecord = {
+    schema_version: 2,
+    record_type: 'HANDOFF',
+    objective_mode: 'implementation',
+    repository: 'boat1994/bemoat-web-starter',
+    issue_number: '410',
+    objective: 'Apply the bounded current-head semantic review correction.',
+    permitted_scope: ['Context routing evidence.'],
+    prohibited_scope: ['Do not merge or broaden the objective.'],
+    executing_agent: 'Independent reviewer',
+    provider: 'OpenAI Codex',
+    branch: 'feature/410-context',
+    exact_head: headSha,
+    protected_base: { branch: 'main', sha },
+    pr: {
+      number: '411',
+      url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+      base: 'main',
+      head: 'feature/410-context',
+      head_sha: headSha,
+    },
+    verified_evidence: [{ kind: 'review', value: 'A blocking finding is bound to the exact current head.', url: null }],
+    route: 'FIX',
+    next_action: { route: 'FIX', description: 'Apply the bounded correction.' },
+    stop_conditions: ['Stop on identity or exact-head drift.'],
+    local_durability: { required: true, durable: true, reason: null },
+    ...overrides,
+  }
+  return {
+    id: 900,
+    body: renderHandoffComment(record),
+    createdAt: '2026-08-02T00:00:00Z',
+    url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-900',
+  }
+}
+
+function handoffReadyDecision(latestHandoff: ReturnType<typeof strictHandoff>) {
+  const exactHeadReview = { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 }
+  return routeContext(baseEvidence({
+    activePr: prEvidence(),
+    currentHeadVerification: verification({ reviews: exactHeadReview }),
+    durableContext: { latestHandoff, historicalResults: [] },
+  }))
+}
+
 describe('bemoat:context pure routing', () => {
   const validVerdict = {
     id: 100,
@@ -192,6 +239,90 @@ describe('bemoat:context pure routing', () => {
     createdAt: '2026-08-01T00:00:00Z',
     url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-107',
   }
+
+  it('routes a valid current-head blocking HANDOFF FIX to FIX', () => {
+    const decision = routeContext(baseEvidence({
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        reviews: { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 },
+      }),
+      durableContext: { latestHandoff: strictHandoff(), historicalResults: [] },
+    }))
+
+    expect(decision.route).toBe('FIX')
+  })
+
+  it('keeps an unresolved current-head HANDOFF STOP fail-closed', () => {
+    const handoff = strictHandoff({
+      route: 'STOP',
+      next_action: { route: 'STOP', description: 'Resolve the current evidence blocker.' },
+    })
+    const decision = routeContext(baseEvidence({
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        reviews: { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 },
+      }),
+      durableContext: { latestHandoff: handoff, historicalResults: [] },
+    }))
+
+    expect(decision.route).toBe('STOP')
+  })
+
+  it('re-evaluates a historical stale-head HANDOFF STOP against current evidence', () => {
+    const historicalStop = strictHandoff({
+      exact_head: 'c'.repeat(40),
+      pr: {
+        number: '411',
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+        base: 'main',
+        head: 'feature/410-context',
+        head_sha: 'c'.repeat(40),
+      },
+      route: 'STOP',
+      next_action: { route: 'STOP', description: 'Resolve the historical blocker.' },
+    })
+    const decision = routeContext(baseEvidence({
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        reviews: { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 },
+      }),
+      durableContext: { latestHandoff: historicalStop, historicalResults: [validVerdict] },
+    }))
+
+    expect(decision.route).toBe('FOUNDER_GATE')
+  })
+
+  it.each<[string, Partial<HandoffRecord>]>([
+    ['wrong repository', { repository: 'other/repository' }],
+    ['wrong Issue', { issue_number: '999' }],
+    ['wrong PR', { pr: { number: '999', url: 'https://github.com/boat1994/bemoat-web-starter/pull/999', base: 'main', head: 'feature/410-context', head_sha: headSha } }],
+    ['wrong base', { protected_base: { branch: 'dev', sha } }],
+    ['wrong head', { exact_head: 'c'.repeat(40), pr: { number: '411', url: 'https://github.com/boat1994/bemoat-web-starter/pull/411', base: 'main', head: 'feature/410-context', head_sha: 'c'.repeat(40) } }],
+  ])('does not let a %s HANDOFF control the current route', (_story, overrides) => {
+    expect(handoffReadyDecision(strictHandoff(overrides)).route).toBe('REVIEW')
+  })
+
+  it('ignores a malformed current-head HANDOFF instead of granting FIX', () => {
+    const handoff = strictHandoff()
+    const malformed = {
+      ...handoff,
+      body: handoff.body.replace('"route": "FIX"', '"route": "BROKEN"'),
+    }
+
+    expect(handoffReadyDecision(malformed).route).toBe('REVIEW')
+  })
+
+  it('fails closed when a current-head HANDOFF FIX competes with a valid eligible review', () => {
+    const decision = routeContext(baseEvidence({
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        reviews: { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 },
+      }),
+      durableContext: { latestHandoff: strictHandoff(), historicalResults: [validVerdict] },
+    }))
+
+    expect(decision.route).toBe('STOP')
+  })
 
   function actual421ReviewVerdictBody(reviewedHead: string): string {
     return `## REVIEW_VERDICT

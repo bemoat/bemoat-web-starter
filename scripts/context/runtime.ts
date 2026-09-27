@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 
-import type { RepositoryEvidence } from './model.ts'
+import type { ActivePullRequestEvidence, NormalizedContextEvidence, RepositoryEvidence } from './model.ts'
+import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 
 export interface ContextCommandResult {
   status: number
@@ -94,4 +95,41 @@ export function normalizeOriginRepository(origin: string | null): string | null 
 export function repositoryEvidence(repo: string): RepositoryEvidence {
   const [owner, name] = repo.split('/')
   return { owner, name, nameWithOwner: repo, url: `https://github.com/${repo}` }
+}
+
+export function parseApplicableHandoff(
+  evidence: NormalizedContextEvidence,
+  activePr: ActivePullRequestEvidence,
+): HandoffRecord | null {
+  const body = evidence.durableContext.latestHandoff?.body
+  const match = body?.match(/^## HANDOFF\n\n```json\n([\s\S]+)\n```\n$/)
+  if (!match) return null
+
+  try {
+    const handoff = parseHandoffBody(match[1] ?? '')
+    if (renderHandoffComment(handoff) !== body || handoff.pr === null) return null
+    if (
+      handoff.repository !== evidence.repository.nameWithOwner ||
+      handoff.issue_number !== evidence.issue.number ||
+      handoff.branch !== activePr.headBranch ||
+      handoff.exact_head.toLowerCase() !== activePr.headSha.toLowerCase() ||
+      handoff.protected_base.branch !== activePr.baseBranch ||
+      handoff.protected_base.sha.toLowerCase() !== activePr.baseSha.toLowerCase() ||
+      handoff.pr.number !== activePr.number ||
+      handoff.pr.url !== activePr.url ||
+      handoff.pr.base !== activePr.baseBranch ||
+      handoff.pr.head !== activePr.headBranch ||
+      handoff.pr.head_sha.toLowerCase() !== activePr.headSha.toLowerCase() ||
+      !handoff.local_durability.durable
+    ) return null
+    return handoff
+  } catch {
+    return null
+  }
+}
+
+export function hasBlockingHandoffReview(handoff: HandoffRecord): boolean {
+  return handoff.route === 'FIX' && handoff.verified_evidence.some(({ kind, value }) =>
+    kind.trim().toLowerCase() === 'review' && value.trim() !== '',
+  )
 }

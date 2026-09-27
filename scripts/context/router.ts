@@ -3,7 +3,7 @@ import type {
   ContextDecision,
   NormalizedContextEvidence,
 } from './model.ts'
-import { isFullSha, isPositiveInteger, isRepositoryObjectUrl } from './runtime.ts'
+import { hasBlockingHandoffReview, isFullSha, isPositiveInteger, isRepositoryObjectUrl, parseApplicableHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
@@ -207,6 +207,17 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     })
   }
 
+  const applicableHandoff = parseApplicableHandoff(evidence, activePr)
+  if (applicableHandoff?.route === 'STOP') {
+    return decision(evidence, 'STOP', [
+      `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
+    ], {
+      type: 'STOP',
+      command: null,
+      description: 'Resolve the exact-head HANDOFF STOP before continuing.',
+    })
+  }
+
   if (verification.checks.failed) {
     return decision(evidence, 'FIX', [
       `Exact-head required checks failed at ${activePr.headSha}.`,
@@ -226,6 +237,7 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
   let semanticReviewSatisfied = false
   let blockingSemanticReview = false
   if (semanticReviewRequired) {
+    const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff)
     const verdicts = evidence.durableContext.historicalResults.filter((r) =>
       /^##\s+REVIEW_VERDICT\b/i.test(r.body),
     )
@@ -332,8 +344,27 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
       conflictingLiveHeadEvidence = true
     }
 
-    semanticReviewSatisfied = !malformedEvidence && !conflictingLiveHeadEvidence && validVerdicts.length >= 1
-    blockingSemanticReview = semanticReviewSatisfied && uniqueValidVerdicts[0] === 'CORRECTION REQUIRED'
+    const handoffConflictsWithReview = handoffBlockingReview && (
+      malformedEvidence ||
+      conflictingLiveHeadEvidence ||
+      validVerdicts.some(({ acceptedVerdict }) => acceptedVerdict !== 'CORRECTION REQUIRED')
+    )
+    if (handoffConflictsWithReview) {
+      return decision(evidence, 'STOP', [
+        `EVIDENCE_CONFLICT: current-head HANDOFF FIX conflicts with competing or malformed semantic review evidence at ${activePr.headSha}.`,
+      ], {
+        type: 'STOP',
+        command: null,
+        description: 'Resolve the conflicting current-head review evidence before continuing.',
+      })
+    }
+
+    semanticReviewSatisfied = handoffBlockingReview || (
+      !malformedEvidence && !conflictingLiveHeadEvidence && validVerdicts.length >= 1
+    )
+    blockingSemanticReview = semanticReviewSatisfied && (
+      handoffBlockingReview || uniqueValidVerdicts[0] === 'CORRECTION REQUIRED'
+    )
   }
 
   if (blockingSemanticReview) {
