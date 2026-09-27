@@ -164,7 +164,11 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
       head: 'feature/410-context',
       head_sha: headSha,
     },
-    verified_evidence: [{ kind: 'review', value: 'A blocking finding is bound to the exact current head.', url: null }],
+    verified_evidence: [{
+      kind: 'review',
+      value: 'Independent exact-head semantic review found one Important viewport defect: the bounded implementation requires correction.',
+      url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+    }],
     route: 'FIX',
     next_action: { route: 'FIX', description: 'Apply the bounded correction.' },
     stop_conditions: ['Stop on identity or exact-head drift.'],
@@ -179,12 +183,27 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
   }
 }
 
-function handoffReadyDecision(latestHandoff: ReturnType<typeof strictHandoff>) {
+function handoffReadyDecision(
+  latestHandoff: ReturnType<typeof strictHandoff>,
+  options: {
+    handoffs?: Array<ReturnType<typeof strictHandoff>>
+    historicalResults?: Array<{
+      id: string | number
+      body: string
+      createdAt: string
+      url: string
+    }>
+  } = {},
+) {
   const exactHeadReview = { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 }
   return routeContext(baseEvidence({
     activePr: prEvidence(),
     currentHeadVerification: verification({ reviews: exactHeadReview }),
-    durableContext: { latestHandoff, historicalResults: [] },
+    durableContext: {
+      latestHandoff,
+      handoffs: options.handoffs ?? [latestHandoff],
+      historicalResults: options.historicalResults ?? [],
+    },
   }))
 }
 
@@ -302,14 +321,81 @@ describe('bemoat:context pure routing', () => {
     expect(handoffReadyDecision(strictHandoff(overrides)).route).toBe('REVIEW')
   })
 
-  it('ignores a malformed current-head HANDOFF instead of granting FIX', () => {
+  it('fails closed for a malformed current-head HANDOFF even with valid review evidence', () => {
     const handoff = strictHandoff()
     const malformed = {
       ...handoff,
       body: handoff.body.replace('"route": "FIX"', '"route": "BROKEN"'),
     }
 
-    expect(handoffReadyDecision(malformed).route).toBe('REVIEW')
+    expect(handoffReadyDecision(malformed, { historicalResults: [validVerdict] }).route).toBe('STOP')
+  })
+
+  it('ignores a malformed stale or wrong-identity HANDOFF during current routing', () => {
+    const handoff = strictHandoff({ repository: 'other/repository' })
+    const malformed = {
+      ...handoff,
+      body: handoff.body.replace('"route": "FIX"', '"route": "BROKEN"'),
+    }
+
+    expect(handoffReadyDecision(malformed, { historicalResults: [validVerdict] }).route).toBe('FOUNDER_GATE')
+  })
+
+  it('fails closed for competing current-head HANDOFF FIX and STOP records', () => {
+    const stop = {
+      ...strictHandoff({
+        route: 'STOP',
+        next_action: { route: 'STOP', description: 'Resolve the current evidence blocker.' },
+      }),
+      id: 901,
+    }
+
+    expect(handoffReadyDecision(strictHandoff(), { handoffs: [strictHandoff(), stop] }).route).toBe('STOP')
+  })
+
+  it('fails closed for two applicable current-head HANDOFF FIX records', () => {
+    const secondFix = {
+      ...strictHandoff({ objective: 'Apply the same correction from another current record.' }),
+      id: 901,
+    }
+
+    expect(handoffReadyDecision(strictHandoff(), { handoffs: [strictHandoff(), secondFix] }).route).toBe('STOP')
+  })
+
+  it('evaluates only the identity-bound current HANDOFF when stale and current records coexist', () => {
+    const stale = strictHandoff({
+      exact_head: 'c'.repeat(40),
+      pr: {
+        number: '411',
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+        base: 'main',
+        head: 'feature/410-context',
+        head_sha: 'c'.repeat(40),
+      },
+    })
+    const current = strictHandoff()
+
+    expect(handoffReadyDecision(stale, { handoffs: [stale, current] }).route).toBe('FIX')
+  })
+
+  it('does not authorize FIX from arbitrary review prose', () => {
+    const arbitrary = strictHandoff({
+      verified_evidence: [{ kind: 'review', value: 'not a review', url: null }],
+    })
+
+    expect(handoffReadyDecision(arbitrary).route).toBe('REVIEW')
+  })
+
+  it('retains the production-shaped bound blocking review evidence path', () => {
+    const productionShaped = strictHandoff({
+      verified_evidence: [{
+        kind: 'review',
+        value: 'Independent exact-head semantic review found one Important viewport defect: the shared implementation still requires a bounded correction.',
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+      }],
+    })
+
+    expect(handoffReadyDecision(productionShaped).route).toBe('FIX')
   })
 
   it('fails closed when a current-head HANDOFF FIX competes with a valid eligible review', () => {

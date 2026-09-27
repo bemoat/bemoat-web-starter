@@ -148,6 +148,7 @@ Implementation Plan: docs/superpowers/plans/example/implementation-plan.md
 
     expect(parseRoleEvidence(comments)).toEqual({
       latestHandoff: comments[1],
+      handoffs: [comments[1]],
       historicalResults: [comments[0]],
       invalid: [comments[2]],
     })

@@ -3,7 +3,7 @@ import type {
   ContextDecision,
   NormalizedContextEvidence,
 } from './model.ts'
-import { hasBlockingHandoffReview, isFullSha, isPositiveInteger, isRepositoryObjectUrl, parseApplicableHandoff } from './runtime.ts'
+import { hasBlockingHandoffReview, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
@@ -207,7 +207,11 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     })
   }
 
-  const applicableHandoff = parseApplicableHandoff(evidence, activePr)
+  const handoffResolution = resolveCurrentHandoff(evidence, activePr)
+  if (handoffResolution.conflict) {
+    return decision(evidence, 'STOP', [handoffResolution.conflict.reason], handoffResolution.conflict.nextAction)
+  }
+  const applicableHandoff = handoffResolution.record
   if (applicableHandoff?.route === 'STOP') {
     return decision(evidence, 'STOP', [
       `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
@@ -237,7 +241,7 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
   let semanticReviewSatisfied = false
   let blockingSemanticReview = false
   if (semanticReviewRequired) {
-    const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff)
+    const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, activePr)
     const verdicts = evidence.durableContext.historicalResults.filter((r) =>
       /^##\s+REVIEW_VERDICT\b/i.test(r.body),
     )

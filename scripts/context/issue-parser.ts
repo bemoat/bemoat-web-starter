@@ -13,6 +13,7 @@ interface ParsedIssueBody {
 
 interface RoleEvidenceResult {
   latestHandoff: RoleEvidence | null
+  handoffs: RoleEvidence[]
   historicalResults: RoleEvidence[]
   invalid: RoleEvidence[]
 }
@@ -105,6 +106,7 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
 
   return {
     latestHandoff: handoffs[0] ?? null,
+    handoffs,
     historicalResults: results,
     invalid,
   }

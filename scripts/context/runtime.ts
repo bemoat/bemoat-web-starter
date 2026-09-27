@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 
-import type { ActivePullRequestEvidence, NormalizedContextEvidence, RepositoryEvidence } from './model.ts'
+import type { ActivePullRequestEvidence, ContextDecision, NormalizedContextEvidence, RepositoryEvidence, RoleEvidence } from './model.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 
 export interface ContextCommandResult {
@@ -97,39 +97,197 @@ export function repositoryEvidence(repo: string): RepositoryEvidence {
   return { owner, name, nameWithOwner: repo, url: `https://github.com/${repo}` }
 }
 
-export function parseApplicableHandoff(
-  evidence: NormalizedContextEvidence,
-  activePr: ActivePullRequestEvidence,
-): HandoffRecord | null {
-  const body = evidence.durableContext.latestHandoff?.body
-  const match = body?.match(/^## HANDOFF\n\n```json\n([\s\S]+)\n```\n$/)
-  if (!match) return null
+export interface HandoffResolution {
+  applicable: Array<{ evidence: RoleEvidence; record: HandoffRecord }>
+  malformedCurrent: RoleEvidence[]
+}
 
+export function currentHandoffConflict(
+  resolution: HandoffResolution,
+  head: string,
+): { reason: string; nextAction: ContextDecision['nextAction'] } | null {
+  if (resolution.malformedCurrent.length > 0) {
+    return {
+      reason: `EVIDENCE_CONFLICT: malformed current-head HANDOFF evidence at ${head}.`,
+      nextAction: {
+        type: 'STOP',
+        command: null,
+        description: 'Resolve the malformed current-head HANDOFF evidence before continuing.',
+      },
+    }
+  }
+  if (resolution.applicable.length > 1) {
+    return {
+      reason: `EVIDENCE_CONFLICT: multiple applicable current-head HANDOFF records at ${head}.`,
+      nextAction: {
+        type: 'STOP',
+        command: null,
+        description: 'Resolve competing current-head HANDOFF records before continuing.',
+      },
+    }
+  }
+  return null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function extractHandoffPayload(body: string): unknown | null {
+  const match = body.match(/```json\s*([\s\S]*?)```/i)
+  if (!match) return null
   try {
-    const handoff = parseHandoffBody(match[1] ?? '')
-    if (renderHandoffComment(handoff) !== body || handoff.pr === null) return null
-    if (
-      handoff.repository !== evidence.repository.nameWithOwner ||
-      handoff.issue_number !== evidence.issue.number ||
-      handoff.branch !== activePr.headBranch ||
-      handoff.exact_head.toLowerCase() !== activePr.headSha.toLowerCase() ||
-      handoff.protected_base.branch !== activePr.baseBranch ||
-      handoff.protected_base.sha.toLowerCase() !== activePr.baseSha.toLowerCase() ||
-      handoff.pr.number !== activePr.number ||
-      handoff.pr.url !== activePr.url ||
-      handoff.pr.base !== activePr.baseBranch ||
-      handoff.pr.head !== activePr.headBranch ||
-      handoff.pr.head_sha.toLowerCase() !== activePr.headSha.toLowerCase() ||
-      !handoff.local_durability.durable
-    ) return null
-    return handoff
+    return JSON.parse(match[1] ?? '')
   } catch {
     return null
   }
 }
 
-export function hasBlockingHandoffReview(handoff: HandoffRecord): boolean {
-  return handoff.route === 'FIX' && handoff.verified_evidence.some(({ kind, value }) =>
-    kind.trim().toLowerCase() === 'review' && value.trim() !== '',
+function compareIdentityValue(
+  payload: Record<string, unknown>,
+  key: string,
+  expected: string,
+  normalizeSha = false,
+): { recognized: boolean; complete: boolean; mismatch: boolean } {
+  if (!(key in payload)) return { recognized: false, complete: false, mismatch: false }
+  const value = payload[key]
+  if (typeof value !== 'string' || !value.trim()) return { recognized: true, complete: false, mismatch: true }
+  const left = normalizeSha ? value.toLowerCase() : value
+  const right = normalizeSha ? expected.toLowerCase() : expected
+  return { recognized: true, complete: true, mismatch: left !== right }
+}
+
+function handoffIdentityStatus(
+  payload: unknown,
+  evidence: NormalizedContextEvidence,
+  activePr: ActivePullRequestEvidence,
+): 'current' | 'stale' | 'unknown' {
+  if (!isRecord(payload)) return 'unknown'
+
+  let recognized = false
+  let complete = true
+  let mismatch = false
+  const compare = (result: { recognized: boolean; complete: boolean; mismatch: boolean }) => {
+    recognized ||= result.recognized
+    complete &&= result.complete
+    mismatch ||= result.mismatch
+  }
+
+  compare(compareIdentityValue(payload, 'repository', evidence.repository.nameWithOwner))
+  compare(compareIdentityValue(payload, 'issue_number', evidence.issue.number))
+  compare(compareIdentityValue(payload, 'branch', activePr.headBranch))
+  const head = compareIdentityValue(payload, 'exact_head', activePr.headSha, true)
+  if (head.recognized && head.complete && !isFullSha(payload.exact_head)) {
+    head.complete = false
+    head.mismatch = true
+  }
+  compare(head)
+
+  const protectedBase = payload.protected_base
+  if (!isRecord(protectedBase)) {
+    complete = false
+  } else {
+    const baseBranch = compareIdentityValue(protectedBase, 'branch', activePr.baseBranch)
+    const baseSha = compareIdentityValue(protectedBase, 'sha', activePr.baseSha, true)
+    if (baseSha.recognized && baseSha.complete && !isFullSha(protectedBase.sha)) {
+      baseSha.complete = false
+      baseSha.mismatch = true
+    }
+    compare(baseBranch)
+    compare(baseSha)
+  }
+
+  const pr = payload.pr
+  if (pr === null) {
+    recognized = true
+    complete = false
+  } else if (!isRecord(pr)) {
+    recognized = true
+    complete = false
+    mismatch = true
+  } else {
+    compare(compareIdentityValue(pr, 'number', activePr.number))
+    compare(compareIdentityValue(pr, 'url', activePr.url))
+    compare(compareIdentityValue(pr, 'base', activePr.baseBranch))
+    compare(compareIdentityValue(pr, 'head', activePr.headBranch))
+    const prHead = compareIdentityValue(pr, 'head_sha', activePr.headSha, true)
+    if (prHead.recognized && prHead.complete && !isFullSha(pr.head_sha)) {
+      prHead.complete = false
+      prHead.mismatch = true
+    }
+    compare(prHead)
+  }
+
+  if (mismatch) return 'stale'
+  if (recognized && complete) return 'current'
+  return 'unknown'
+}
+
+export function resolveApplicableHandoffs(
+  evidence: NormalizedContextEvidence,
+  activePr: ActivePullRequestEvidence,
+): HandoffResolution {
+  const candidates = evidence.durableContext.handoffs ??
+    (evidence.durableContext.latestHandoff ? [evidence.durableContext.latestHandoff] : [])
+  const applicable: HandoffResolution['applicable'] = []
+  const malformedCurrent: RoleEvidence[] = []
+
+  for (const candidate of candidates) {
+    const payload = extractHandoffPayload(candidate.body)
+    const status = handoffIdentityStatus(payload, evidence, activePr)
+    if (status !== 'current') continue
+
+    let handoff: HandoffRecord | null = null
+    try {
+      handoff = parseHandoffBody(isRecord(payload) ? JSON.stringify(payload) : '')
+    } catch {
+      handoff = null
+    }
+
+    if (
+      !handoff ||
+      handoff.pr === null ||
+      !handoff.local_durability.durable ||
+      renderHandoffComment(handoff) !== candidate.body
+    ) {
+      malformedCurrent.push(candidate)
+      continue
+    }
+
+    applicable.push({ evidence: candidate, record: handoff })
+  }
+
+  return { applicable, malformedCurrent }
+}
+
+export interface CurrentHandoffResolution {
+  record: HandoffRecord | null
+  conflict: ReturnType<typeof currentHandoffConflict>
+}
+
+export function resolveCurrentHandoff(
+  evidence: NormalizedContextEvidence,
+  activePr: ActivePullRequestEvidence,
+): CurrentHandoffResolution {
+  const resolution = resolveApplicableHandoffs(evidence, activePr)
+  const conflict = currentHandoffConflict(resolution, activePr.headSha)
+  return { record: conflict ? null : resolution.applicable[0]?.record ?? null, conflict }
+}
+
+export function parseApplicableHandoff(
+  evidence: NormalizedContextEvidence,
+  activePr: ActivePullRequestEvidence,
+): HandoffRecord | null {
+  const resolution = resolveApplicableHandoffs(evidence, activePr)
+  return resolution.applicable.length === 1 && resolution.malformedCurrent.length === 0
+    ? resolution.applicable[0]?.record ?? null
+    : null
+}
+
+export function hasBlockingHandoffReview(handoff: HandoffRecord, activePr: ActivePullRequestEvidence): boolean {
+  return handoff.route === 'FIX' && handoff.verified_evidence.some(({ kind, value, url }) =>
+    kind.trim().toLowerCase() === 'review' &&
+    value.trim() !== '' &&
+    url === activePr.url,
   )
 }
