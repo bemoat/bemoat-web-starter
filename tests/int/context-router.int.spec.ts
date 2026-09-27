@@ -165,9 +165,9 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
       head_sha: headSha,
     },
     verified_evidence: [{
-      kind: 'review',
+      kind: 'review-verdict',
       value: 'Independent exact-head semantic review found one Important viewport defect: the bounded implementation requires correction.',
-      url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-950',
     }],
     route: 'FIX',
     next_action: { route: 'FIX', description: 'Apply the bounded correction.' },
@@ -202,7 +202,7 @@ function handoffReadyDecision(
     durableContext: {
       latestHandoff,
       handoffs: options.handoffs ?? [latestHandoff],
-      historicalResults: options.historicalResults ?? [],
+      historicalResults: options.historicalResults ?? [handoffReviewVerdict()],
     },
   }))
 }
@@ -265,7 +265,7 @@ describe('bemoat:context pure routing', () => {
       currentHeadVerification: verification({
         reviews: { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 },
       }),
-      durableContext: { latestHandoff: strictHandoff(), historicalResults: [] },
+      durableContext: { latestHandoff: strictHandoff(), historicalResults: [handoffReviewVerdict()] },
     }))
 
     expect(decision.route).toBe('FIX')
@@ -383,19 +383,104 @@ describe('bemoat:context pure routing', () => {
       verified_evidence: [{ kind: 'review', value: 'not a review', url: null }],
     })
 
-    expect(handoffReadyDecision(arbitrary).route).toBe('REVIEW')
+    expect(handoffReadyDecision(arbitrary).route).toBe('STOP')
   })
 
-  it('retains the production-shaped bound blocking review evidence path', () => {
+  it('retains the production-shaped bound blocking review-verdict evidence path', () => {
     const productionShaped = strictHandoff({
       verified_evidence: [{
-        kind: 'review',
+        kind: 'review-verdict',
         value: 'Independent exact-head semantic review found one Important viewport defect: the shared implementation still requires a bounded correction.',
-        url: 'https://github.com/boat1994/bemoat-web-starter/pull/411',
+        url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-950',
       }],
     })
 
     expect(handoffReadyDecision(productionShaped).route).toBe('FIX')
+  })
+
+  it('routes a REVIEW handoff followed by its exact-head blocking review verdict and derived FIX handoff to FIX', () => {
+    const review = {
+      ...strictHandoff({
+        verified_evidence: [{ kind: 'focused-tests', value: 'Focused tests passed.', url: null }],
+        route: 'REVIEW',
+        next_action: { route: 'REVIEW', description: 'Obtain the independent semantic review.' },
+      }),
+      id: 901,
+    }
+    const fix = { ...strictHandoff(), id: 902 }
+
+    expect(handoffReadyDecision(review, {
+      handoffs: [review, fix],
+      historicalResults: [handoffReviewVerdict()],
+    }).route).toBe('FIX')
+  })
+
+  it('does not use HANDOFF timestamp or array order to decide a valid REVIEW-to-FIX lineage', () => {
+    const review = {
+      ...strictHandoff({
+        verified_evidence: [{ kind: 'focused-tests', value: 'Focused tests passed.', url: null }],
+        route: 'REVIEW',
+        next_action: { route: 'REVIEW', description: 'Obtain the independent semantic review.' },
+      }),
+      id: 901,
+      createdAt: '2026-08-03T00:00:00Z',
+    }
+    const fix = { ...strictHandoff(), id: 902, createdAt: '2026-08-01T00:00:00Z' }
+
+    expect(handoffReadyDecision(fix, {
+      handoffs: [fix, review],
+      historicalResults: [handoffReviewVerdict({ createdAt: '2026-08-04T00:00:00Z' })],
+    }).route).toBe('FIX')
+  })
+
+  it('keeps unrelated same-head REVIEW and FIX HANDOFFs fail-closed', () => {
+    const review = {
+      ...strictHandoff({
+        verified_evidence: [{ kind: 'focused-tests', value: 'Focused tests passed.', url: null }],
+        route: 'REVIEW',
+        next_action: { route: 'REVIEW', description: 'Obtain the independent semantic review.' },
+      }),
+      id: 901,
+    }
+    const unrelatedFix = {
+      ...strictHandoff({
+        verified_evidence: [{ kind: 'review', value: 'not a review', url: 'https://github.com/boat1994/bemoat-web-starter/pull/411' }],
+      }),
+      id: 902,
+    }
+
+    expect(handoffReadyDecision(review, {
+      handoffs: [review, unrelatedFix],
+      historicalResults: [],
+    }).route).toBe('STOP')
+  })
+
+  it('fails closed when review-verdict evidence points to a non-review Issue comment', () => {
+    const fix = strictHandoff({
+      verified_evidence: [{
+        kind: 'review-verdict',
+        value: 'Descriptive only.',
+        url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-951',
+      }],
+    })
+
+    expect(handoffReadyDecision(fix, {
+      historicalResults: [{
+        id: 951,
+        body: '## RESULT\nThe comment is not a semantic review verdict.',
+        createdAt: '2026-08-02T00:00:00Z',
+        url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-951',
+      }],
+    }).route).toBe('STOP')
+  })
+
+  it.each([
+    ['wrong head', handoffReviewVerdict({ body: handoffReviewVerdict().body.replace(headSha, 'c'.repeat(40)) })],
+    ['wrong Issue', handoffReviewVerdict({ body: handoffReviewVerdict().body.replace('#410', '#999') })],
+    ['wrong PR', handoffReviewVerdict({ body: handoffReviewVerdict().body.replace('PR #411', 'PR #999') })],
+    ['wrong repository', handoffReviewVerdict({ body: handoffReviewVerdict().body.replace('boat1994/bemoat-web-starter', 'other/repository') })],
+  ])('does not apply a %s review verdict to the current HANDOFF FIX', (_story, verdict) => {
+    expect(handoffReadyDecision(strictHandoff(), { historicalResults: [verdict] }).route).toBe('STOP')
   })
 
   it('fails closed when a current-head HANDOFF FIX competes with a valid eligible review', () => {
@@ -1577,3 +1662,21 @@ ${issueFields}
     }).valid).toBe(false)
   })
 })
+function handoffReviewVerdict(overrides: Partial<{
+  id: string | number
+  body: string
+  createdAt: string
+  url: string
+}> = {}) {
+  return {
+    id: 950,
+    body: `## REVIEW_VERDICT
+**Task / Issue:** #410
+**Repository:** \`boat1994/bemoat-web-starter\`
+**PR / base / head:** PR #411 · \`main\` · \`${headSha}\`
+**Verdict:** CORRECTION REQUIRED`,
+    createdAt: '2026-08-02T00:00:00Z',
+    url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-950',
+    ...overrides,
+  }
+}

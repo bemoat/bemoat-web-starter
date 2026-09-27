@@ -3,7 +3,7 @@ import type {
   ContextDecision,
   NormalizedContextEvidence,
 } from './model.ts'
-import { hasBlockingHandoffReview, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
+import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
@@ -212,6 +212,7 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     return decision(evidence, 'STOP', [handoffResolution.conflict.reason], handoffResolution.conflict.nextAction)
   }
   const applicableHandoff = handoffResolution.record
+  const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, evidence, activePr)
   if (applicableHandoff?.route === 'STOP') {
     return decision(evidence, 'STOP', [
       `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
@@ -221,7 +222,6 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
       description: 'Resolve the exact-head HANDOFF STOP before continuing.',
     })
   }
-
   if (verification.checks.failed) {
     return decision(evidence, 'FIX', [
       `Exact-head required checks failed at ${activePr.headSha}.`,
@@ -241,13 +241,12 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
   let semanticReviewSatisfied = false
   let blockingSemanticReview = false
   if (semanticReviewRequired) {
-    const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, activePr)
     const verdicts = evidence.durableContext.historicalResults.filter((r) =>
       /^##\s+REVIEW_VERDICT\b/i.test(r.body),
     )
     const currentHeadVerdicts: Array<{ id: string | number; body: string; parsed: ProductionMergeReviewVerdict | null; valid: boolean; acceptedVerdict: string | null }> = []
 
-    const inspectVerdict = (id: string | number, body: string): void => {
+    const inspectVerdict = (id: string | number, body: string, commentUrl: string | null = null): void => {
       try {
         const parsed = parseProductionMergeReviewVerdict(body, id)
         const classification = classifyMergeReviewVerdict({
@@ -268,7 +267,8 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
           ? parsed.verdict
           : null
         const validCorrection = acceptedVerdict === 'CORRECTION REQUIRED' &&
-          hasBlockingFinding(body, activePr.headSha)
+          (hasBlockingFinding(body, activePr.headSha) ||
+            isCurrentHandoffReviewVerdict(applicableHandoff, evidence, activePr, commentUrl))
         if (classification.valid && (acceptedVerdict === 'ELIGIBLE FOR FOUNDER REVIEW' || validCorrection)) {
           currentHeadVerdicts.push({ id, body, parsed, valid: true, acceptedVerdict })
         }
@@ -285,7 +285,7 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
 
     for (const verdict of verdicts) {
       if (/evidence reconciliation\s*\(no semantic re-review\)/i.test(verdict.body)) continue
-      inspectVerdict(verdict.id, verdict.body)
+      inspectVerdict(verdict.id, verdict.body, verdict.url)
     }
 
     for (const review of verification.reviews.nativeReviews ?? []) {
