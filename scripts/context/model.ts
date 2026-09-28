@@ -113,6 +113,7 @@ export interface RoleEvidence {
 
 export interface DurableContextEvidence {
   latestHandoff: RoleEvidence | null
+  handoffs?: RoleEvidence[]
   historicalResults: RoleEvidence[]
 }
 
@@ -147,6 +148,10 @@ export function normalizeContextEvidence(
   normalized.issue.acceptanceCriteria = [...normalized.issue.acceptanceCriteria]
   normalized.issue.dependencies = [...normalized.issue.dependencies]
   normalized.localGit.reasons = [...new Set(normalized.localGit.reasons)].sort()
+  if (normalized.durableContext.handoffs) {
+    normalized.durableContext.handoffs = [...normalized.durableContext.handoffs]
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || String(left.id).localeCompare(String(right.id)))
+  }
   normalized.durableContext.historicalResults = [
     ...normalized.durableContext.historicalResults,
   ].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
