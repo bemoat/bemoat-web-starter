@@ -370,8 +370,8 @@ export function readGithubEvidence({
     verifications.push(verification)
   }
   const unmergedPrs = activePrs.filter((pr) => !pr.merged)
-  // A current OPEN PR remains authoritative. If no unmerged PRs exist, terminal merged PRs are evaluated.
-  const selectedPrs = unmergedPrs.length > 0 ? unmergedPrs : activePrs
+  // Unmerged PRs are current candidates. Merged PRs remain selectable only for closed-Issue terminal reconstruction.
+  const selectedPrs = unmergedPrs.length > 0 ? unmergedPrs : issue?.state.toUpperCase() === 'CLOSED' ? activePrs : []
   const selectedNumbers = new Set(selectedPrs.map((pr) => pr.number))
   const selectedVerifications = activePrs.flatMap((pr, index) =>
     selectedNumbers.has(pr.number) && verifications[index] ? [verifications[index]] : [])
