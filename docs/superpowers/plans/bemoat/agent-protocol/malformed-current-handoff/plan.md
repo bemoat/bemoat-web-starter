@@ -30,6 +30,7 @@ paired_plan: "docs/superpowers/plans/bemoat/agent-protocol/malformed-current-han
 
 - Work only on Issue #498 / CTX-255-001 in `boat1994/bemoat-web-starter`.
 - Any structurally valid wrong repository, Issue, PR, base, branch, or head keeps the HANDOFF non-applicable, even if another field is malformed.
+- Case-equivalent repository/PR values identify the same current resource but remain malformed when they do not use canonical spelling; case-distinct values naming another resource remain valid mismatches.
 - Malformed/absent identity with at least one matching current anchor and no valid mismatch must fail closed through `malformedCurrent`.
 - Preserve CTX-496-001/002/003, FIX and FOUNDER_GATE supersession, #425/#469, and existing conflict precedence.
 - Context remains read-only; do not add timestamps, latest-comment authority, counters, state, protocol fields, or routes.
@@ -60,7 +61,9 @@ paired_plan: "docs/superpowers/plans/bemoat/agent-protocol/malformed-current-han
   Add pairwise mixed stories where one identity field is malformed but another
   structurally valid field identifies a different repository, Issue, PR,
   approved base, or exact head. Assert those remain non-applicable and existing
-  current evidence is re-evaluated. Retain existing valid FIX/FOUNDER_GATE,
+  current evidence is re-evaluated. Cover case-equivalent repository/PR spellings
+  as malformed current evidence and different case-distinct resources as valid
+  mismatches. Retain existing valid FIX/FOUNDER_GATE,
   supersession, #425/#469, and timestamp/order-independence stories unchanged.
 
 - [ ] **Step 2: Run the characterization against protected main.**
@@ -75,8 +78,10 @@ paired_plan: "docs/superpowers/plans/bemoat/agent-protocol/malformed-current-han
 
   Keep the existing three-argument classifier signature. Validate each field's
   structural form before comparing values. A valid mismatch takes precedence;
-  otherwise return malformed-current only when at least one valid field matches
-  and some required value/container is missing or malformed. Route that status
+  case-equivalent same-resource repository/PR spellings count as matching anchors
+  while remaining malformed. Otherwise return malformed-current only when at
+  least one valid field matches and some required value/container is missing or
+  malformed. Route that status
   through the existing `malformedCurrent` array. Keep the runtime under 400
   lines; only if needed, move the pure classifier into a sibling that imports
   model types directly and has no runtime cycle.

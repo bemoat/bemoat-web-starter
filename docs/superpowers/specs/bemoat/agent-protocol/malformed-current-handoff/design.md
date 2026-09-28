@@ -67,7 +67,9 @@ structural ceiling; if the focused classifier cannot fit, extract only that
 pure classifier to a small sibling module with no import cycle.
 
 Tests use the existing production-shaped `routeContext` fixtures and canonical
-HANDOFF JSON envelope. They cover malformed current identities, a malformed
+HANDOFF JSON envelope, including case-variant spellings of the same repository
+and PR URL plus distinct case-variant identities paired with another malformed
+field. They cover malformed current identities, a malformed
 field paired with a valid wrong identity, and existing current FIX,
 FOUNDER_GATE, and historical re-evaluation behavior. No timestamps, comment
 ordering, counters, state, new route, or alternate protocol are introduced.

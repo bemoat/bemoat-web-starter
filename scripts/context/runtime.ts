@@ -235,13 +235,16 @@ function compareIdentityValue(
   expected: string,
   valid: (value: unknown) => boolean = isIdentityString,
   normalizeSha = false,
-): { recognized: boolean; malformed: boolean; mismatch: boolean } {
-  if (!(key in payload)) return { recognized: false, malformed: true, mismatch: false }
+  caseFoldMalformed = false,
+): { recognized: boolean; malformed: boolean; mismatch: boolean; matched: boolean } {
+  if (!(key in payload)) return { recognized: false, malformed: true, mismatch: false, matched: false }
   const value = payload[key]
-  if (typeof value !== 'string' || !valid(value)) return { recognized: true, malformed: true, mismatch: false }
+  if (typeof value !== 'string' || !valid(value)) return { recognized: true, malformed: true, mismatch: false, matched: false }
   const actual = normalizeSha ? value.toLowerCase() : value
   const wanted = normalizeSha ? expected.toLowerCase() : expected
-  return { recognized: true, malformed: false, mismatch: actual !== wanted }
+  const mismatch = actual !== wanted
+  const noncanonicalSameIdentity = caseFoldMalformed && mismatch && actual.toLowerCase() === wanted.toLowerCase()
+  return { recognized: true, malformed: noncanonicalSameIdentity, mismatch: mismatch && !noncanonicalSameIdentity, matched: !mismatch || noncanonicalSameIdentity }
 }
 
 function handoffIdentityStatus(
@@ -259,14 +262,14 @@ function handoffIdentityStatus(
   let matched = false
   let malformed = false
   let mismatch = false
-  const compare = (result: { recognized: boolean; malformed: boolean; mismatch: boolean }) => {
+  const compare = (result: { recognized: boolean; malformed: boolean; mismatch: boolean; matched: boolean }) => {
     recognized ||= result.recognized
-    matched ||= result.recognized && !result.malformed && !result.mismatch
+    matched ||= result.matched
     malformed ||= result.malformed
     mismatch ||= result.mismatch
   }
 
-  compare(compareIdentityValue(payload, 'repository', evidence.repository.nameWithOwner, repositoryString))
+  compare(compareIdentityValue(payload, 'repository', evidence.repository.nameWithOwner, repositoryString, false, true))
   compare(compareIdentityValue(payload, 'issue_number', evidence.issue.number, positiveIntegerString))
   compare(compareIdentityValue(payload, 'branch', activePr.headBranch))
   compare(compareIdentityValue(payload, 'exact_head', activePr.headSha, fullShaString, true))
@@ -281,7 +284,7 @@ function handoffIdentityStatus(
 
   if (isRecord(payload.pr)) {
     compare(compareIdentityValue(payload.pr, 'number', activePr.number, positiveIntegerString))
-    compare(compareIdentityValue(payload.pr, 'url', activePr.url, pullRequestUrl))
+    compare(compareIdentityValue(payload.pr, 'url', activePr.url, pullRequestUrl, false, true))
     compare(compareIdentityValue(payload.pr, 'base', activePr.baseBranch))
     compare(compareIdentityValue(payload.pr, 'head', activePr.headBranch))
     compare(compareIdentityValue(payload.pr, 'head_sha', activePr.headSha, fullShaString, true))
