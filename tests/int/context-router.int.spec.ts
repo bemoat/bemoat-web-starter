@@ -205,6 +205,27 @@ function founderGateHandoff(overrides: Partial<HandoffRecord> = {}) {
   })
 }
 
+function mutateHandoffIdentity(
+  handoff: ReturnType<typeof strictHandoff>,
+  mutate: (payload: Record<string, unknown>) => void,
+) {
+  const match = handoff.body.match(/```json\n([\s\S]+)\n```\n$/)
+  if (!match) throw new Error('Expected canonical HANDOFF JSON envelope')
+  const payload = JSON.parse(match[1]!) as Record<string, unknown>
+  mutate(payload)
+  return {
+    ...handoff,
+    body: `## HANDOFF\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\`\n`,
+  }
+}
+
+function handoffIdentityObject(payload: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = payload[key]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Expected HANDOFF ${key} object`)
+  }
+  return value as Record<string, unknown>
+}
 function handoffReadyDecision(
   latestHandoff: ReturnType<typeof strictHandoff>,
   options: {
@@ -362,6 +383,70 @@ describe('bemoat:context pure routing', () => {
 
     expect(handoffReadyDecision(malformed, { historicalResults: [validVerdict] }).route).toBe('FOUNDER_GATE')
   })
+
+  describe('malformed identity on an otherwise current HANDOFF', () => {
+    const malformedIdentityCases: Array<[string, (payload: Record<string, unknown>) => void]> = [
+      ['empty repository', (payload) => { payload.repository = '' }],
+      ['non-string Issue number', (payload) => { payload.issue_number = 410 }],
+      ['missing branch', (payload) => { delete payload.branch }],
+      ['short exact-head SHA', (payload) => { payload.exact_head = headSha.slice(1) }],
+      ['padded exact-head SHA', (payload) => { payload.exact_head = ` ${headSha}` }],
+      ['malformed protected-base branch', (payload) => { handoffIdentityObject(payload, 'protected_base').branch = null }],
+      ['missing protected-base SHA', (payload) => { delete handoffIdentityObject(payload, 'protected_base').sha }],
+      ['padded protected-base SHA', (payload) => { handoffIdentityObject(payload, 'protected_base').sha = `${sha} ` }],
+      ['non-string PR number', (payload) => { handoffIdentityObject(payload, 'pr').number = 411 }],
+      ['malformed PR URL', (payload) => { handoffIdentityObject(payload, 'pr').url = 'not-a-pull-request-url' }],
+      ['missing PR identity', (payload) => { delete payload.pr }],
+    ]
+
+    it.each(malformedIdentityCases)('routes an otherwise-current %s HANDOFF to STOP despite valid review evidence', (_story, mutate) => {
+      const malformed = mutateHandoffIdentity(strictHandoff(), mutate)
+
+      expect(handoffReadyDecision(malformed, { historicalResults: [validVerdict] }).route).toBe('STOP')
+    })
+
+    it.each<[string, (payload: Record<string, unknown>) => void]>([
+      ['wrong repository', (payload) => { payload.repository = 'other/repository' }],
+      ['wrong Issue', (payload) => { payload.issue_number = '999' }],
+      ['wrong PR', (payload) => { handoffIdentityObject(payload, 'pr').number = '999' }],
+      ['wrong approved base', (payload) => { handoffIdentityObject(payload, 'protected_base').branch = 'dev' }],
+      ['stale exact head', (payload) => { payload.exact_head = 'c'.repeat(40) }],
+    ])('keeps a valid %s mismatch historical when another identity field is malformed', (_story, setMismatch) => {
+      const historical = mutateHandoffIdentity(strictHandoff(), (payload) => {
+        setMismatch(payload)
+        delete payload.branch
+      })
+
+      expect(handoffReadyDecision(historical, { historicalResults: [validVerdict] }).route).toBe('FOUNDER_GATE')
+    })
+
+    it('does not treat a payload without identity anchors as current-malformed', () => {
+      const noIdentity = mutateHandoffIdentity(strictHandoff(), (payload) => {
+        delete payload.repository
+        delete payload.issue_number
+        delete payload.branch
+        delete payload.exact_head
+        delete payload.protected_base
+        delete payload.pr
+      })
+
+      expect(handoffReadyDecision(noIdentity, { historicalResults: [validVerdict] }).route).toBe('FOUNDER_GATE')
+    })
+
+    it('stops a malformed FOUNDER_GATE identity before it can supersede REVIEW', () => {
+      const review = { ...reviewHandoff(), id: 901 }
+      const founderGate = {
+        ...mutateHandoffIdentity(founderGateHandoff(), (payload) => { delete payload.branch }),
+        id: 902,
+      }
+
+      expect(handoffReadyDecision(founderGate, {
+        handoffs: [review, founderGate],
+        historicalResults: [eligibleHandoffReviewVerdict()],
+      }).route).toBe('STOP')
+    })
+  })
+
 
   it('fails closed for competing current-head HANDOFF FIX and STOP records', () => {
     const stop = {
