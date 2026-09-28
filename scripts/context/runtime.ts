@@ -225,86 +225,79 @@ function extractHandoffPayload(body: string): unknown | null {
   }
 }
 
+function isIdentityString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
 function compareIdentityValue(
   payload: Record<string, unknown>,
   key: string,
   expected: string,
+  valid: (value: unknown) => boolean = isIdentityString,
   normalizeSha = false,
-): { recognized: boolean; complete: boolean; mismatch: boolean } {
-  if (!(key in payload)) return { recognized: false, complete: false, mismatch: false }
+  caseFoldMalformed = false,
+): { recognized: boolean; malformed: boolean; mismatch: boolean; matched: boolean } {
+  if (!(key in payload)) return { recognized: false, malformed: true, mismatch: false, matched: false }
   const value = payload[key]
-  if (typeof value !== 'string' || !value.trim()) return { recognized: true, complete: false, mismatch: true }
-  const left = normalizeSha ? value.toLowerCase() : value
-  const right = normalizeSha ? expected.toLowerCase() : expected
-  return { recognized: true, complete: true, mismatch: left !== right }
+  if (typeof value !== 'string' || !valid(value)) return { recognized: true, malformed: true, mismatch: false, matched: false }
+  const actual = normalizeSha ? value.toLowerCase() : value
+  const wanted = normalizeSha ? expected.toLowerCase() : expected
+  const mismatch = actual !== wanted
+  const noncanonicalSameIdentity = caseFoldMalformed && mismatch && actual.toLowerCase() === wanted.toLowerCase()
+  return { recognized: true, malformed: noncanonicalSameIdentity, mismatch: mismatch && !noncanonicalSameIdentity, matched: !mismatch || noncanonicalSameIdentity }
 }
 
 function handoffIdentityStatus(
   payload: unknown,
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
-): 'current' | 'stale' | 'unknown' {
+): 'current' | 'stale' | 'unknown' | 'malformed-current' {
   if (!isRecord(payload)) return 'unknown'
 
+  const positiveIntegerString = (value: unknown) => typeof value === 'string' && /^[1-9]\d*$/.test(value)
+  const fullShaString = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{40}$/i.test(value)
+  const repositoryString = (value: unknown) => isIdentityString(value) && /^[^/\s:]+\/[^/\s:]+$/.test(value)
+  const pullRequestUrl = (value: unknown) => isIdentityString(value) && /^https:\/\/github\.com\/[^/?#\s:]+\/[^/?#\s:]+\/pull\/[1-9]\d*$/.test(value)
   let recognized = false
-  let complete = true
+  let matched = false
+  let malformed = false
   let mismatch = false
-  const compare = (result: { recognized: boolean; complete: boolean; mismatch: boolean }) => {
+  const compare = (result: { recognized: boolean; malformed: boolean; mismatch: boolean; matched: boolean }) => {
     recognized ||= result.recognized
-    complete &&= result.complete
+    matched ||= result.matched
+    malformed ||= result.malformed
     mismatch ||= result.mismatch
   }
 
-  compare(compareIdentityValue(payload, 'repository', evidence.repository.nameWithOwner))
-  compare(compareIdentityValue(payload, 'issue_number', evidence.issue.number))
+  compare(compareIdentityValue(payload, 'repository', evidence.repository.nameWithOwner, repositoryString, false, true))
+  compare(compareIdentityValue(payload, 'issue_number', evidence.issue.number, positiveIntegerString))
   compare(compareIdentityValue(payload, 'branch', activePr.headBranch))
-  const head = compareIdentityValue(payload, 'exact_head', activePr.headSha, true)
-  if (head.recognized && head.complete && !isFullSha(payload.exact_head)) {
-    head.complete = false
-    head.mismatch = true
-  }
-  compare(head)
+  compare(compareIdentityValue(payload, 'exact_head', activePr.headSha, fullShaString, true))
 
-  const protectedBase = payload.protected_base
-  if (!isRecord(protectedBase)) {
-    complete = false
+  if (isRecord(payload.protected_base)) {
+    compare(compareIdentityValue(payload.protected_base, 'branch', activePr.baseBranch))
+    compare(compareIdentityValue(payload.protected_base, 'sha', activePr.baseSha, fullShaString, true))
   } else {
-    const baseBranch = compareIdentityValue(protectedBase, 'branch', activePr.baseBranch)
-    const baseSha = compareIdentityValue(protectedBase, 'sha', activePr.baseSha, true)
-    if (baseSha.recognized && baseSha.complete && !isFullSha(protectedBase.sha)) {
-      baseSha.complete = false
-      baseSha.mismatch = true
-    }
-    compare(baseBranch)
-    compare(baseSha)
+    recognized ||= 'protected_base' in payload
+    malformed = true
   }
 
-  const pr = payload.pr
-  if (pr === null) {
-    recognized = true
-    complete = false
-  } else if (!isRecord(pr)) {
-    recognized = true
-    complete = false
-    mismatch = true
+  if (isRecord(payload.pr)) {
+    compare(compareIdentityValue(payload.pr, 'number', activePr.number, positiveIntegerString))
+    compare(compareIdentityValue(payload.pr, 'url', activePr.url, pullRequestUrl, false, true))
+    compare(compareIdentityValue(payload.pr, 'base', activePr.baseBranch))
+    compare(compareIdentityValue(payload.pr, 'head', activePr.headBranch))
+    compare(compareIdentityValue(payload.pr, 'head_sha', activePr.headSha, fullShaString, true))
   } else {
-    compare(compareIdentityValue(pr, 'number', activePr.number))
-    compare(compareIdentityValue(pr, 'url', activePr.url))
-    compare(compareIdentityValue(pr, 'base', activePr.baseBranch))
-    compare(compareIdentityValue(pr, 'head', activePr.headBranch))
-    const prHead = compareIdentityValue(pr, 'head_sha', activePr.headSha, true)
-    if (prHead.recognized && prHead.complete && !isFullSha(pr.head_sha)) {
-      prHead.complete = false
-      prHead.mismatch = true
-    }
-    compare(prHead)
+    recognized ||= 'pr' in payload
+    malformed = true
   }
 
   if (mismatch) return 'stale'
-  if (recognized && complete) return 'current'
+  if (recognized && matched && malformed) return 'malformed-current'
+  if (recognized && matched) return 'current'
   return 'unknown'
 }
-
 function resolveSupersedingHandoff(
   applicable: HandoffCandidate[], evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
@@ -327,6 +320,10 @@ export function resolveApplicableHandoffs(
   for (const candidate of candidates) {
     const payload = extractHandoffPayload(candidate.body)
     const status = handoffIdentityStatus(payload, evidence, activePr)
+    if (status === 'malformed-current') {
+      malformedCurrent.push(candidate)
+      continue
+    }
     if (status !== 'current') continue
 
     let handoff: HandoffRecord | null = null
