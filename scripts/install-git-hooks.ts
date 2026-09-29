@@ -59,9 +59,13 @@ function createAmbiguousInstallError(error: unknown): Error & {
   })
 }
 
+export function stringifyCapturedGitOutput(output: unknown): string {
+  if (!output) return ''
+  return String(output)
+}
+
 function writeCapturedGitStdout(output: unknown): void {
-  if (!output) return
-  const text = Buffer.isBuffer(output) ? output.toString('utf8') : String(output)
+  const text = stringifyCapturedGitOutput(output)
   if (text) process.stderr.write(text)
 }
 

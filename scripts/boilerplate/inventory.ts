@@ -67,6 +67,7 @@ export const managedPaths = [
   'tests/int/cli-envelope-runtime.int.spec.ts',
   'tests/int/cli-tier-b-boundaries.int.spec.ts',
   'tests/int/cli-tier-a-boundaries.int.spec.ts',
+  'tests/int/install-git-hooks.int.spec.ts',
   'tests/int/command-runner.int.spec.ts',
   'tests/int/scripts-architecture.int.spec.ts',
   'tests/int/scripts-entrypoints-contract.int.spec.ts',
