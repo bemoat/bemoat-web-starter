@@ -361,7 +361,7 @@ describe('bemoat:context pure routing', () => {
     ['wrong base', { protected_base: { branch: 'dev', sha } }],
     ['wrong head', { exact_head: 'c'.repeat(40), pr: { number: '411', url: 'https://github.com/boat1994/bemoat-web-starter/pull/411', base: 'main', head: 'feature/410-context', head_sha: 'c'.repeat(40) } }],
   ])('does not let a %s HANDOFF control the current route', (_story, overrides) => {
-    expect(handoffReadyDecision(strictHandoff(overrides)).route).toBe('REVIEW')
+    expect(handoffReadyDecision(strictHandoff(overrides), { historicalResults: [] }).route).toBe('REVIEW')
   })
 
   it('fails closed for a malformed current-head HANDOFF even with valid review evidence', () => {
@@ -917,12 +917,12 @@ describe('bemoat:context pure routing', () => {
       expect(decision.route).toBe('FIX')
     })
 
-    const nativeReviewCases: Array<[string, Record<string, unknown>]> = [
-      ['stale commit binding', { commitId: 'c'.repeat(40) }],
-      ['wrong reviewed head', { body: nativeReview().body.replace(headSha, 'c'.repeat(40)) }],
-      ['malformed body', { body: '## REVIEW_VERDICT\n**Verdict:** ELIGIBLE FOR FOUNDER REVIEW' }],
+    const nativeReviewCases: Array<[string, Record<string, unknown>, string]> = [
+      ['stale commit binding', { commitId: 'c'.repeat(40) }, 'REVIEW'],
+      ['wrong reviewed head', { body: nativeReview().body.replace(headSha, 'c'.repeat(40)) }, 'STOP'],
+      ['malformed body', { body: '## REVIEW_VERDICT\n**Verdict:** ELIGIBLE FOR FOUNDER REVIEW' }, 'STOP'],
     ]
-    it.each(nativeReviewCases)('keeps native review evidence fail-closed for %s', (_label, reviewOverrides) => {
+    it.each(nativeReviewCases)('keeps native review evidence fail-closed for %s', (_label, reviewOverrides, expectedRoute) => {
       const currentHeadVerification = verification({
         reviews: {
           required: false,
@@ -939,7 +939,7 @@ describe('bemoat:context pure routing', () => {
         currentHeadVerification,
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe(expectedRoute)
     })
 
     it('routes multiple compatible exact-head native reviews to FOUNDER_GATE', () => {
@@ -979,7 +979,7 @@ describe('bemoat:context pure routing', () => {
         currentHeadVerification,
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
 
@@ -1134,7 +1134,7 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [malformedVerdict, correctiveVerdict] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('keeps malformed current-head review fail-closed if predecessor ID does not exist', () => {
@@ -1164,7 +1164,7 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [malformedVerdict, correctiveVerdict] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('keeps malformed current-head review fail-closed if there are competing valid current-head verdicts', () => {
@@ -1200,7 +1200,7 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [malformedVerdict, correctiveVerdict, competingValidVerdict] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('keeps malformed current-head review fail-closed if predecessor binding does not match exactly', () => {
@@ -1230,7 +1230,7 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [malformedVerdict, correctiveVerdict] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('keeps malformed current-head review fail-closed if predecessor cannot be independently parsed', () => {
@@ -1260,7 +1260,7 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [malformedVerdict, correctiveVerdict] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('keeps malformed live-head #421 evidence fail-closed', () => {
@@ -1297,10 +1297,10 @@ describe('bemoat:context pure routing', () => {
         },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
-    it('routes CORRECTION REQUIRED REVIEW_VERDICT to REVIEW (does not satisfy gate)', () => {
+    it('routes CORRECTION REQUIRED REVIEW_VERDICT to STOP (malformed blocking evidence)', () => {
       const decision = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
         activePr: prEvidence(),
@@ -1312,7 +1312,7 @@ describe('bemoat:context pure routing', () => {
           historicalResults: [correctionVerdict],
         },
       }))
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('routes durable STANDARD blocking review evidence to FIX without accepting reconciliation attempts', () => {
@@ -1405,7 +1405,7 @@ describe('bemoat:context pure routing', () => {
       expect(decision.route).toBe('FIX')
     })
 
-    it('keeps an exact-bound CORRECTION REQUIRED verdict without a blocking finding on REVIEW', () => {
+    it('keeps an exact-bound CORRECTION REQUIRED verdict without a blocking finding at STOP', () => {
       const reviewedHead = '0d7c77995e92391b49e042e182b54af2d561c87c'
       const decision = routeContext(baseEvidence({
         issue: {
@@ -1436,7 +1436,7 @@ describe('bemoat:context pure routing', () => {
         },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it.each([
@@ -1444,7 +1444,7 @@ describe('bemoat:context pure routing', () => {
       ['missing reviewed head', () => '{ "schema_version": 1, "findings": [{ "id": "CTX-001", "canonical_summary": "Fix it", "source_thread": "thread", "required_evidence": ["Evidence"] }] }'],
       ['wrong reviewed head', () => '{ "schema_version": 1, "reviewed_head": "' + 'c'.repeat(40) + '", "findings": [{ "id": "CTX-001", "canonical_summary": "Fix it", "source_thread": "thread", "required_evidence": ["Evidence"] }] }'],
       ['missing source thread', (head: string) => '{ "schema_version": 1, "reviewed_head": "' + head + '", "findings": [{ "id": "CTX-001", "canonical_summary": "Fix it", "required_evidence": ["Evidence"] }] }'],
-    ])('keeps CORRECTION REQUIRED with %s on REVIEW', (_label, serializedFinding) => {
+    ])('keeps CORRECTION REQUIRED with %s at STOP', (_label, serializedFinding) => {
       const reviewedHead = headSha
       const reviewBody = [
         '## REVIEW_VERDICT',
@@ -1465,13 +1465,13 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [{ ...correctionVerdict, body: reviewBody }] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it.each([
       ['duplicate finding IDs', `{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${headSha}", "findings": [{ "id": "CTX-001", "canonical_summary": "Fix it", "source_thread": "thread-1", "required_evidence": ["Evidence"] }, { "id": "CTX-001", "canonical_summary": "Fix it twice", "source_thread": "thread-2", "required_evidence": ["Evidence"] }] }`],
       ['multiple fenced correction contracts', `{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${headSha}", "findings": [{ "id": "CTX-001", "canonical_summary": "Fix it", "source_thread": "thread", "required_evidence": ["Evidence"] }] }\n\n\`\`\`json\n{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${headSha}", "findings": [{ "id": "CTX-002", "canonical_summary": "Fix that", "source_thread": "thread", "required_evidence": ["Evidence"] }] }\n\`\`\``],
-    ])('keeps CORRECTION REQUIRED with %s on REVIEW', (_label, findingBlocks) => {
+    ])('keeps CORRECTION REQUIRED with %s at STOP', (_label, findingBlocks) => {
       const reviewBody = [
         '## REVIEW_VERDICT',
         '**Repository:** \x60boat1994/bemoat-web-starter\x60',
@@ -1489,7 +1489,7 @@ describe('bemoat:context pure routing', () => {
         durableContext: { latestHandoff: null, historicalResults: [{ ...correctionVerdict, body: reviewBody }] },
       }))
 
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('routes STANDARD + stale/wrong-head review to REVIEW', () => {
@@ -1507,7 +1507,7 @@ describe('bemoat:context pure routing', () => {
       expect(decision.route).toBe('REVIEW')
     })
 
-    it('routes STANDARD + wrong PR review to REVIEW (fail closed)', () => {
+    it('routes STANDARD + wrong PR review to STOP (fail closed)', () => {
       const decision = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
         activePr: prEvidence(),
@@ -1519,10 +1519,10 @@ describe('bemoat:context pure routing', () => {
           historicalResults: [wrongIssueVerdict],
         },
       }))
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
-    it('routes STANDARD + wrong base review to REVIEW (fail closed)', () => {
+    it('routes STANDARD + wrong base review to STOP (fail closed)', () => {
       const decision = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
         activePr: prEvidence(),
@@ -1534,10 +1534,10 @@ describe('bemoat:context pure routing', () => {
           historicalResults: [wrongBaseVerdict],
         },
       }))
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
-    it('routes STANDARD + genuine wrong Issue review to REVIEW (fail closed)', () => {
+    it('routes STANDARD + genuine wrong Issue review to STOP (fail closed)', () => {
       const decision = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
         activePr: prEvidence(),
@@ -1549,10 +1549,10 @@ describe('bemoat:context pure routing', () => {
           historicalResults: [genuineWrongIssueVerdict],
         },
       }))
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
-    it('routes STANDARD + genuine wrong repository review to REVIEW (fail closed)', () => {
+    it('routes STANDARD + genuine wrong repository review to STOP (fail closed)', () => {
       const decision = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
         activePr: prEvidence(),
@@ -1564,7 +1564,7 @@ describe('bemoat:context pure routing', () => {
           historicalResults: [genuineWrongRepoVerdict],
         },
       }))
-      expect(decision.route).toBe('REVIEW')
+      expect(decision.route).toBe('STOP')
     })
 
     it('routes multiple compatible valid exact-head reviews to FOUNDER_GATE', () => {
@@ -1582,7 +1582,7 @@ describe('bemoat:context pure routing', () => {
       expect(decisionCompatible.route).toBe('FOUNDER_GATE')
     })
 
-    it('routes genuinely conflicting, malformed, or ambiguous verdict evidence to REVIEW (fail closed)', () => {
+    it('routes genuinely conflicting, malformed, or ambiguous verdict evidence to STOP (fail closed)', () => {
       const decisionConflicting = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
         activePr: prEvidence(),
@@ -1594,7 +1594,7 @@ describe('bemoat:context pure routing', () => {
           historicalResults: [validVerdict, correctionVerdict],
         },
       }))
-      expect(decisionConflicting.route).toBe('REVIEW')
+      expect(decisionConflicting.route).toBe('STOP')
 
       const decisionMalformed = routeContext(baseEvidence({
         issue: { ...baseEvidence().issue, workflowProfile: 'STANDARD' },
@@ -1955,3 +1955,109 @@ function eligibleHandoffReviewVerdict(overrides: Partial<{
     ...overrides,
   })
 }
+
+// #503: these stories protect HANDOFF-only transport, exact native review
+// lineage, immutable blocking evidence, and the correction-head review boundary.
+describe('#503 supported native review lineage', () => {
+  const reviewUrl = 'https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-200'
+  function evidenceFor(
+    reviews = [nativeBlockingReview()],
+    handoffs = [strictHandoff({ verified_evidence: [{ kind: 'review-verdict', value: 'Independent native review.', url: reviewUrl }] })],
+  ) {
+    return baseEvidence({
+      activePr: prEvidence(),
+      currentHeadVerification: verification({ reviews: {
+        required: false, approved: true, exactHead: true,
+        approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews: reviews,
+      } }),
+      durableContext: { latestHandoff: handoffs[0] ?? null, handoffs, historicalResults: [] },
+    })
+  }
+
+  it.each([
+    ['blocking', 'FIX', nativeBlockingReview(), 'FIX'],
+    ['eligible', 'FOUNDER_GATE', nativeReview(), 'FOUNDER_GATE'],
+  ] as const)('appends a %s outcome after REVIEW without legacy Issue comments or rewriting HANDOFF', (_label, route, review, expected) => {
+    const initial = reviewHandoff()
+    const outcome = strictHandoff({ route, next_action: { route, description: 'Follow independently reviewed outcome.' },
+      verified_evidence: [{ kind: 'review-verdict', value: 'Independent native review.', url: reviewUrl }] })
+    const initialBody = initial.body
+    for (const order of [[initial, outcome], [outcome, initial]]) {
+      const evidence = evidenceFor([review], order)
+      const before = JSON.stringify(evidence)
+      expect(routeContext(evidence).route).toBe(expected)
+      expect(JSON.stringify(evidence)).toBe(before)
+      expect(initial.body).toBe(initialBody)
+    }
+  })
+
+  it('accepts a lone FIX with native lineage and immutable findings', () => {
+    expect(routeContext(evidenceFor()).route).toBe('FIX')
+  })
+
+  it.each([
+    ['missing', []],
+    ['stale', [nativeBlockingReview({ commitId: 'c'.repeat(40) })]],
+    ['wrong repository', [nativeBlockingReview({ body: nativeBlockingReview().body.replace('boat1994/bemoat-web-starter', 'other/repo') })]],
+    ['wrong Issue', [nativeBlockingReview({ body: nativeBlockingReview().body.replace('#410', '#999') })]],
+    ['wrong PR', [nativeBlockingReview({ body: nativeBlockingReview().body.replace('PR #411', 'PR #999') })]],
+    ['wrong base', [nativeBlockingReview({ body: nativeBlockingReview().body.replace('`main`', '`dev`') })]],
+    ['wrong body head', [nativeBlockingReview({ body: nativeBlockingReview().body.replaceAll(headSha, 'c'.repeat(40)) })]],
+    ['missing commit', [nativeBlockingReview({ commitId: null })]],
+    ['duplicate ID', [nativeBlockingReview(), nativeBlockingReview()]],
+    ['malformed', [nativeBlockingReview({ body: '## REVIEW_VERDICT\n**Verdict:** CORRECTION REQUIRED' })]],
+    ['no immutable finding', [nativeReview({ body: nativeReview().body.replace('ELIGIBLE FOR FOUNDER REVIEW', 'CORRECTION REQUIRED') })]],
+    ['empty findings', [nativeBlockingReview({ body: nativeBlockingReview().body.replace(/"findings": \[.*\]/, '"findings": []') })]],
+    ['stale finding head', [nativeBlockingReview({ body: nativeBlockingReview().body.replace(/"reviewed_head": "[^"]+"/, `"reviewed_head": "${'c'.repeat(40)}"`) })]],
+    ['dismissed', [nativeBlockingReview({ state: 'DISMISSED' })]],
+    ['conflicting verdict', [nativeBlockingReview(), nativeReview({ id: 201 })]],
+  ])('keeps %s referenced review evidence at STOP', (_label, reviews) => {
+    expect(routeContext(evidenceFor(reviews)).route).toBe('STOP')
+  })
+
+  it.each([
+    ['malformed', nativeBlockingReview({ body: '## REVIEW_VERDICT\n**Verdict:** CORRECTION REQUIRED' })],
+    ['dismissed', nativeBlockingReview({ state: 'DISMISSED' })],
+    ['missing finding', nativeReview({ body: nativeReview().body.replace('ELIGIBLE FOR FOUNDER REVIEW', 'CORRECTION REQUIRED') })],
+  ])('keeps %s current native evidence at STOP even without a HANDOFF', (_label, review) => {
+    expect(routeContext(evidenceFor([review], [])).route).toBe('STOP')
+  })
+
+  it.each([
+    'https://github.com/other/repo/pull/411#pullrequestreview-200',
+    'https://github.com/boat1994/bemoat-web-starter/pull/999#pullrequestreview-200',
+    `${reviewUrl}?query=1`,
+    reviewUrl.replace('https:', 'http:'),
+    reviewUrl.replace('-200', '-999'),
+    reviewUrl.replace('pullrequestreview', 'discussion_r'),
+  ])('rejects a non-exact native review reference %s', (url) => {
+    expect(routeContext(evidenceFor([nativeBlockingReview()], [strictHandoff({
+      verified_evidence: [{ kind: 'review-verdict', value: 'Review.', url }],
+    })])).route).toBe('STOP')
+  })
+
+  it('does not let native lineage bypass malformed-current HANDOFF (#498)', () => {
+    const current = strictHandoff({ verified_evidence: [{ kind: 'review-verdict', value: 'Native review.', url: reviewUrl }] })
+    const evidence = evidenceFor([nativeBlockingReview()], [current])
+    evidence.durableContext.handoffs!.push(mutateHandoffIdentity(current, (payload) => { payload.issue_number = 410 }))
+    expect(routeContext(evidence).route).toBe('STOP')
+  })
+
+  it('requires a new exact-head Delta Review after correction', () => {
+    const evidence = evidenceFor()
+    expect(routeContext(evidence).route).toBe('FIX')
+    const correctionHead = 'd'.repeat(40)
+    evidence.activePr = prEvidence({ headSha: correctionHead })
+    evidence.localGit.head = correctionHead
+    evidence.currentHeadVerification!.exactHead = correctionHead
+    expect(routeContext(evidence).route).toBe('REVIEW')
+    evidence.currentHeadVerification!.reviews.nativeReviews = [nativeReview({
+      id: 201, commitId: correctionHead, body: nativeReview().body.replace(headSha, correctionHead),
+    })]
+    expect(routeContext(evidence).route).toBe('FOUNDER_GATE')
+  })
+
+  it('fails closed for conflicting exact-head native verdicts even without a HANDOFF', () => {
+    expect(routeContext(evidenceFor([nativeBlockingReview(), nativeReview({ id: 201 })], [])).route).toBe('STOP')
+  })
+})
