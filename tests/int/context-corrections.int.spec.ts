@@ -70,6 +70,7 @@ function githubRunner({
   issue = issuePayload(),
   pr = prPayload(),
   prByNumber = {},
+  nativeReviews = [],
   prList = [{
     number: 411,
     body: 'Part of #410',
@@ -83,12 +84,16 @@ function githubRunner({
   issue?: string
   pr?: string
   prByNumber?: Record<string, string>
+  nativeReviews?: unknown[]
   prList?: unknown[]
   legacyProtection?: ContextCommandResult
   rulesets?: string
 } = {}): ContextCommandRunner {
   return (_command, args) => {
     const key = args.join(' ')
+    if (args.some((arg) => /^repos\/[^/]+\/[^/]+\/pulls\/[1-9]\d*\/reviews\?per_page=100$/.test(arg))) {
+      return response(JSON.stringify([nativeReviews]))
+    }
     if (key.startsWith('issue view ')) return response(issue)
     if (key.startsWith('pr list')) return response(JSON.stringify(prList))
     if (key.startsWith('pr view ')) return response(prByNumber[args[2] ?? ''] ?? pr)
@@ -263,17 +268,21 @@ describe('bounded context corrections', () => {
 
     const oneApproval = readGithubEvidence({
       repo: 'boat1994/bemoat-web-starter', issueNumber: '410', branch: 'feature/410-context', protectedBaseBranch: 'main',
-      run: githubRunner({ pr: prPayload({ reviews: [{ state: 'APPROVED', user: { login: 'reviewer-1' }, commitId: headSha }] }) }),
+      run: githubRunner({ nativeReviews: [{
+        id: 5101,
+        html_url: 'https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-5101',
+        state: 'APPROVED', user: { login: 'reviewer-1' }, commit_id: headSha,
+      }] }),
     })
     expect(oneApproval.exactHead?.reviews.approved).toBe(false)
     expect(oneApproval.exactHead?.reviews.approvedCount).toBe(1)
 
     const twoApprovals = readGithubEvidence({
       repo: 'boat1994/bemoat-web-starter', issueNumber: '410', branch: 'feature/410-context', protectedBaseBranch: 'main',
-      run: githubRunner({ pr: prPayload({ reviews: [
-        { state: 'APPROVED', user: { login: 'reviewer-1' }, commitId: headSha },
-        { state: 'APPROVED', user: { login: 'reviewer-2' }, commitId: headSha },
-      ] }) }),
+      run: githubRunner({ nativeReviews: [
+        { id: 5101, html_url: 'https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-5101', state: 'APPROVED', user: { login: 'reviewer-1' }, commit_id: headSha },
+        { id: 5102, html_url: 'https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-5102', state: 'APPROVED', user: { login: 'reviewer-2' }, commit_id: headSha },
+      ] }),
     })
     expect(twoApprovals.exactHead?.reviews.approved).toBe(true)
     expect(twoApprovals.exactHead?.reviews.approvedCount).toBe(2)

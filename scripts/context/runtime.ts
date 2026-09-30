@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import type { ActivePullRequestEvidence, ContextDecision, NormalizedContextEvidence, RepositoryEvidence, RoleEvidence } from './model.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { parseProductionMergeReviewVerdict } from './merge-review-verdict.ts'
+import { hasNativeReviewLineage } from './semantic-review-evidence.ts'
 
 export interface ContextCommandResult {
   status: number
@@ -141,6 +142,8 @@ function hasCurrentReviewVerdict(
   if (references.length !== 1) return false
   const reference = references[0]
   if (!reference?.url) return false
+
+  if (hasNativeReviewLineage(reference.url, evidence, activePr, requiredVerdict)) return true
 
   const comments = evidence.durableContext.historicalResults.filter((comment) =>
     comment.url === reference.url && isExactIssueCommentUrl(reference.url!, comment, evidence))
@@ -302,7 +305,7 @@ function resolveSupersedingHandoff(
   applicable: HandoffCandidate[], evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): HandoffCandidate | null {
-  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW')) return null
+  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW' || record.route === 'VERIFY')) return null
   return applicable.find(({ record }) => record.route === 'FIX'
     ? hasBlockingHandoffReview(record, evidence, activePr)
     : record.route === 'FOUNDER_GATE' && hasEligibleFounderHandoffReview(record, evidence, activePr)) ?? null

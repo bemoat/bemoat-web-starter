@@ -5,6 +5,7 @@ import type {
 } from './model.ts'
 import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
+import { hasBlockingFinding } from './semantic-review-evidence.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
 function evidenceUrls(evidence: NormalizedContextEvidence): string[] {
@@ -99,39 +100,6 @@ function reviewedHeadForApplicability(body: string): string | null {
 
   const unique = [...new Set(candidates)]
   return unique.length === 1 ? unique[0] ?? null : null
-}
-
-function hasBlockingFinding(body: string, expectedHead: string): boolean {
-  const section = body.match(/###\s+Immutable finding disposition\s*\n([\s\S]*?)(?=\n###|\n##|$)/i)?.[1] ?? ''
-  const fenced = [...section.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
-  if (fenced.length > 1) return false
-  const serialized = fenced[0]?.[1]
-    ?? section.match(/`(\{[\s\S]*\})`/)?.[1]
-  if (!serialized) return false
-
-  try {
-    const parsed: unknown = JSON.parse(serialized)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
-    const record = parsed as { schema_version?: unknown; reviewed_head?: unknown; findings?: unknown }
-    if (record.schema_version !== 1 || typeof record.reviewed_head !== 'string' ||
-      record.reviewed_head.toLowerCase() !== expectedHead.toLowerCase()) return false
-    const findings = record.findings
-    if (!Array.isArray(findings) || findings.length === 0) return false
-    const findingIds = new Set<string>()
-    return findings.every((finding) => {
-      if (!finding || typeof finding !== 'object' || Array.isArray(finding)) return false
-      const findingRecord = finding as { id?: unknown; canonical_summary?: unknown; source_thread?: unknown; required_evidence?: unknown }
-      const id = typeof findingRecord.id === 'string' ? findingRecord.id.trim() : ''
-      if (!id || findingIds.has(id)) return false
-      findingIds.add(id)
-      return typeof findingRecord.canonical_summary === 'string' && findingRecord.canonical_summary.trim() !== '' &&
-        typeof findingRecord.source_thread === 'string' && findingRecord.source_thread.trim() !== '' &&
-        Array.isArray(findingRecord.required_evidence) && findingRecord.required_evidence.length > 0 &&
-        findingRecord.required_evidence.every((item) => typeof item === 'string' && item.trim() !== '')
-    })
-  } catch {
-    return false
-  }
 }
 
 function isProtectedOrIntegrationBranch(branch: string): boolean {
@@ -246,7 +214,7 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     )
     const currentHeadVerdicts: Array<{ id: string | number; body: string; parsed: ProductionMergeReviewVerdict | null; valid: boolean; acceptedVerdict: string | null }> = []
 
-    const inspectVerdict = (id: string | number, body: string, commentUrl: string | null = null): void => {
+    const inspectVerdict = (id: string | number, body: string, commentUrl: string | null = null, nativeCurrent = false): void => {
       try {
         const parsed = parseProductionMergeReviewVerdict(body, id)
         const classification = classifyMergeReviewVerdict({
@@ -272,12 +240,12 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
         if (classification.valid && (acceptedVerdict === 'ELIGIBLE FOR FOUNDER REVIEW' || validCorrection)) {
           currentHeadVerdicts.push({ id, body, parsed, valid: true, acceptedVerdict })
         }
-        else if (parsed.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()) {
+        else if (nativeCurrent || parsed.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()) {
           currentHeadVerdicts.push({ id, body, parsed, valid: false, acceptedVerdict })
         }
       } catch {
         const reviewedHead = reviewedHeadForApplicability(body)
-        if (!reviewedHead || reviewedHead === activePr.headSha.toLowerCase()) {
+        if (nativeCurrent || !reviewedHead || reviewedHead === activePr.headSha.toLowerCase()) {
           currentHeadVerdicts.push({ id, body, parsed: null, valid: false, acceptedVerdict: null })
         }
       }
@@ -295,11 +263,11 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
         continue
       }
       if (review.commitId.toLowerCase() !== activePr.headSha.toLowerCase()) continue
-      if (review.id === null || !review.state.trim()) {
+      if (!isPositiveInteger(review.id) || !['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase())) {
         currentHeadVerdicts.push({ id: review.id ?? '<unknown>', body: review.body, parsed: null, valid: false, acceptedVerdict: null })
         continue
       }
-      inspectVerdict(review.id, review.body)
+      inspectVerdict(review.id!, review.body, null, true)
     }
 
     let malformedEvidence = false
@@ -360,6 +328,15 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
         type: 'STOP',
         command: null,
         description: 'Resolve the conflicting current-head review evidence before continuing.',
+      })
+    }
+
+    if (malformedEvidence || conflictingLiveHeadEvidence) {
+      return decision(evidence, 'STOP', [
+        `EVIDENCE_CONFLICT: malformed or conflicting exact-head semantic review evidence at ${activePr.headSha}.`,
+      ], {
+        type: 'STOP', command: null,
+        description: 'Resolve the exact-head semantic review evidence conflict before continuing.',
       })
     }
 
