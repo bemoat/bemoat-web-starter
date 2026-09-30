@@ -305,7 +305,7 @@ function resolveSupersedingHandoff(
   applicable: HandoffCandidate[], evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): HandoffCandidate | null {
-  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW')) return null
+  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW' || record.route === 'VERIFY')) return null
   return applicable.find(({ record }) => record.route === 'FIX'
     ? hasBlockingHandoffReview(record, evidence, activePr)
     : record.route === 'FOUNDER_GATE' && hasEligibleFounderHandoffReview(record, evidence, activePr)) ?? null

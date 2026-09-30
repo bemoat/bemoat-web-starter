@@ -98,7 +98,8 @@ export interface ProtectionEvidence {
 }
 
 export interface NativeReviewEvidence {
-  id: string | number | null
+  id: number | null
+  url: string | null
   state: string
   body: string
   commitId: string | null

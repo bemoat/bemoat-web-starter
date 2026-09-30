@@ -115,6 +115,7 @@ function verification(overrides: Record<string, unknown> = {}) {
 function nativeReview(overrides: Record<string, unknown> = {}) {
   return {
     id: 200,
+    url: `https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-${String(overrides.id ?? 200)}`,
     state: 'COMMENTED',
     commitId: headSha,
     body: `## REVIEW_VERDICT
@@ -1989,6 +1990,101 @@ describe('#503 supported native review lineage', () => {
       expect(JSON.stringify(evidence)).toBe(before)
       expect(initial.body).toBe(initialBody)
     }
+  })
+
+  function verifyPredecessor() {
+    const handoff = strictHandoff({
+      route: 'VERIFY',
+      next_action: { route: 'VERIFY', description: 'Verify the pushed exact head.' },
+      verified_evidence: [{ kind: 'focused-tests', value: 'Implementation validation passed.', url: null }],
+    })
+    return { ...handoff, id: 901, url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-901' }
+  }
+
+  function nativeReviewOutcome(route: 'FIX' | 'FOUNDER_GATE', reviewId = 200, commentId = 900) {
+    const handoff = strictHandoff({
+      route,
+      next_action: { route, description: `Follow the exact-head ${route} outcome.` },
+      verified_evidence: [{
+        kind: 'review-verdict',
+        value: 'Independent exact-head native review outcome.',
+        url: `https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-${reviewId}`,
+      }],
+    })
+    return {
+      ...handoff,
+      id: commentId,
+      url: `https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-${commentId}`,
+    }
+  }
+
+  it.each([
+    ['blocking review, predecessor first', 'FIX', nativeBlockingReview(), 'FIX', false],
+    ['blocking review, outcome first', 'FIX', nativeBlockingReview(), 'FIX', true],
+    ['eligible review, predecessor first', 'FOUNDER_GATE', nativeReview(), 'FOUNDER_GATE', false],
+    ['eligible review, outcome first', 'FOUNDER_GATE', nativeReview(), 'FOUNDER_GATE', true],
+  ] as const)('accepts a VERIFY predecessor with a valid %s outcome', (_label, route, review, expected, outcomeFirst) => {
+    const predecessor = verifyPredecessor()
+    const outcome = nativeReviewOutcome(route)
+    const order = outcomeFirst ? [outcome, predecessor] : [predecessor, outcome]
+    const evidence = evidenceFor([review], order)
+    const before = JSON.stringify(evidence)
+    const originalBodies = order.map(({ body }) => body)
+    expect(routeContext(evidence).route).toBe(expected)
+    expect(JSON.stringify(evidence)).toBe(before)
+    expect(order.map(({ body }) => body)).toEqual(originalBodies)
+  })
+
+  it('keeps an unrelated exact-head outcome beside VERIFY at STOP', () => {
+    const unrelated = strictHandoff({
+      route: 'COMPLETE',
+      next_action: { route: 'COMPLETE', description: 'Mark the unrelated objective complete.' },
+      verified_evidence: [{ kind: 'focused-tests', value: 'Validation evidence.', url: null }],
+    })
+    expect(routeContext(evidenceFor([], [verifyPredecessor(), { ...unrelated, id: 902 }])).route).toBe('STOP')
+  })
+
+  it('keeps competing FIX and FOUNDER_GATE outcomes beside VERIFY at STOP', () => {
+    const evidence = evidenceFor(
+      [nativeBlockingReview(), nativeReview({ id: 201 })],
+      [verifyPredecessor(), nativeReviewOutcome('FIX'), nativeReviewOutcome('FOUNDER_GATE', 201, 902)],
+    )
+    expect(routeContext(evidence).route).toBe('STOP')
+  })
+
+  it('keeps a malformed exact-head outcome beside VERIFY at STOP', () => {
+    const malformed = mutateHandoffIdentity(nativeReviewOutcome('FIX'), (payload) => {
+      const pr = payload.pr as Record<string, unknown>
+      pr.head_sha = 'not-a-full-commit-sha'
+    })
+    expect(routeContext(evidenceFor([nativeBlockingReview()], [verifyPredecessor(), malformed])).route).toBe('STOP')
+  })
+
+  it('resolves an exact database-ID review reference to its unique canonical native review', () => {
+    const databaseId = 5355572368
+    const canonicalUrl = `https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-${databaseId}`
+    const review = nativeBlockingReview({ id: databaseId, url: canonicalUrl })
+    const outcome = nativeReviewOutcome('FIX', databaseId)
+    expect(routeContext(evidenceFor([review], [outcome])).route).toBe('FIX')
+  })
+
+  it('rejects a canonical review reference when the acquired review URL binds elsewhere', () => {
+    const review = nativeBlockingReview({
+      url: 'https://github.com/other/repo/pull/999#pullrequestreview-200',
+    })
+    expect(routeContext(evidenceFor([review], [nativeReviewOutcome('FIX')])).route).toBe('STOP')
+  })
+
+  it('rejects a review reference with a different numeric database ID', () => {
+    const outcome = nativeReviewOutcome('FIX', 201)
+    expect(routeContext(evidenceFor([nativeBlockingReview()], [outcome])).route).toBe('STOP')
+  })
+
+  it('rejects duplicate database IDs even when only one acquired URL is canonical', () => {
+    const duplicate = nativeBlockingReview({
+      url: 'https://github.com/other/repo/pull/999#pullrequestreview-200',
+    })
+    expect(routeContext(evidenceFor([nativeBlockingReview(), duplicate])).route).toBe('STOP')
   })
 
   it('accepts a lone FIX with native lineage and immutable findings', () => {

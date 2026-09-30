@@ -1,5 +1,78 @@
-import type { ActivePullRequestEvidence, NormalizedContextEvidence } from './model.ts'
+import type { ActivePullRequestEvidence, NativeReviewEvidence, NormalizedContextEvidence } from './model.ts'
 import { parseProductionMergeReviewVerdict } from './merge-review-verdict.ts'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function reviewDatabaseId(value: unknown): number | null {
+  const candidate = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^[1-9]\d*$/.test(value)
+      ? Number(value)
+      : null
+  return typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate > 0 ? candidate : null
+}
+
+function reviewEvidence(value: unknown): NativeReviewEvidence {
+  const record = isRecord(value) ? value : {}
+  const ids = [record.databaseId, record.database_id, record.id]
+    .map(reviewDatabaseId)
+    .filter((id): id is number => id !== null)
+  const uniqueIds = [...new Set(ids)]
+  const id = uniqueIds.length === 1 ? uniqueIds[0] ?? null : null
+  const url = typeof record.html_url === 'string' ? record.html_url : typeof record.url === 'string' ? record.url : null
+  const state = typeof record.state === 'string' ? record.state : ''
+  const body = typeof record.body === 'string' ? record.body : ''
+  const rawCommitId = record.commitId ?? record.commit_id ?? (isRecord(record.commit) ? record.commit.oid : null)
+  return { id, url, state, body, commitId: typeof rawCommitId === 'string' && rawCommitId.trim() ? rawCommitId : null }
+}
+
+export function nativeReviewRows(value: unknown): Record<string, unknown>[] | null {
+  if (!Array.isArray(value)) return null
+  const rows: unknown[] = value.every(Array.isArray) ? value.flat() : value
+  const records: Record<string, unknown>[] = []
+  for (const row of rows) {
+    if (!isRecord(row)) return null
+    records.push(row)
+  }
+  return records
+}
+
+export function hasUniqueCanonicalReviewIdentity(reviews: Record<string, unknown>[], repo: string, prNumber: string): boolean {
+  const ids = new Set<number>()
+  for (const value of reviews) {
+    const review = reviewEvidence(value)
+    if (review.id === null || review.url !== `https://github.com/${repo}/pull/${prNumber}#pullrequestreview-${review.id}` || ids.has(review.id)) {
+      return false
+    }
+    ids.add(review.id)
+  }
+  return true
+}
+
+export function reviewCounts(reviews: unknown[], headSha: string): { approvedCount: number; exactHeadApprovedCount: number; nativeReviews: NativeReviewEvidence[] } {
+  const latest = new Map<string, { approved: boolean; exactHead: boolean }>()
+  reviews.forEach((value, index) => {
+    if (!isRecord(value)) return
+    const identity = asString(isRecord(value.user) ? value.user.login : null) ??
+      asString(isRecord(value.author) ? value.author.login : null) ??
+      asString(value.authorLogin) ?? `review-${index}`
+    const state = String(value.state ?? '').toUpperCase()
+    const commitId = String(value.commitId ?? value.commit_id ?? (isRecord(value.commit) ? value.commit.oid : ''))
+    latest.set(identity, { approved: state === 'APPROVED', exactHead: state === 'APPROVED' && commitId === headSha })
+  })
+  const current = [...latest.values()].filter((review) => review.approved)
+  return {
+    approvedCount: current.length,
+    exactHeadApprovedCount: current.filter((review) => review.exactHead).length,
+    nativeReviews: reviews.map((value) => reviewEvidence(value)),
+  }
+}
 
 // Native reviews are durable evidence; HANDOFF remains the append-only transport.
 export function hasNativeReviewLineage(
@@ -8,12 +81,18 @@ export function hasNativeReviewLineage(
   activePr: ActivePullRequestEvidence,
   requiredVerdict: 'CORRECTION REQUIRED' | 'ELIGIBLE FOR FOUNDER REVIEW',
 ): boolean {
-  const reviews = (evidence.currentHeadVerification?.reviews.nativeReviews ?? []).filter((review) =>
-    /^[1-9]\d*$/.test(String(review.id)) && url ===
-      `https://github.com/${evidence.repository.nameWithOwner}/pull/${activePr.number}#pullrequestreview-${review.id}`)
+  const reviewUrlPrefix = `https://github.com/${evidence.repository.nameWithOwner}/pull/${activePr.number}#pullrequestreview-`
+  if (!url.startsWith(reviewUrlPrefix)) return false
+  const idText = url.slice(reviewUrlPrefix.length)
+  if (!/^[1-9]\d*$/.test(idText)) return false
+  const reviewId = Number(idText)
+  if (!Number.isSafeInteger(reviewId)) return false
+
+  const reviews = (evidence.currentHeadVerification?.reviews.nativeReviews ?? [])
+    .filter((review) => review.id === reviewId)
   if (reviews.length !== 1) return false
   const review = reviews[0]!
-  if (!review.commitId || !/^[0-9a-f]{40}$/i.test(review.commitId) ||
+  if (review.url !== url || !review.commitId || !/^[0-9a-f]{40}$/i.test(review.commitId) ||
     review.commitId.toLowerCase() !== activePr.headSha.toLowerCase() ||
     !['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase()) ||
     !/^##\s+REVIEW_VERDICT\b/i.test(review.body)) return false
