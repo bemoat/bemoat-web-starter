@@ -110,12 +110,17 @@ export interface RoleEvidence {
   body: string
   createdAt: string
   url: string
+  authorLogin?: string | null
+  authorAssociation?: string | null
+  authorIdentityConflict?: boolean
 }
 
 export interface DurableContextEvidence {
   latestHandoff: RoleEvidence | null
   handoffs?: RoleEvidence[]
   historicalResults: RoleEvidence[]
+  blockerResolutions?: RoleEvidence[]
+  invalidBlockerResolutions?: RoleEvidence[]
 }
 
 export interface NormalizedContextEvidence {

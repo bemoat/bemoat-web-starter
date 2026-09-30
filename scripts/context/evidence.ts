@@ -99,7 +99,13 @@ export function collectContextEvidence({
     localGit,
     activePr,
     currentHeadVerification: github.activePrs.length === 1 ? github.exactHead : null,
-    durableContext: { latestHandoff: roleEvidence.latestHandoff, handoffs: roleEvidence.handoffs, historicalResults: roleEvidence.historicalResults },
+    durableContext: {
+      latestHandoff: roleEvidence.latestHandoff,
+      handoffs: roleEvidence.handoffs,
+      historicalResults: roleEvidence.historicalResults,
+      blockerResolutions: roleEvidence.blockerResolutions,
+      invalidBlockerResolutions: roleEvidence.invalidBlockerResolutions,
+    },
     evidenceErrors: [...new Set([
       ...errors,
       ...approvedBase.errors,

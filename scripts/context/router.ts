@@ -6,6 +6,7 @@ import type {
 import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import { hasBlockingFinding } from './semantic-review-evidence.ts'
+import { resolveStopBlockers } from './blocker-resolution.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
 function evidenceUrls(evidence: NormalizedContextEvidence): string[] {
@@ -182,13 +183,21 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
   const applicableHandoff = handoffResolution.record
   const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, evidence, activePr)
   if (applicableHandoff?.route === 'STOP') {
-    return decision(evidence, 'STOP', [
-      `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
-    ], {
-      type: 'STOP',
-      command: null,
-      description: 'Resolve the exact-head HANDOFF STOP before continuing.',
-    })
+    const source = handoffResolution.evidence
+    const blockerResolution = source
+      ? resolveStopBlockers({ record: applicableHandoff, source, evidence, activePr })
+      : 'conflict'
+    if (blockerResolution !== 'resolved') {
+      return decision(evidence, 'STOP', [
+        blockerResolution === 'conflict'
+          ? `EVIDENCE_CONFLICT: exact-head HANDOFF STOP has ambiguous blocker-resolution evidence at ${activePr.headSha}.`
+          : `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
+      ], {
+        type: 'STOP',
+        command: null,
+        description: 'Resolve the exact-head HANDOFF STOP before continuing.',
+      })
+    }
   }
   if (verification.checks.failed) {
     return decision(evidence, 'FIX', [

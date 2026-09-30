@@ -16,6 +16,8 @@ interface RoleEvidenceResult {
   handoffs: RoleEvidence[]
   historicalResults: RoleEvidence[]
   invalid: RoleEvidence[]
+  blockerResolutions: RoleEvidence[]
+  invalidBlockerResolutions: RoleEvidence[]
 }
 
 function sections(body: string): Map<string, string[]> {
@@ -77,12 +79,19 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
   const handoffs: RoleEvidence[] = []
   const results: RoleEvidence[] = []
   const invalid: RoleEvidence[] = []
+  const blockerResolutions: RoleEvidence[] = []
+  const invalidBlockerResolutions: RoleEvidence[] = []
 
   for (const value of comments) {
     if (!value || typeof value !== 'object') continue
-    const comment = value as Partial<RoleEvidence>
+    const comment = value as Partial<RoleEvidence> & Record<string, unknown>
+    const author = comment.author && typeof comment.author === 'object'
+      ? comment.author as Record<string, unknown>
+      : null
+    const explicitAuthorLogin = typeof comment.authorLogin === 'string' ? comment.authorLogin : null
+    const nestedAuthorLogin = typeof author?.login === 'string' ? author.login : null
     const body = typeof comment.body === 'string' ? comment.body : ''
-    const marker = body.match(/^##\s+(HANDOFF|RESULT|REVIEW_VERDICT)\b/i)?.[1]?.toUpperCase()
+    const marker = body.match(/^##\s+(HANDOFF|RESULT|REVIEW_VERDICT|BLOCKER_RESOLUTION)\b/i)?.[1]?.toUpperCase()
     if (!marker) continue
 
     const normalized: RoleEvidence = {
@@ -90,6 +99,20 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
       body,
       createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
       url: typeof comment.url === 'string' ? comment.url : '',
+      ...(marker === 'BLOCKER_RESOLUTION' ? {
+        authorLogin: explicitAuthorLogin ?? nestedAuthorLogin,
+        authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,
+        authorIdentityConflict: explicitAuthorLogin !== null && nestedAuthorLogin !== null &&
+          explicitAuthorLogin.toLowerCase() !== nestedAuthorLogin.toLowerCase(),
+      } : {}),
+    }
+
+    if (marker === 'BLOCKER_RESOLUTION') {
+      // Resolution authority is checked from native comment author evidence.
+      // Its timestamp is deliberately not used for applicability or precedence.
+      if (normalized.id === '' || !normalized.url) invalidBlockerResolutions.push(normalized)
+      else blockerResolutions.push(normalized)
+      continue
     }
 
     if (!normalized.createdAt || Number.isNaN(Date.parse(normalized.createdAt))) {
@@ -109,5 +132,7 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
     handoffs,
     historicalResults: results,
     invalid,
+    blockerResolutions,
+    invalidBlockerResolutions,
   }
 }

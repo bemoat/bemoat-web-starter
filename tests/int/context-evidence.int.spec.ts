@@ -419,7 +419,7 @@ describe('bemoat:context neutral evidence adapters', () => {
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.startsWith('issue view 434')) {
-        return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [{ id: 1001, body: '## HANDOFF PR #431', createdAt: '2026-09-01T00:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1001' }, { id: 1002, body: '## REVIEW_VERDICT PR #432', createdAt: '2026-09-01T01:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1002' }] }))
+        return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [{ id: 1001, body: '## HANDOFF PR #431', createdAt: '2026-09-01T00:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1001', author: { login: 'boat1994' }, authorAssociation: 'OWNER' }, { id: 1002, body: '## REVIEW_VERDICT PR #432', createdAt: '2026-09-01T01:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1002' }] }))
       }
       if (key.startsWith('pr list')) return response(JSON.stringify([1, 2].map((number) => ({ number: 430 + number, url: `https://github.com/boat1994/bemoat-web-starter/pull/${430 + number}`, headRefName: `fix/434-history-${number}`, closingIssuesReferences: [{ number: 434 }] }))))
       const match = key.match(/^pr view (43[1-2])/)
@@ -442,7 +442,7 @@ describe('bemoat:context neutral evidence adapters', () => {
     })
     expect(evidence.activePrs).toEqual([])
     expect(evidence.comments).toMatchObject([
-      { id: '1001', body: expect.stringContaining('HANDOFF') },
+      { id: '1001', body: expect.stringContaining('HANDOFF'), authorLogin: 'boat1994', authorAssociation: 'OWNER' },
       { id: '1002', body: expect.stringContaining('REVIEW_VERDICT') },
     ])
     expect(evidence.errors).toEqual([])
