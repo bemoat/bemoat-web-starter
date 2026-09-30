@@ -28,6 +28,7 @@ export interface PolicyEvidence {
   policyId: string
   version: string
   sourceSha: string
+  trustedFounderLogin?: string | null
   url: string
 }
 

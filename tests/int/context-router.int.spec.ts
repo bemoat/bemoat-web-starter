@@ -34,6 +34,7 @@ function baseEvidence(
       policyId: 'bemoat-mission-control',
       version: '1.3.0',
       sourceSha: sha,
+      trustedFounderLogin: 'boat1994',
       url: 'https://github.com/boat1994/bemoat-web-starter/blob/main/docs/mission-control/mission-control-guide.md',
     },
     issue: {
@@ -447,6 +448,16 @@ describe('bemoat:context pure routing', () => {
     expect(decision.route).toBe('REVIEW')
   })
 
+  it('re-evaluates a schema-v3 STOP only through its explicit blocker ID', () => {
+    const handoff = strictHandoff({
+      schema_version: 3,
+      route: 'STOP',
+      verified_evidence: [{ kind: 'stop-blocker', value: 'new-protocol-blocker', url: null }],
+      next_action: { route: 'STOP', description: 'Resolve the new protocol blocker.' },
+    })
+    expect(routeWithStop(handoff, [blockerResolutionComment(handoff, 'new-protocol-blocker')]).route).toBe('REVIEW')
+  })
+
   it.each([
     ['repository', (record: Record<string, unknown>) => { record.repository = 'other/repository' }],
     ['Issue', (record: Record<string, unknown>) => { record.issue_number = '999' }],
@@ -529,11 +540,24 @@ describe('bemoat:context pure routing', () => {
       mutate: (record) => { record.authority = { role: 'OWNER', login: 'boat1994' } },
     })
     const missingNativeAuthor = blockerResolutionComment(handoff, 'named-blocker', { authorLogin: null })
+    const otherOwner = blockerResolutionComment(handoff, 'named-blocker', {
+      authorLogin: 'another-owner',
+      mutate: (record) => { record.authority = { role: 'FOUNDER', login: 'another-owner' } },
+    })
     expect(routeWithStop(handoff, [spoofed]).route).toBe('STOP')
     expect(routeWithStop(handoff, [nonOwner]).route).toBe('STOP')
     expect(routeWithStop(handoff, [conflicting]).route).toBe('STOP')
     expect(routeWithStop(handoff, [wrongRole]).route).toBe('STOP')
     expect(routeWithStop(handoff, [missingNativeAuthor]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [otherOwner]).route).toBe('STOP')
+  })
+
+  it('fails closed when protected policy lacks a trusted Founder login', () => {
+    const handoff = stopHandoff()
+    const evidence = baseEvidence()
+    expect(routeWithStop(handoff, [blockerResolutionComment(handoff)], {
+      policy: { ...evidence.policy, trustedFounderLogin: null },
+    }).route).toBe('STOP')
   })
 
   it('does not use resolution timestamp order to select authority', () => {

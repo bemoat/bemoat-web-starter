@@ -1,6 +1,7 @@
 ---
 policy_id: bemoat-mission-control
 version: 1.3.0
+trusted_founder_login: boat1994
 scope: repository-development
 canonical_repository: boat1994/bemoat-web-starter
 max_review_cycles: 3
@@ -139,6 +140,20 @@ evidence stops fail-closed as STOP, including BLOCKED_EXTERNAL,
 STATE_CONFLICT, or CLI_DISCOVERY_DEFECT as applicable.
 
 ## Safety and durability
+
+`trusted_founder_login` in merged protected-base policy supplies Founder
+identity for `BLOCKER_RESOLUTION`. The native GitHub comment author and the
+record's declared login must both match it. A role claim or GitHub `OWNER`
+association cannot supply missing authority. An unmerged policy change cannot
+authorize evidence for its own PR. This value applies only when
+`canonical_repository` matches the live repository; a copied starter guide
+cannot grant Founder authority in a child repository.
+
+Historical schema-v2 STOP HANDOFFs without explicit blockers retain one legacy
+blocker derived from immutable `next_action.description`; `stop_conditions`
+remain guardrails. New STOP HANDOFFs use schema-v3 and require unique explicit
+`stop-blocker` evidence. The public HANDOFF writer rejects schema-v2 STOP
+publication; Context may still read historical schema-v2 STOPs.
 
 Each objective has one authority scope, explicit in/out-of-scope boundaries,
 acceptance-criteria audit, required checks, and one terminal outcome.

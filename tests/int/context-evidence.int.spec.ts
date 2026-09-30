@@ -118,7 +118,7 @@ describe('bemoat:context neutral evidence adapters', () => {
   })
 
   it('reads protected-base SHA and policy identity from live GitHub content', () => {
-    const policy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\n---\n\n# Guide\n'
+    const policy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\n---\n\n# Guide\n'
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.includes('git/ref/heads/main')) {
@@ -145,11 +145,40 @@ describe('bemoat:context neutral evidence adapters', () => {
         path: 'docs/mission-control/mission-control-guide.md',
         policyId: 'bemoat-mission-control',
         version: '1.3.0',
+        trustedFounderLogin: 'boat1994',
         sourceSha: 'c'.repeat(40),
         url: 'https://github.com/boat1994/bemoat-web-starter/blob/' + 'a'.repeat(40) + '/docs/mission-control/mission-control-guide.md',
       },
       errors: [],
     })
+  })
+
+  it('rejects ambiguous trusted Founder identity in protected policy', () => {
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) return response(JSON.stringify({
+        sha: 'c'.repeat(40),
+        content: Buffer.from('---\npolicy_id: bemoat-mission-control\nversion: 1.4.0\ntrusted_founder_login: boat1994\ntrusted_founder_login: another-owner\n---\n').toString('base64'),
+        encoding: 'base64',
+      }))
+      return response('')
+    }
+    expect(readProtectedPolicy({ repo: 'boat1994/bemoat-web-starter', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
+  })
+
+  it('does not copy the starter Founder identity into a child repository', () => {
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) return response(JSON.stringify({
+        sha: 'c'.repeat(40),
+        content: Buffer.from('---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\n---\n').toString('base64'),
+        encoding: 'base64',
+      }))
+      return response('')
+    }
+    expect(readProtectedPolicy({ repo: 'boat1994/child-project', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
   })
 
   it('binds the Issue, one active PR, and exact-head verification', () => {

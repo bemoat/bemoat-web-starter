@@ -72,6 +72,21 @@ describe('bemoat:handoff schema', () => {
     expect(() => parseHandoffBody(JSON.stringify(validRecord({ schema_version: 1 })))).toThrow(/schema_version.*2/i)
   })
 
+  it('reads historical schema-v2 STOP but requires explicit blocker IDs for new STOP publication', () => {
+    const legacy = validRecord({ route: 'STOP', next_action: { route: 'STOP', description: 'Historical stop.' } })
+    expect(parseHandoffBody(JSON.stringify(legacy))).toMatchObject({ schema_version: 2, route: 'STOP' })
+    expect(() => parseHandoffBody(JSON.stringify(legacy), { allowLegacyStop: false })).toThrow(/schema-v3|legacy STOP/i)
+
+    const newStop = validRecord({
+      schema_version: 3,
+      route: 'STOP',
+      next_action: { route: 'STOP', description: 'Resolve a named blocker.' },
+      verified_evidence: [{ kind: 'stop-blocker', value: 'named-blocker', url: null }],
+    })
+    expect(parseHandoffBody(JSON.stringify(newStop), { allowLegacyStop: false })).toMatchObject({ schema_version: 3, route: 'STOP' })
+    expect(() => parseHandoffBody(JSON.stringify({ ...newStop, verified_evidence: legacy.verified_evidence }))).toThrow(/stop-blocker/i)
+  })
+
   it('rejects a route whose next action is not compatible with the route', () => {
     expect(() => parseHandoffBody(JSON.stringify(validRecord({
       next_action: { route: 'REVIEW', description: 'Review the implementation.' },

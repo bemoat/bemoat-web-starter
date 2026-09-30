@@ -77,6 +77,8 @@ export function stopBlockerIds(record: HandoffRecord, source: RoleEvidence): str
     return ids
   }
 
+  if (record.schema_version !== 2) return null
+
   // Schema-v2 STOPs have no blocker list. Bind the one legacy blocker to the
   // immutable action description; stop_conditions remain guardrails, not blockers.
   const description = record.next_action.description.trim()
@@ -159,7 +161,11 @@ export function resolveStopBlockers({
     if (matches.length !== 1) return 'conflict'
     const { comment, parsed } = matches[0]!
     if (!bindsCurrentStop(parsed, source, blockerId, evidence, activePr) || !exactCommentUrl(comment, evidence)) return 'conflict'
-    if (comment.authorIdentityConflict || !comment.authorLogin || comment.authorLogin.toLowerCase() !== parsed.authority.login.toLowerCase() ||
+    const trustedFounderLogin = evidence.policy.trustedFounderLogin
+    if (!trustedFounderLogin || !/^[A-Za-z0-9-]+$/.test(trustedFounderLogin) ||
+        comment.authorIdentityConflict || !comment.authorLogin ||
+        comment.authorLogin.toLowerCase() !== trustedFounderLogin.toLowerCase() ||
+        parsed.authority.login.toLowerCase() !== trustedFounderLogin.toLowerCase() ||
         comment.authorAssociation?.toUpperCase() !== 'OWNER') return 'conflict'
   }
   return 'resolved'
