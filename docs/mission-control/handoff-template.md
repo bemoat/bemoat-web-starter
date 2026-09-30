@@ -7,8 +7,9 @@ one bounded objective:
 pnpm run bemoat:handoff <issue-number> --body-file <strict-handoff.json>
 ```
 
-The body must contain exactly one strict JSON HANDOFF object with the schema-v2
-fields below. Markdown, fenced
+The body must contain exactly one strict JSON HANDOFF object with the fields
+below. Use schema-v2 for ordinary routes and schema-v3 for a new STOP.
+Markdown, fenced
 JSON, stdin, unknown fields, and multiple records are rejected.
 
 ```json
@@ -58,6 +59,35 @@ JSON, stdin, unknown fields, and multiple records are rejected.
 ```
 
 `objective_mode` is `implementation` or `read_only`. Read-only records must set `pr` to `null`; the runtime verifies that no applicable active PR exists and that the protected-base-to-HEAD diff is empty before running `pnpm run bemoat:guard:safety`.
+
+For a new STOP, set `schema_version` to `3`, set both `route` and
+`next_action.route` to `STOP`, and include one `verified_evidence` entry of kind
+`stop-blocker` for each independently resolvable blocker. Each entry has a
+unique ID in `value` and `url: null`. Keep `stop_conditions` as guardrails;
+they are not blocker IDs. The public writer rejects schema-v2 STOP input.
+Context reads older schema-v2 STOPs only when their immutable identity is
+listed in merged protected-base policy.
+
+Example `verified_evidence` and route fields for a new STOP (use them in the
+complete object above):
+
+```json
+{
+  "schema_version": 3,
+  "verified_evidence": [
+    { "kind": "stop-blocker", "value": "missing-founder-decision", "url": null },
+    { "kind": "stop-blocker", "value": "conflicting-native-evidence", "url": null }
+  ],
+  "route": "STOP",
+  "next_action": {
+    "route": "STOP",
+    "description": "Resolve each named blocker through authorized durable evidence"
+  }
+}
+```
+
+This fragment illustrates replacements; the body file must still contain every
+required field from the complete HANDOFF object.
 
 The runtime derives the required validation tier from authoritative changed-file evidence and runs the matching repository command before publishing. It removes any caller-supplied `validation-proof` entry and adds one runtime-generated proof containing `status`, `tier`, `command`, and `exact_head`. Do not write or claim this proof in the input record.
 
