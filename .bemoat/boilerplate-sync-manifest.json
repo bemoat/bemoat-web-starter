@@ -103,6 +103,7 @@
     "tests/int/context-router.int.spec.ts",
     "tests/int/context-evidence.int.spec.ts",
     "tests/int/context-acquisition.int.spec.ts",
+    "tests/int/context-legacy-fix-characterization.int.spec.ts",
     "tests/int/approved-base.int.spec.ts",
     "tests/int/context-cli.int.spec.ts",
     "tests/int/context-skill.int.spec.ts",
