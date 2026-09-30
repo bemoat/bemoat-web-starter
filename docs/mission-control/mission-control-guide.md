@@ -2,6 +2,7 @@
 policy_id: bemoat-mission-control
 version: 1.3.0
 trusted_founder_login: boat1994
+legacy_stop_handoffs: 513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7,509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2
 scope: repository-development
 canonical_repository: boat1994/bemoat-web-starter
 max_review_cycles: 3
@@ -149,9 +150,11 @@ authorize evidence for its own PR. This value applies only when
 `canonical_repository` matches the live repository; a copied starter guide
 cannot grant Founder authority in a child repository.
 
-Historical schema-v2 STOP HANDOFFs without explicit blockers retain one legacy
-blocker derived from immutable `next_action.description`; `stop_conditions`
-remain guardrails. New STOP HANDOFFs use schema-v3 and require unique explicit
+Only schema-v2 STOP HANDOFFs identified by `legacy_stop_handoffs` in merged
+protected-base policy retain one legacy blocker derived from immutable
+`next_action.description`. Each entry binds Issue number, native comment ID,
+exact head, and description SHA-256. `stop_conditions` remain guardrails.
+Unlisted schema-v2 STOPs fail closed. New STOP HANDOFFs use schema-v3 and require unique explicit
 `stop-blocker` evidence. The public HANDOFF writer rejects schema-v2 STOP
 publication; Context may still read historical schema-v2 STOPs.
 

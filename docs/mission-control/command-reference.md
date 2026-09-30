@@ -59,8 +59,10 @@ For a STOP HANDOFF with explicit `verified_evidence` entries of kind
 one valid resolution. An older STOP HANDOFF without these entries has one
 legacy blocker ID: `legacy-stop:<HANDOFF comment ID>:<SHA-256 of the trimmed
 next_action.description UTF-8 bytes>`. Its `stop_conditions` are guardrails,
-not separate blockers. This compatibility applies only to historical
-schema-v2 STOPs. New schema-v3 STOPs require unique explicit `stop-blocker`
+not separate blockers. This compatibility applies only to schema-v2 STOPs
+whose Issue, native comment ID, exact head, and description digest appear in
+`legacy_stop_handoffs` in merged protected-base policy. Unlisted schema-v2
+STOPs stay blocked. New schema-v3 STOPs require unique explicit `stop-blocker`
 IDs and cannot derive blockers from prose. The source HANDOFF remains unchanged.
 
 Missing, malformed, stale, wrong, duplicate, competing, or ambiguous

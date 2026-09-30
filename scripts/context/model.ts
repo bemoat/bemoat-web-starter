@@ -29,6 +29,7 @@ export interface PolicyEvidence {
   version: string
   sourceSha: string
   trustedFounderLogin?: string | null
+  legacyStopHandoffs?: string[]
   url: string
 }
 

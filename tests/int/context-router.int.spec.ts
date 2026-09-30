@@ -35,6 +35,10 @@ function baseEvidence(
       version: '1.3.0',
       sourceSha: sha,
       trustedFounderLogin: 'boat1994',
+      legacyStopHandoffs: [
+        '513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7',
+        '509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2',
+      ],
       url: 'https://github.com/boat1994/bemoat-web-starter/blob/main/docs/mission-control/mission-control-guide.md',
     },
     issue: {
@@ -456,6 +460,16 @@ describe('bemoat:context pure routing', () => {
       next_action: { route: 'STOP', description: 'Resolve the new protocol blocker.' },
     })
     expect(routeWithStop(handoff, [blockerResolutionComment(handoff, 'new-protocol-blocker')]).route).toBe('REVIEW')
+  })
+
+  it('does not treat a newly appended schema-v2 prose-only STOP as historical', () => {
+    const handoff = strictHandoff({
+      route: 'STOP',
+      verified_evidence: [{ kind: 'diagnostic', value: 'new STOP with no blocker ID', url: null }],
+      next_action: { route: 'STOP', description: 'Resolve all newly identified blockers.' },
+    })
+    const resolution = blockerResolutionComment(handoff, 'legacy-stop:900:64c3b71ef6154c417afd241dc39efd33ddf38be8dc60294c2a9cc64bcff1def9')
+    expect(routeWithStop(handoff, [resolution]).route).toBe('STOP')
   })
 
   it.each([

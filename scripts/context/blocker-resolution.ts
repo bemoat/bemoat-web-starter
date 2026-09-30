@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import type { ActivePullRequestEvidence, NormalizedContextEvidence, RoleEvidence } from './model.ts'
+import type { ActivePullRequestEvidence, NormalizedContextEvidence, PolicyEvidence, RoleEvidence } from './model.ts'
 import type { HandoffRecord } from '../handoff/schema.ts'
 
 export type BlockerResolutionRecord = {
@@ -69,7 +69,7 @@ function parseRecord(body: string): BlockerResolutionRecord | null {
   return render(record) === body ? record : null
 }
 
-export function stopBlockerIds(record: HandoffRecord, source: RoleEvidence): string[] | null {
+export function stopBlockerIds(record: HandoffRecord, source: RoleEvidence, policy: PolicyEvidence): string[] | null {
   const explicit = record.verified_evidence.filter(({ kind }) => kind === 'stop-blocker')
   if (explicit.length > 0) {
     const ids = explicit.map(({ value }) => value)
@@ -84,6 +84,8 @@ export function stopBlockerIds(record: HandoffRecord, source: RoleEvidence): str
   const description = record.next_action.description.trim()
   if (!description || source.id === '') return null
   const digest = createHash('sha256').update(description, 'utf8').digest('hex')
+  const historicalIdentity = `${record.issue_number}:${String(source.id)}:${record.exact_head}:${digest}`
+  if (!policy.legacyStopHandoffs?.includes(historicalIdentity)) return null
   return [`legacy-stop:${String(source.id)}:${digest}`]
 }
 
@@ -138,7 +140,7 @@ export function resolveStopBlockers({
   evidence: NormalizedContextEvidence
   activePr: ActivePullRequestEvidence
 }): StopBlockerResolution {
-  const blockers = stopBlockerIds(record, source)
+  const blockers = stopBlockerIds(record, source, evidence.policy)
   if (!blockers) return 'conflict'
   const resolutions = evidence.durableContext.blockerResolutions ?? []
   const invalid = evidence.durableContext.invalidBlockerResolutions ?? []

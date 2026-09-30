@@ -185,7 +185,7 @@ export function validateHandoffRecord(value: unknown, options: { allowLegacyStop
   const errors: string[] = []
   if (!isRecord(value)) throw new HandoffValidationError(['HANDOFF body must be a JSON object'])
   errors.push(...unknownFields(value, TOP_LEVEL_KEYS))
-  if (!exactKeys(value, TOP_LEVEL_KEYS)) errors.push('HANDOFF body must contain exactly the schema-v2 fields')
+  if (!exactKeys(value, TOP_LEVEL_KEYS)) errors.push('HANDOFF body must contain exactly the canonical fields')
   if (value.schema_version !== 2 && value.schema_version !== 3) errors.push('schema_version must be 2 or 3')
   if (value.record_type !== 'HANDOFF') errors.push('record_type must be HANDOFF')
   if (value.objective_mode !== 'implementation' && value.objective_mode !== 'read_only') {

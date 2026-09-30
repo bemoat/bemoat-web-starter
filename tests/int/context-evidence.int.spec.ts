@@ -118,7 +118,8 @@ describe('bemoat:context neutral evidence adapters', () => {
   })
 
   it('reads protected-base SHA and policy identity from live GitHub content', () => {
-    const policy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\n---\n\n# Guide\n'
+    const historicalStop = `513:5913355141:${'a'.repeat(40)}:${'b'.repeat(64)}`
+    const policy = `---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\nlegacy_stop_handoffs: ${historicalStop}\n---\n\n# Guide\n`
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.includes('git/ref/heads/main')) {
@@ -146,6 +147,7 @@ describe('bemoat:context neutral evidence adapters', () => {
         policyId: 'bemoat-mission-control',
         version: '1.3.0',
         trustedFounderLogin: 'boat1994',
+        legacyStopHandoffs: [historicalStop],
         sourceSha: 'c'.repeat(40),
         url: 'https://github.com/boat1994/bemoat-web-starter/blob/' + 'a'.repeat(40) + '/docs/mission-control/mission-control-guide.md',
       },
