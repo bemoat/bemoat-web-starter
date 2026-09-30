@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { routeContext } from '../../scripts/context/router.ts'
+import { parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
 import {
   classifyMergeReviewVerdict,
@@ -329,6 +330,56 @@ describe('bemoat:context pure routing', () => {
     }))
 
     expect(decision.route).toBe('STOP')
+  })
+
+  it('characterizes the #509-shaped Founder decision leaving the exact-head STOP pinned', () => {
+    const reviewedHead = '86c0ec49311a1b356ff96be087bb335ea6dc992f'
+    const stop = {
+      ...strictHandoff({
+        issue_number: '509',
+        branch: 'test/509-legacy-fix-lineage-characterization',
+        exact_head: reviewedHead,
+        pr: {
+          number: '511',
+          url: 'https://github.com/boat1994/bemoat-web-starter/pull/511',
+          base: 'main',
+          head: 'test/509-legacy-fix-lineage-characterization',
+          head_sha: reviewedHead,
+        },
+        route: 'STOP',
+        next_action: { route: 'STOP', description: 'Stop production correction until a Founder architecture decision.' },
+      }),
+      id: 5906598686,
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/509#issuecomment-5906598686',
+    }
+    const founderDecision = {
+      id: 5907706574,
+      body: '## FOUNDER_DECISION — legacy review migration semantics\n\nThis decision resolves the protocol/spec decision recorded by HANDOFF 5906598686.',
+      createdAt: '2026-09-30T08:53:39Z',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/509#issuecomment-5907706574',
+    }
+    const parsed = parseRoleEvidence([stop, founderDecision])
+    expect(parsed.handoffs.map(({ id }) => id)).toEqual([5906598686])
+    expect(parsed.historicalResults).toEqual([])
+    const decision = routeContext(baseEvidence({
+      issue: {
+        ...baseEvidence().issue,
+        number: '509',
+        url: 'https://github.com/boat1994/bemoat-web-starter/issues/509',
+      },
+      localGit: { ...baseEvidence().localGit, branch: 'test/509-legacy-fix-lineage-characterization', head: reviewedHead },
+      activePr: prEvidence({
+        number: '511',
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/511',
+        headBranch: 'test/509-legacy-fix-lineage-characterization',
+        headSha: reviewedHead,
+      }),
+      currentHeadVerification: verification({ exactHead: reviewedHead }),
+      durableContext: parsed,
+    }))
+
+    expect(decision.route).toBe('STOP')
+    expect(decision.reasons).toContain(`Exact-head HANDOFF STOP remains unresolved at ${reviewedHead}.`)
   })
 
   it('re-evaluates a historical stale-head HANDOFF STOP against current evidence', () => {
