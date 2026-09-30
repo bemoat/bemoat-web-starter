@@ -43,7 +43,7 @@ bemoat:context → one bounded objective → bemoat:handoff → fresh reconstruc
 Treat these as execution preferences only; the canonical policy and current
 evidence determine authority, routes, and gates.
 
-- GPT-5.6 Sol Medium is the preferred controller for core, multi-stage,
+- GPT- Sol Medium is the preferred controller for core, multi-stage,
   release work, cross-domain work with ambiguity, or evidence synthesis.
 - Luna Medium is the default worker for read-only evidence gathering, inventory, deterministic and
   mechanical verification, and focused validation when that role is sufficient.
