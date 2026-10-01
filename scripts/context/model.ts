@@ -28,6 +28,8 @@ export interface PolicyEvidence {
   policyId: string
   version: string
   sourceSha: string
+  trustedFounderLogin?: string | null
+  legacyStopHandoffs?: string[]
   url: string
 }
 
@@ -110,12 +112,36 @@ export interface RoleEvidence {
   body: string
   createdAt: string
   url: string
+  authorLogin?: string | null
+  authorAssociation?: string | null
+  authorIdentityConflict?: boolean
 }
 
 export interface DurableContextEvidence {
   latestHandoff: RoleEvidence | null
   handoffs?: RoleEvidence[]
   historicalResults: RoleEvidence[]
+  blockerResolutions?: RoleEvidence[]
+  invalidBlockerResolutions?: RoleEvidence[]
+}
+
+export interface HistoricalBlockerResolutionProof {
+  resolutionCommentId: string
+  resolutionBodySha256: string
+  repository: string
+  historicalBase: { branch: string; sha: string }
+  currentBase: { branch: string; sha: string }
+  historicalPolicy: PolicyEvidence
+  historicalContractBlobs: { missionControlGuideSha: string; commandReferenceSha: string }
+  currentContractBlobs: { missionControlGuideSha: string; commandReferenceSha: string }
+  ancestry: {
+    status: 'ahead'
+    baseSha: string
+    currentSha: string
+    mergeBaseSha: string
+    aheadBy: number
+    behindBy: number
+  }
 }
 
 export interface NormalizedContextEvidence {
@@ -127,6 +153,7 @@ export interface NormalizedContextEvidence {
   activePr: ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
   currentHeadVerification: HeadVerificationEvidence | null
   durableContext: DurableContextEvidence
+  historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
   evidenceErrors: string[]
 }
 

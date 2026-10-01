@@ -250,8 +250,8 @@ const commands: Record<string, CommandContract> = {
     operation: 'Read and normalize live GitHub and local Git evidence, then compute one pure route.',
     required_inputs: [positional('issue_number', '<issue-number>', 'positive_integer', 'Issue number to reconstruct.')],
     optional_flags: [flag('json', '--json', 'boolean', 'Emit deterministic machine-readable context output.')],
-    required_evidence: ['Canonical repository identity and live protected-base SHA.', 'Canonical policy path, version, and source/blob identity.', 'Issue objective, scope, acceptance criteria, dependencies, and durable comments.', 'Local branch, HEAD, upstream, origin identity, cleanliness, and push durability.', 'Unique active PR, exact head, CI/check, review, and applicable protection evidence when present.'],
-    reads: ['local Git refs, status, branch, upstream, and origin identity', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection'],
+    required_evidence: ['Canonical repository identity and live protected-base SHA.', 'Canonical policy path, version, and source/blob identity.', 'Issue objective, scope, acceptance criteria, dependencies, and durable comments.', 'Local branch, HEAD, upstream, origin identity, cleanliness, and push durability.', 'Unique active PR, exact head, CI/check, review, and applicable protection evidence when present.', 'For applicable historical BLOCKER_RESOLUTION carry-forward: exact historical policy replay, approved-base ancestry, identical historical/current mission-control-guide and command-reference blobs, and invariant current resolution bindings.'],
+    reads: ['local Git refs, status, branch, upstream, and origin identity', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base'],
     writes: [],
     success_classifications: ['SUCCESS'],
     next_action_rules: [

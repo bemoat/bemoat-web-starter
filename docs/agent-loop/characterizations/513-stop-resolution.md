@@ -5,6 +5,18 @@ Policy: `bemoat-mission-control` 1.3.0, blob
 `7e2e8bdcb51ac36c74a9ff729eedcc9399352d75`.
 This characterization changes no production routing or transport semantics.
 
+## Reconciliation with current protected main
+
+This document records the baseline observed before the structured
+`BLOCKER_RESOLUTION` contract was merged. On protected `main` at
+`1f33afd4aa54f39772530d124bb11078e8c77401`, that contract and its
+regressions are already present. The router test for the real #509 identity
+tuple now proves both that the Founder decision alone leaves the STOP in place
+and that a separate, valid structured resolution allows re-evaluation. The
+original PR #514 test asserted the former case; the merged test covers it with
+the current policy's exact legacy blocker identity. This reconciliation keeps
+the original red-story evidence below as history and adds no routing semantics.
+
 ## Red story and observed baseline
 
 The new `#509`-shaped router story was first run with an expected `REVIEW`

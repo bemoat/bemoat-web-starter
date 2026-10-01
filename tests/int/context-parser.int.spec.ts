@@ -151,6 +151,45 @@ Implementation Plan: docs/superpowers/plans/example/implementation-plan.md
       handoffs: [comments[1]],
       historicalResults: [comments[0]],
       invalid: [comments[2]],
+      blockerResolutions: [],
+      invalidBlockerResolutions: [],
     })
+  })
+
+  it('parses structured BLOCKER_RESOLUTION records without treating prose or timestamps as authority', () => {
+    const resolution = {
+      id: 15,
+      body: '## BLOCKER_RESOLUTION\n\n```json\n{}\n```\n',
+      createdAt: 'not-a-date',
+      url: 'https://github.com/example/repo/issues/410#issuecomment-15',
+      author: { login: 'founder' },
+      authorAssociation: 'OWNER',
+    }
+    const prose = {
+      id: 16,
+      body: '## FOUNDER_DECISION\n\nThis text is context only.',
+      createdAt: '2026-08-23T00:00:00Z',
+      url: 'https://github.com/example/repo/issues/410#issuecomment-16',
+    }
+
+    expect(parseRoleEvidence([resolution, prose])).toMatchObject({
+      blockerResolutions: [{ id: 15, authorLogin: 'founder', authorAssociation: 'OWNER' }],
+      invalidBlockerResolutions: [],
+      historicalResults: [],
+    })
+  })
+
+  it('retains conflicting explicit and native Founder author identities for fail-closed routing', () => {
+    const resolution = {
+      id: 17,
+      body: '## BLOCKER_RESOLUTION\n\n```json\n{}\n```\n',
+      createdAt: '2026-08-23T00:00:00Z',
+      url: 'https://github.com/example/repo/issues/410#issuecomment-17',
+      authorLogin: 'founder',
+      author: { login: 'different-person' },
+      authorAssociation: 'OWNER',
+    }
+
+    expect(parseRoleEvidence([resolution]).blockerResolutions[0]?.authorIdentityConflict).toBe(true)
   })
 })

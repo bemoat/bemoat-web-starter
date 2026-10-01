@@ -359,12 +359,11 @@ export function resolveApplicableHandoffs(
     superseding: resolveSupersedingHandoff(applicable, evidence, activePr),
   }
 }
-
 export interface CurrentHandoffResolution {
   record: HandoffRecord | null
+  evidence: RoleEvidence | null
   conflict: ReturnType<typeof currentHandoffConflict>
 }
-
 export function resolveCurrentHandoff(
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
@@ -373,6 +372,7 @@ export function resolveCurrentHandoff(
   const conflict = currentHandoffConflict(resolution, activePr.headSha)
   return {
     record: conflict ? null : resolution.superseding?.record ?? resolution.applicable[0]?.record ?? null,
+    evidence: conflict ? null : resolution.superseding?.evidence ?? resolution.applicable[0]?.evidence ?? null,
     conflict,
   }
 }
