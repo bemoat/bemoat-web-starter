@@ -67,6 +67,7 @@ export const managedPaths = [
   'tests/int/cli-envelope-runtime.int.spec.ts',
   'tests/int/cli-tier-b-boundaries.int.spec.ts',
   'tests/int/cli-tier-a-boundaries.int.spec.ts',
+  'tests/int/install-git-hooks.int.spec.ts',
   'tests/int/command-runner.int.spec.ts',
   'tests/int/scripts-architecture.int.spec.ts',
   'tests/int/scripts-entrypoints-contract.int.spec.ts',
@@ -77,6 +78,7 @@ export const managedPaths = [
   'tests/int/open-next-config.int.spec.ts', 'tests/int/payload-build-context.int.spec.ts',
   'tests/fixtures/guard', 'tests/fixtures/planning', 'tests/fixtures/acceptance',
   'tests/fixtures/boilerplate-sync', 'tests/fixtures/child-shape',
+  'tests/fixtures/node-api-buffer',
 ]
 
 export const seedOnlyPaths = [
