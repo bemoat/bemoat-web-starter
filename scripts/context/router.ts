@@ -7,6 +7,7 @@ import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isP
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import { hasBlockingFinding } from './semantic-review-evidence.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
+import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
 function evidenceUrls(evidence: NormalizedContextEvidence): string[] {
@@ -39,7 +40,7 @@ function commandAction(description: string): ContextDecision['nextAction'] {
   return { type: 'COMMAND', command: null, description }
 }
 
-function identityErrors(evidence: NormalizedContextEvidence): string[] {
+function identityErrors(evidence: NormalizedContextEvidence, allowWellFormedStaleBase = false): string[] {
   const errors: string[] = []
   const repo = evidence.repository?.nameWithOwner ?? ''
   if (!evidence.issue || typeof evidence.issue.number !== 'string' || !isPositiveInteger(evidence.issue.number)) {
@@ -69,9 +70,7 @@ function identityErrors(evidence: NormalizedContextEvidence): string[] {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} state and merge commit evidence disagree`)
     }
     const merged = stateMerged && Boolean(pr?.merged) && validMergeCommit
-    if (!pr || typeof pr.baseBranch !== 'string' || !pr.baseBranch.trim() || typeof pr.baseSha !== 'string' || !isFullSha(pr.baseSha) || pr.baseBranch !== evidence.protectedBase.branch || (!merged && pr.baseSha.toLowerCase() !== evidence.protectedBase.sha.toLowerCase())) {
-      errors.push(`EVIDENCE_CONFLICT: PR #${number} base identity is missing or malformed`)
-    }
+    errors.push(...prBaseIdentityErrors(evidence, pr, number, merged, allowWellFormedStaleBase))
     if (merged && (!pr || typeof pr.mergeCommitSha !== 'string' || !isFullSha(pr.mergeCommitSha))) {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} merge commit identity is missing or malformed`)
     }
@@ -107,8 +106,11 @@ function isProtectedOrIntegrationBranch(branch: string): boolean {
   return /^(?:main|master|dev|develop|integration|staging|production)(?:\/.*)?$/i.test(branch)
 }
 
-export function routeContext(evidence: NormalizedContextEvidence): ContextDecision {
-  const baseReasons = [...evidence.evidenceErrors, ...identityErrors(evidence)]
+function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleBaseError: string | null = null): ContextDecision {
+  const baseReasons = [
+    ...evidence.evidenceErrors.filter((error) => error !== ignoredStaleBaseError),
+    ...identityErrors(evidence, ignoredStaleBaseError !== null),
+  ]
   const activeEvidence = evidence.activePr as ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
   const mergedPr = activeEvidence && !Array.isArray(activeEvidence) && (activeEvidence.merged || activeEvidence.state.toUpperCase() === 'MERGED')
   if (!mergedPr && (!evidence.localGit.clean || evidence.localGit.detached || !evidence.localGit.pushed || !evidence.localGit.durable)) {
@@ -383,4 +385,13 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     command: null,
     description: 'Founder authorization is required before the next merge or scope mutation.',
   })
+}
+
+export function routeContext(evidence: NormalizedContextEvidence): ContextDecision {
+  return routeContextInternal(evidence)
+}
+
+// Sync authorization uses this continuation evaluation; ordinary Context does not.
+export function routeContextForStaleBaseSync(evidence: NormalizedContextEvidence): ContextDecision {
+  return routeContextInternal(evidence, staleBaseSyncDiagnostic(evidence))
 }
