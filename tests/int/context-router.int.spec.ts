@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { routeContext } from '../../scripts/context/router.ts'
+import { parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
 import {
   classifyMergeReviewVerdict,
@@ -33,6 +34,11 @@ function baseEvidence(
       policyId: 'bemoat-mission-control',
       version: '1.3.0',
       sourceSha: sha,
+      trustedFounderLogin: 'boat1994',
+      legacyStopHandoffs: [
+        '513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7',
+        '509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2',
+      ],
       url: 'https://github.com/boat1994/bemoat-web-starter/blob/main/docs/mission-control/mission-control-guide.md',
     },
     issue: {
@@ -184,6 +190,113 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
   }
 }
 
+function stopHandoff(blockerIds: string[] = ['named-blocker']) {
+  return strictHandoff({
+    route: 'STOP',
+    verified_evidence: blockerIds.map((value): HandoffRecord['verified_evidence'][number] => ({ kind: 'stop-blocker', value, url: null })),
+    next_action: { route: 'STOP', description: 'Resolve the named blocker.' },
+  })
+}
+
+function blockerResolutionComment(
+  stop: ReturnType<typeof strictHandoff>,
+  blockerId = 'named-blocker',
+  overrides: {
+    mutate?: (record: Record<string, unknown>) => void
+    id?: number
+    authorLogin?: string | null
+    authorAssociation?: string | null
+    nestedAuthorLogin?: string | null
+    createdAt?: string
+  } = {},
+) {
+  const handoffMatch = stop.body.match(/```json\n([\s\S]+)\n```\n$/)
+  if (!handoffMatch) throw new Error('Expected a strict HANDOFF JSON body')
+  const handoffRecord = JSON.parse(handoffMatch[1]!) as HandoffRecord
+  if (!handoffRecord.pr) throw new Error('Expected an active PR in the STOP HANDOFF')
+  const record: Record<string, unknown> = {
+    schema_version: 1,
+    record_type: 'BLOCKER_RESOLUTION',
+    repository: handoffRecord.repository,
+    issue_number: handoffRecord.issue_number,
+    pr_number: handoffRecord.pr.number,
+    exact_head: handoffRecord.exact_head,
+    protected_base: handoffRecord.protected_base,
+    policy: {
+      path: 'docs/mission-control/mission-control-guide.md',
+      policy_id: 'bemoat-mission-control',
+      version: '1.3.0',
+      source_sha: sha,
+    },
+    source_stop_handoff: { comment_id: String(stop.id), url: stop.url },
+    blocker_id: blockerId,
+    authority: { role: 'FOUNDER', login: 'boat1994' },
+  }
+  overrides.mutate?.(record)
+  const body = `## BLOCKER_RESOLUTION\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n`
+  return {
+    id: overrides.id ?? 901,
+    body,
+    createdAt: overrides.createdAt ?? '2026-08-03T00:00:00Z',
+    url: `https://github.com/${handoffRecord.repository}/issues/${handoffRecord.issue_number}#issuecomment-${overrides.id ?? 901}`,
+    authorLogin: overrides.authorLogin === undefined ? 'boat1994' : overrides.authorLogin,
+    authorAssociation: overrides.authorAssociation === undefined ? 'OWNER' : overrides.authorAssociation,
+    ...(overrides.nestedAuthorLogin !== undefined ? { author: { login: overrides.nestedAuthorLogin } } : {}),
+  }
+}
+
+function routeWithStop(
+  handoff: ReturnType<typeof strictHandoff>,
+  comments: Array<Record<string, unknown>> = [],
+  overrides: Partial<NormalizedContextEvidence> = {},
+) {
+  const handoffMatch = handoff.body.match(/```json\n([\s\S]+)\n```\n$/)
+  if (!handoffMatch) throw new Error('Expected a strict HANDOFF JSON body')
+  const handoffRecord = JSON.parse(handoffMatch[1]!) as HandoffRecord
+  if (!handoffRecord.pr) throw new Error('Expected an active PR in the STOP HANDOFF')
+  const parsed = parseRoleEvidence([handoff, ...comments])
+  return routeContext(baseEvidence({
+    repository: {
+      owner: handoffRecord.repository.split('/')[0]!,
+      name: handoffRecord.repository.split('/')[1]!,
+      nameWithOwner: handoffRecord.repository,
+      url: `https://github.com/${handoffRecord.repository}`,
+    },
+    protectedBase: { branch: handoffRecord.protected_base.branch, sha: handoffRecord.protected_base.sha, source: 'test',
+      url: `https://github.com/${handoffRecord.repository}/tree/${handoffRecord.protected_base.branch}` },
+    issue: {
+      ...baseEvidence().issue,
+      number: handoffRecord.issue_number,
+      url: `https://github.com/${handoffRecord.repository}/issues/${handoffRecord.issue_number}`,
+    },
+    localGit: {
+      ...baseEvidence().localGit,
+      branch: handoffRecord.branch,
+      head: handoffRecord.exact_head,
+    },
+    activePr: prEvidence({
+      number: handoffRecord.pr.number,
+      url: handoffRecord.pr.url,
+      baseBranch: handoffRecord.pr.base,
+      baseSha: handoffRecord.protected_base.sha,
+      headBranch: handoffRecord.pr.head,
+      headSha: handoffRecord.pr.head_sha,
+    }),
+    currentHeadVerification: verification({
+      exactHead: handoffRecord.exact_head,
+      reviews: { required: false, approved: true, exactHead: true, approvedCount: 1, exactHeadApprovedCount: 1 },
+    }),
+    durableContext: {
+      latestHandoff: handoff,
+      handoffs: [handoff],
+      historicalResults: parsed.historicalResults,
+      blockerResolutions: parsed.blockerResolutions,
+      invalidBlockerResolutions: parsed.invalidBlockerResolutions,
+    },
+    ...overrides,
+  }))
+}
+
 function reviewHandoff(overrides: Partial<HandoffRecord> = {}) {
   return strictHandoff({
     route: 'REVIEW',
@@ -329,6 +442,223 @@ describe('bemoat:context pure routing', () => {
     }))
 
     expect(decision.route).toBe('STOP')
+  })
+
+  it('re-evaluates a current-head STOP after one exact Founder resolution record', () => {
+    const handoff = stopHandoff()
+    const resolutionComment = blockerResolutionComment(handoff)
+    const decision = routeWithStop(handoff, [resolutionComment])
+
+    expect(decision.route).toBe('REVIEW')
+  })
+
+  it('re-evaluates a schema-v3 STOP only through its explicit blocker ID', () => {
+    const handoff = strictHandoff({
+      schema_version: 3,
+      route: 'STOP',
+      verified_evidence: [{ kind: 'stop-blocker', value: 'new-protocol-blocker', url: null }],
+      next_action: { route: 'STOP', description: 'Resolve the new protocol blocker.' },
+    })
+    expect(routeWithStop(handoff, [blockerResolutionComment(handoff, 'new-protocol-blocker')]).route).toBe('REVIEW')
+  })
+
+  it('does not treat a newly appended schema-v2 prose-only STOP as historical', () => {
+    const handoff = strictHandoff({
+      route: 'STOP',
+      verified_evidence: [{ kind: 'diagnostic', value: 'new STOP with no blocker ID', url: null }],
+      next_action: { route: 'STOP', description: 'Resolve all newly identified blockers.' },
+    })
+    const resolution = blockerResolutionComment(handoff, 'legacy-stop:900:64c3b71ef6154c417afd241dc39efd33ddf38be8dc60294c2a9cc64bcff1def9')
+    expect(routeWithStop(handoff, [resolution]).route).toBe('STOP')
+  })
+
+  it.each([
+    ['repository', (record: Record<string, unknown>) => { record.repository = 'other/repository' }],
+    ['Issue', (record: Record<string, unknown>) => { record.issue_number = '999' }],
+    ['PR', (record: Record<string, unknown>) => { record.pr_number = '999' }],
+    ['exact head', (record: Record<string, unknown>) => { record.exact_head = 'c'.repeat(40) }],
+    ['protected base', (record: Record<string, unknown>) => { (record.protected_base as Record<string, unknown>).sha = 'd'.repeat(40) }],
+    ['protected base branch', (record: Record<string, unknown>) => { (record.protected_base as Record<string, unknown>).branch = 'release' }],
+    ['policy path', (record: Record<string, unknown>) => { (record.policy as Record<string, unknown>).path = 'other-policy.md' }],
+    ['policy identity', (record: Record<string, unknown>) => { (record.policy as Record<string, unknown>).policy_id = 'other-policy' }],
+    ['policy version', (record: Record<string, unknown>) => { (record.policy as Record<string, unknown>).version = '9.9.9' }],
+    ['policy source', (record: Record<string, unknown>) => { (record.policy as Record<string, unknown>).source_sha = 'e'.repeat(40) }],
+    ['source HANDOFF', (record: Record<string, unknown>) => { (record.source_stop_handoff as Record<string, unknown>).comment_id = '902' }],
+    ['source HANDOFF URL', (record: Record<string, unknown>) => { (record.source_stop_handoff as Record<string, unknown>).url = 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-902' }],
+    ['blocker', (record: Record<string, unknown>) => { record.blocker_id = 'different-blocker' }],
+  ])('keeps a STOP when resolution has a wrong %s binding', (_field, mutate) => {
+    const handoff = stopHandoff()
+    const resolution = blockerResolutionComment(handoff, 'named-blocker', { mutate })
+    expect(routeWithStop(handoff, [resolution]).route).toBe('STOP')
+  })
+
+  it('ignores unrelated Founder prose when resolving a STOP', () => {
+    const handoff = stopHandoff()
+    const prose = {
+      id: 902,
+      body: '## FOUNDER_DECISION\n\nThe old STOP may proceed after this protocol decision.',
+      createdAt: '2026-08-04T00:00:00Z',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-902',
+      authorLogin: 'boat1994',
+      authorAssociation: 'OWNER',
+    }
+    expect(routeWithStop(handoff, [prose]).route).toBe('STOP')
+  })
+
+  it('keeps a STOP for duplicate or competing resolution records regardless of comment order', () => {
+    const handoff = stopHandoff()
+    const first = blockerResolutionComment(handoff, 'named-blocker', { createdAt: '2026-08-01T00:00:00Z' })
+    const second = { ...blockerResolutionComment(handoff, 'named-blocker', { createdAt: '2026-08-05T00:00:00Z' }), id: 903,
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-903' }
+    const prose = { id: 904, body: '## FOUNDER_DECISION\n\nIgnore ordering.', createdAt: '2026-08-03T00:00:00Z',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-904', authorLogin: 'boat1994', authorAssociation: 'OWNER' }
+    expect(routeWithStop(handoff, [first, prose, second]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [second, prose, first]).route).toBe('STOP')
+  })
+
+  it('fails closed for malformed resolution records and duplicate blocker identities', () => {
+    const handoff = stopHandoff()
+    const malformed = { ...blockerResolutionComment(handoff), body: '## BLOCKER_RESOLUTION\n\n```json\n{}\n```\n' }
+    expect(routeWithStop(handoff, [malformed]).route).toBe('STOP')
+    expect(routeWithStop(stopHandoff(['same-id', 'same-id'])).route).toBe('STOP')
+  })
+
+  it('requires independent resolutions for every explicitly named STOP blocker', () => {
+    const handoff = stopHandoff(['first-blocker', 'second-blocker'])
+    expect(routeWithStop(handoff, [blockerResolutionComment(handoff, 'first-blocker')]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [
+      blockerResolutionComment(handoff, 'first-blocker'),
+      { ...blockerResolutionComment(handoff, 'second-blocker'), id: 905,
+        url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-905' },
+    ]).route).toBe('REVIEW')
+  })
+
+  it('does not let a resolution grant a route that current checks do not grant', () => {
+    const handoff = stopHandoff()
+    const pending = routeWithStop(handoff, [blockerResolutionComment(handoff)], {
+      currentHeadVerification: verification({ checks: { status: 'PENDING', complete: false, failed: false, pending: true, required: true } }),
+    })
+    const failed = routeWithStop(handoff, [blockerResolutionComment(handoff)], {
+      currentHeadVerification: verification({ checks: { status: 'FAILURE', complete: true, failed: true, pending: false, required: true } }),
+    })
+    expect(pending.route).toBe('VERIFY')
+    expect(failed.route).toBe('FIX')
+  })
+
+  it('requires explicit Founder authority to match the native OWNER comment author', () => {
+    const handoff = stopHandoff()
+    const spoofed = blockerResolutionComment(handoff, 'named-blocker', { authorLogin: 'someone-else' })
+    const nonOwner = blockerResolutionComment(handoff, 'named-blocker', { authorAssociation: 'MEMBER' })
+    const conflicting = blockerResolutionComment(handoff, 'named-blocker', { nestedAuthorLogin: 'someone-else' })
+    const wrongRole = blockerResolutionComment(handoff, 'named-blocker', {
+      mutate: (record) => { record.authority = { role: 'OWNER', login: 'boat1994' } },
+    })
+    const missingNativeAuthor = blockerResolutionComment(handoff, 'named-blocker', { authorLogin: null })
+    const otherOwner = blockerResolutionComment(handoff, 'named-blocker', {
+      authorLogin: 'another-owner',
+      mutate: (record) => { record.authority = { role: 'FOUNDER', login: 'another-owner' } },
+    })
+    expect(routeWithStop(handoff, [spoofed]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [nonOwner]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [conflicting]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [wrongRole]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [missingNativeAuthor]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [otherOwner]).route).toBe('STOP')
+  })
+
+  it('fails closed when protected policy lacks a trusted Founder login', () => {
+    const handoff = stopHandoff()
+    const evidence = baseEvidence()
+    expect(routeWithStop(handoff, [blockerResolutionComment(handoff)], {
+      policy: { ...evidence.policy, trustedFounderLogin: null },
+    }).route).toBe('STOP')
+  })
+
+  it('does not use resolution timestamp order to select authority', () => {
+    const handoff = stopHandoff()
+    const earlyResolution = blockerResolutionComment(handoff, 'named-blocker', { createdAt: '1994-01-01T00:00:00Z' })
+    expect(routeWithStop(handoff, [earlyResolution]).route).toBe('REVIEW')
+  })
+
+  it('keeps the original STOP HANDOFF immutable while its named blocker is resolved', () => {
+    const handoff = stopHandoff()
+    const originalBody = handoff.body
+    expect(routeWithStop(handoff, [blockerResolutionComment(handoff)]).route).toBe('REVIEW')
+    expect(handoff.body).toBe(originalBody)
+  })
+
+  it('resolves the single legacy #513 blocker from next_action.description, not stop-condition guardrails', () => {
+    const description = 'Stop production correction until a Founder/protocol decision defines a deterministic, identity-bound durable resolution record and conflict rules; then reconstruct fresh #513 Context for a separate bounded objective.'
+    const handoff = {
+      ...strictHandoff({
+        issue_number: '513',
+        branch: 'test/513-stop-resolution-characterization',
+        exact_head: 'f8af039bad10c0bc3c98fa69fc2c7ab9fe782180',
+        protected_base: { branch: 'main', sha: '89a88f21d73038ebff33a72600be9561e13239ed' },
+        pr: {
+          number: '514',
+          url: 'https://github.com/boat1994/bemoat-web-starter/pull/514',
+          base: 'main',
+          head: 'test/513-stop-resolution-characterization',
+          head_sha: 'f8af039bad10c0bc3c98fa69fc2c7ab9fe782180',
+        },
+        route: 'STOP',
+        verified_evidence: [{ kind: 'story-first-characterization', value: 'The #513 stop is characterized.', url: 'https://github.com/boat1994/bemoat-web-starter/pull/514' }],
+        next_action: { route: 'STOP', description },
+        stop_conditions: ['Do not infer authority from prose', 'Do not mutate history', 'Do not merge autonomously'],
+      }),
+      id: 5913355141,
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/513#issuecomment-5913355141',
+    }
+    const resolution = blockerResolutionComment(handoff, 'legacy-stop:5913355141:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7', { id: 5913459163 })
+    const founderProtocolDecision = {
+      id: 5913459162,
+      body: '## FOUNDER_DECISION — BLOCKER_RESOLUTION protocol contract\n\nThe Founder approves the structured contract.',
+      createdAt: '2026-09-30T14:35:47Z',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/513#issuecomment-5913459162',
+      authorLogin: 'boat1994',
+      authorAssociation: 'OWNER',
+    }
+
+    expect(routeWithStop(handoff, [founderProtocolDecision, resolution]).route).toBe('REVIEW')
+  })
+
+  it('recovers the #509-shaped exact-head STOP only from a separate structured resolution', () => {
+    const description = 'Stop production correction until architecture/Founder authority defines deterministic historical native-review migration; then reconstruct fresh #509 Context for a separate bounded objective.'
+    const handoff = {
+      ...strictHandoff({
+        issue_number: '509',
+        branch: 'test/509-legacy-fix-lineage-characterization',
+        exact_head: '86c0ec49311a1b356ff96be087bb335ea6dc992f',
+        protected_base: { branch: 'main', sha: '89a88f21d73038ebff33a72600be9561e13239ed' },
+        pr: {
+          number: '511',
+          url: 'https://github.com/boat1994/bemoat-web-starter/pull/511',
+          base: 'main',
+          head: 'test/509-legacy-fix-lineage-characterization',
+          head_sha: '86c0ec49311a1b356ff96be087bb335ea6dc992f',
+        },
+        route: 'STOP',
+        verified_evidence: [{ kind: 'story-first-characterization', value: 'The #509 exact-head STOP is characterized.', url: 'https://github.com/boat1994/bemoat-web-starter/pull/511' }],
+        next_action: { route: 'STOP', description },
+        stop_conditions: ['Do not mutate real #504 or PR #505', 'Do not merge autonomously'],
+      }),
+      id: 5906598686,
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/509#issuecomment-5906598686',
+    }
+    const founderDecision = {
+      id: 5907706574,
+      body: '## FOUNDER_DECISION — legacy review migration semantics\n\nThis protocol decision does not itself resolve a STOP.',
+      createdAt: '2026-09-30T08:53:39Z',
+      url: 'https://github.com/boat1994/bemoat-web-starter/issues/509#issuecomment-5907706574',
+      authorLogin: 'boat1994',
+      authorAssociation: 'OWNER',
+    }
+    const legacyBlocker = 'legacy-stop:5906598686:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2'
+    const resolution = blockerResolutionComment(handoff, legacyBlocker, { id: 5907706575 })
+
+    expect(routeWithStop(handoff, [founderDecision]).route).toBe('STOP')
+    expect(routeWithStop(handoff, [resolution, founderDecision]).route).toBe('REVIEW')
   })
 
   it('re-evaluates a historical stale-head HANDOFF STOP against current evidence', () => {

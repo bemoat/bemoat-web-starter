@@ -9,7 +9,7 @@ export function handoffCommands(dependencies: CommandMetadataDependencies) {
       tier: 'A',
       entrypoint: 'scripts/agent-handoff.ts',
       purpose: 'Append one validated, stateless HANDOFF record to an Issue.',
-      operation: 'Validate schema-v2 objective_mode and the complete live repository binding; implementation mode selects validation from changed files, while read_only requires no applicable PR and an empty protected-base diff and runs safety validation; append exactly one top-level Issue comment and verify it by fresh readback.',
+      operation: 'Validate schema-v2 ordinary HANDOFFs and schema-v3 STOP with explicit stop-blocker IDs against the complete live repository binding; implementation mode selects validation from changed files, while read_only requires no applicable PR and an empty protected-base diff and runs safety validation; append exactly one top-level Issue comment and verify it by fresh readback.',
       accepted_pre_states: ['NOT_STATEFUL'],
       required_inputs: [
         positional('issue_number', '<issue-number>', 'positive_integer', 'Issue number receiving the HANDOFF.'),
@@ -17,7 +17,8 @@ export function handoffCommands(dependencies: CommandMetadataDependencies) {
       ],
       optional_flags: [],
       required_evidence: [
-        'Canonical schema-v2 HANDOFF schema, objective_mode enum (`implementation` or `read_only`), and closed route/next-action binding.',
+        'Canonical schema-v2 ordinary HANDOFF or schema-v3 STOP, objective_mode enum (`implementation` or `read_only`), and closed route/next-action binding.',
+        'New STOP publication uses schema-v3 with one or more unique explicit stop-blocker IDs; schema-v2 STOP is historical read-only evidence.',
         'Live repository and Issue identity.',
         'Protected base branch and exact SHA.',
         'Required local branch/head/upstream durability and PR identity when present.',

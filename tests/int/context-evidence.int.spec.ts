@@ -118,7 +118,8 @@ describe('bemoat:context neutral evidence adapters', () => {
   })
 
   it('reads protected-base SHA and policy identity from live GitHub content', () => {
-    const policy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\n---\n\n# Guide\n'
+    const historicalStop = `513:5913355141:${'a'.repeat(40)}:${'b'.repeat(64)}`
+    const policy = `---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\nlegacy_stop_handoffs: ${historicalStop}\n---\n\n# Guide\n`
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.includes('git/ref/heads/main')) {
@@ -145,11 +146,41 @@ describe('bemoat:context neutral evidence adapters', () => {
         path: 'docs/mission-control/mission-control-guide.md',
         policyId: 'bemoat-mission-control',
         version: '1.3.0',
+        trustedFounderLogin: 'boat1994',
+        legacyStopHandoffs: [historicalStop],
         sourceSha: 'c'.repeat(40),
         url: 'https://github.com/boat1994/bemoat-web-starter/blob/' + 'a'.repeat(40) + '/docs/mission-control/mission-control-guide.md',
       },
       errors: [],
     })
+  })
+
+  it('rejects ambiguous trusted Founder identity in protected policy', () => {
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) return response(JSON.stringify({
+        sha: 'c'.repeat(40),
+        content: Buffer.from('---\npolicy_id: bemoat-mission-control\nversion: 1.4.0\ntrusted_founder_login: boat1994\ntrusted_founder_login: another-owner\n---\n').toString('base64'),
+        encoding: 'base64',
+      }))
+      return response('')
+    }
+    expect(readProtectedPolicy({ repo: 'boat1994/bemoat-web-starter', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
+  })
+
+  it('does not copy the starter Founder identity into a child repository', () => {
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) return response(JSON.stringify({
+        sha: 'c'.repeat(40),
+        content: Buffer.from('---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\n---\n').toString('base64'),
+        encoding: 'base64',
+      }))
+      return response('')
+    }
+    expect(readProtectedPolicy({ repo: 'boat1994/child-project', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
   })
 
   it('binds the Issue, one active PR, and exact-head verification', () => {
@@ -419,7 +450,7 @@ describe('bemoat:context neutral evidence adapters', () => {
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.startsWith('issue view 434')) {
-        return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [{ id: 1001, body: '## HANDOFF PR #431', createdAt: '2026-09-01T00:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1001' }, { id: 1002, body: '## REVIEW_VERDICT PR #432', createdAt: '2026-09-01T01:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1002' }] }))
+        return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [{ id: 1001, body: '## HANDOFF PR #431', createdAt: '2026-09-01T00:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1001', author: { login: 'boat1994' }, authorAssociation: 'OWNER' }, { id: 1002, body: '## REVIEW_VERDICT PR #432', createdAt: '2026-09-01T01:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1002' }] }))
       }
       if (key.startsWith('pr list')) return response(JSON.stringify([1, 2].map((number) => ({ number: 430 + number, url: `https://github.com/boat1994/bemoat-web-starter/pull/${430 + number}`, headRefName: `fix/434-history-${number}`, closingIssuesReferences: [{ number: 434 }] }))))
       const match = key.match(/^pr view (43[1-2])/)
@@ -442,7 +473,7 @@ describe('bemoat:context neutral evidence adapters', () => {
     })
     expect(evidence.activePrs).toEqual([])
     expect(evidence.comments).toMatchObject([
-      { id: '1001', body: expect.stringContaining('HANDOFF') },
+      { id: '1001', body: expect.stringContaining('HANDOFF'), authorLogin: 'boat1994', authorAssociation: 'OWNER' },
       { id: '1002', body: expect.stringContaining('REVIEW_VERDICT') },
     ])
     expect(evidence.errors).toEqual([])

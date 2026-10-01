@@ -28,6 +28,8 @@ export interface PolicyEvidence {
   policyId: string
   version: string
   sourceSha: string
+  trustedFounderLogin?: string | null
+  legacyStopHandoffs?: string[]
   url: string
 }
 
@@ -110,12 +112,17 @@ export interface RoleEvidence {
   body: string
   createdAt: string
   url: string
+  authorLogin?: string | null
+  authorAssociation?: string | null
+  authorIdentityConflict?: boolean
 }
 
 export interface DurableContextEvidence {
   latestHandoff: RoleEvidence | null
   handoffs?: RoleEvidence[]
   historicalResults: RoleEvidence[]
+  blockerResolutions?: RoleEvidence[]
+  invalidBlockerResolutions?: RoleEvidence[]
 }
 
 export interface NormalizedContextEvidence {

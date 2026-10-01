@@ -50,11 +50,13 @@ describe('bemoat:handoff public CLI contract', () => {
     expect(contract?.required_evidence).toContain(
       'Runtime-generated PASS proof bound to the selected tier, canonical command, and exact HEAD; read_only uses tier `read-only` and `pnpm run bemoat:guard:safety`.',
     )
-    expect(contract?.operation).toMatch(/schema-v2.*read_only.*empty protected-base diff.*safety validation/i)
+    expect(contract?.operation).toMatch(/schema-v2.*schema-v3 STOP.*stop-blocker.*read_only.*empty protected-base diff.*safety validation/i)
+    expect(contract?.required_evidence).toContain('New STOP publication uses schema-v3 with one or more unique explicit stop-blocker IDs; schema-v2 STOP is historical read-only evidence.')
 
     const help = createHelpEnvelopeV1(contract)
     expect(help.command).toBe('bemoat:handoff')
     expect(help.writes).toEqual(['exactly one top-level Issue HANDOFF comment; no other protocol mutation'])
+    expect(help.required_evidence).toContain('New STOP publication uses schema-v3 with one or more unique explicit stop-blocker IDs; schema-v2 STOP is historical read-only evidence.')
   })
 
   it('declares the only supported invocation shape', () => {

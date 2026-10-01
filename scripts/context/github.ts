@@ -215,7 +215,15 @@ export function readGithubEvidence({
   const issuePayload = issueResult.value
   const comments: RoleEvidence[] = Array.isArray(issuePayload?.comments) ? issuePayload.comments.filter(isRecord).map((comment) => {
     const url = String(comment.url ?? '')
-    return { id: extractDatabaseId(url) ?? (comment.id as string | number | undefined) ?? '', body: String(comment.body ?? ''), createdAt: String(comment.createdAt ?? ''), url }
+    const author = isRecord(comment.author) ? comment.author : null
+    return {
+      id: extractDatabaseId(url) ?? (comment.id as string | number | undefined) ?? '',
+      body: String(comment.body ?? ''),
+      createdAt: String(comment.createdAt ?? ''),
+      url,
+      authorLogin: typeof author?.login === 'string' ? author.login : null,
+      authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,
+    }
   }) : []
 
   let issue: IssueEvidence | null = null

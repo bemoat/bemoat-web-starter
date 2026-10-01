@@ -145,7 +145,7 @@ export function runHandoffWorkflow({
   env?: NodeJS.ProcessEnv
   run?: HandoffCommandRunner
 }): HandoffWorkflowResult {
-  let record = parseHandoffBody(inputBody)
+  let record = parseHandoffBody(inputBody, { allowLegacyStop: false })
   if (record.issue_number !== issueNumber) {
     throw new HandoffRuntimeError('EVIDENCE_CONFLICT', `HANDOFF Issue binding does not match Issue #${issueNumber}`)
   }

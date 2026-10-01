@@ -12,6 +12,66 @@ This command is read-only. It binds the Issue to the repository, protected
 base, policy path/SHA, PR, exact-head CI, review, and local durability
 evidence, then returns one route. Help must not create or modify any state.
 
+## STOP blocker resolution evidence
+
+An authorized Founder may append one `## BLOCKER_RESOLUTION` Issue comment for
+one named blocker in an applicable exact-head STOP HANDOFF. The comment is a
+strict JSON record in a `json` fence. Its native GitHub author and explicit
+`authority.login` must both match the trusted Founder login declared by merged
+protected-base policy. `OWNER` is an additional consistency check; neither
+`OWNER` nor a JSON role claim grants authority. An unmerged policy change
+cannot authorize its own evidence. The record binds the repository,
+Issue, active PR, exact head, protected base, protected policy identity, source
+STOP HANDOFF comment, and blocker ID:
+
+```json
+{
+  "schema_version": 1,
+  "record_type": "BLOCKER_RESOLUTION",
+  "repository": "owner/repository",
+  "issue_number": "410",
+  "pr_number": "411",
+  "exact_head": "0123456789abcdef0123456789abcdef01234567",
+  "protected_base": {
+    "branch": "main",
+    "sha": "89abcdef0123456789abcdef0123456789abcdef"
+  },
+  "policy": {
+    "path": "docs/mission-control/mission-control-guide.md",
+    "policy_id": "bemoat-mission-control",
+    "version": "1.3.0",
+    "source_sha": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "source_stop_handoff": {
+    "comment_id": "123456789",
+    "url": "https://github.com/owner/repository/issues/410#issuecomment-123456789"
+  },
+  "blocker_id": "architecture-decision",
+  "authority": {
+    "role": "FOUNDER",
+    "login": "founder-login"
+  }
+}
+```
+
+For a STOP HANDOFF with explicit `verified_evidence` entries of kind
+`stop-blocker`, each entry's `value` is one blocker ID. Every ID needs exactly
+one valid resolution. An older STOP HANDOFF without these entries has one
+legacy blocker ID: `legacy-stop:<HANDOFF comment ID>:<SHA-256 of the trimmed
+next_action.description UTF-8 bytes>`. Its `stop_conditions` are guardrails,
+not separate blockers. This compatibility applies only to schema-v2 STOPs
+whose Issue, native comment ID, exact head, and description digest appear in
+`legacy_stop_handoffs` in merged protected-base policy. Unlisted schema-v2
+STOPs stay blocked. New schema-v3 STOPs require unique explicit `stop-blocker`
+IDs and cannot derive blockers from prose. The source HANDOFF remains unchanged.
+
+Missing, malformed, stale, wrong, duplicate, competing, or ambiguous
+resolution evidence keeps Context at STOP. A valid record removes only its
+named blocker. Once all blockers resolve, Context recomputes its route from
+current durable and native evidence; the record itself grants no workflow,
+review, merge, deployment, or migration authority. Comment timestamps and
+latest-comment order do not select authority.
+
 ## Handoff
 
     pnpm run bemoat:handoff <issue-number> --body-file <strict-handoff.json>

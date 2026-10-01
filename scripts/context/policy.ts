@@ -12,6 +12,11 @@ function frontmatterValue(content: string, key: string): string | null {
   return content.match(new RegExp(`^${key}:\\s*([^\\n]+)\\s*$`, 'mi'))?.[1]?.trim() ?? null
 }
 
+function uniqueFrontmatterValue(content: string, key: string): string | null {
+  const lines = content.split('\n').filter((line) => new RegExp(`^${key}\\s*:`, 'i').test(line))
+  return lines.length === 1 ? lines[0]!.replace(new RegExp(`^${key}\\s*:`, 'i'), '').trim() : null
+}
+
 export function readProtectedPolicy({ repo, baseBranch, run, cwd = process.cwd(), env = process.env }: {
   repo: string
   baseBranch: string
@@ -34,11 +39,22 @@ export function readProtectedPolicy({ repo, baseBranch, run, cwd = process.cwd()
     const frontmatter = decoded.match(/^---\s*\n([\s\S]*?)\n---/)
     const policyId = frontmatter ? frontmatterValue(frontmatter[1], 'policy_id') : null
     const version = frontmatter ? frontmatterValue(frontmatter[1], 'version') : null
+    const canonicalRepository = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'canonical_repository') : null
+    const trustedFounderLogin = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'trusted_founder_login') : null
+    const legacyStopText = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'legacy_stop_handoffs') : null
+    const legacyStopEntries = legacyStopText ? legacyStopText.split(',').map((entry) => entry.trim()) : []
+    const legacyStopHandoffs = canonicalRepository === repo && legacyStopEntries.length > 0 &&
+      legacyStopEntries.every((entry) => /^[1-9]\d*:[1-9]\d*:[0-9a-f]{40}:[0-9a-f]{64}$/.test(entry)) &&
+      new Set(legacyStopEntries).size === legacyStopEntries.length
+      ? legacyStopEntries : []
     if (!policyId || !version) errors.push('EVIDENCE_CONFLICT: canonical policy frontmatter is missing policy_id or version')
     else policy = {
       path: 'docs/mission-control/mission-control-guide.md',
       policyId,
       version,
+      trustedFounderLogin: canonicalRepository === repo && trustedFounderLogin && /^[A-Za-z0-9-]+$/.test(trustedFounderLogin)
+        ? trustedFounderLogin : null,
+      legacyStopHandoffs,
       sourceSha: content.value.sha,
       url: `https://github.com/${repo}/blob/${sha}/docs/mission-control/mission-control-guide.md`,
     }
