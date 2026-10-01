@@ -163,8 +163,12 @@ function exactLegacyReviewBody(
   const findings = [...body.matchAll(/^[ \t]*Blocking finding:[ \t]*$/gim)]
   if (findings.length !== 1) return false
   const findingStart = (findings[0]?.index ?? -1) + (findings[0]?.[0].length ?? 0)
-  const findingText = findingStart >= 0 ? body.slice(findingStart).trim() : ''
-  if (!findingText || !publicationIdentityMatches(body, evidence, activePr)) return false
+  const followingText = findingStart >= 0 ? body.slice(findingStart) : ''
+  const nextSection = followingText.search(/^[ \t]*(?:#{1,6}[ \t]+\S|\p{Lu}[\p{L}\p{N} /_-]{1,60}:[ \t]*)/mu)
+  const findingText = (nextSection < 0 ? followingText : followingText.slice(0, nextSection))
+    .replace(/^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+|>[ \t]*)/gm, '')
+    .trim()
+  if (!/[\p{L}\p{N}]/u.test(findingText) || !publicationIdentityMatches(body, evidence, activePr)) return false
 
   return true
 }

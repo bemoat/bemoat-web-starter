@@ -2638,6 +2638,15 @@ ${reviewUrl}`) {
     expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'REVIEW' })
   })
 
+  it('does not treat following non-blocking observations as an empty legacy finding', () => {
+    const body = publicationReview().body.replace(
+      /Blocking finding:[\s\S]*$/,
+      'Blocking finding:\n\nNon-blocking observations: the implementation is otherwise sound.',
+    )
+    expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
+      .toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
   it.each([
     ['repository', (payload: Record<string, unknown>) => { payload.repository = 'other/repository' }],
     ['Issue', (payload: Record<string, unknown>) => { payload.issue_number = '999' }],
