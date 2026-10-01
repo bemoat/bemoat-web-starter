@@ -8,6 +8,7 @@ import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/
 const repo = 'boat1994/bemoat-web-starter'
 const oldBase = '89a88f21d73038ebff33a72600be9561e13239ed'
 const liveBase = '22728c339722198cd937c7c6f1c0420dc06c1f81'
+const postMergeBase = 'eccb36837c7e0c2fdda0aa2871999364507aa937'
 const head = 'f8af039bad10c0bc3c98fa69fc2c7ab9fe782180'
 const branch = 'test/513-stop-resolution-characterization'
 const policyPath = 'docs/mission-control/mission-control-guide.md'
@@ -121,6 +122,21 @@ function legacy513Evidence(): NormalizedContextEvidence {
   }
 }
 
+function postMerge513Evidence(): NormalizedContextEvidence {
+  const result = legacy513Evidence()
+  result.protectedBase = { ...result.protectedBase, sha: postMergeBase }
+  result.evidenceErrors = [`EVIDENCE_CONFLICT: PR #514 base does not match live protected main@${postMergeBase}`]
+  return result
+}
+
+function rewriteResolution(comment: RoleEvidence, mutate: (record: Record<string, unknown>) => void): RoleEvidence {
+  const match = comment.body.match(/^## BLOCKER_RESOLUTION\n\n```json\n([\s\S]+)\n```\n$/)
+  if (!match) throw new Error('Expected a canonical BLOCKER_RESOLUTION fixture')
+  const record = JSON.parse(match[1]!) as Record<string, unknown>
+  mutate(record)
+  return { ...comment, body: `## BLOCKER_RESOLUTION\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n` }
+}
+
 function evidence(blockerResolutions: RoleEvidence[] = [resolution()]): NormalizedContextEvidence {
   return {
     repository: { owner: 'boat1994', name: 'bemoat-web-starter', nameWithOwner: repo, url: `https://github.com/${repo}` },
@@ -215,5 +231,64 @@ describe('Issue #518 stale active PR base characterization', () => {
     ['wrong policy source binding', [resolution({ policySourceSha: oldBase })]],
   ])('keeps sync-base fail-closed for %s', (_story, resolutions) => {
     expect(authorizeContextSync(evidence(resolutions))).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+})
+
+describe('Issue #520 protected-base advancement characterization', () => {
+  it('keeps an exact-current-base resolution valid before protected-base advancement', () => {
+    const evidence = legacy513Evidence()
+    expect(routeContext(evidence).route).toBe('STOP')
+    expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'REVIEW' })
+  })
+
+  it('keeps the publication-time-valid #513 resolution at STOP after approved main advances', () => {
+    const result = routeContext(postMerge513Evidence())
+    expect(result.route).toBe('STOP')
+    expect(authorizeContextSync(postMerge513Evidence())).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('keeps a resolution fail-closed when the relevant policy identity changes', () => {
+    const changed = legacy513Evidence()
+    changed.policy = { ...changed.policy, version: '1.4.0' }
+    expect(authorizeContextSync(changed)).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('does not carry a prior resolution to a changed PR head', () => {
+    const changed = legacy513Evidence()
+    const newHead = 'c'.repeat(40)
+    changed.activePr = { ...changed.activePr!, headSha: newHead }
+    changed.localGit = { ...changed.localGit, head: newHead }
+    changed.currentHeadVerification = { ...changed.currentHeadVerification!, exactHead: newHead }
+    const withHistoricalResolution = authorizeContextSync(changed)
+    changed.durableContext.blockerResolutions = []
+    expect(withHistoricalResolution).toEqual(authorizeContextSync(changed))
+  })
+
+  it.each([
+    ['wrong repository', (record: Record<string, unknown>) => { record.repository = 'other/repository' }],
+    ['wrong Issue', (record: Record<string, unknown>) => { record.issue_number = '999' }],
+    ['wrong PR', (record: Record<string, unknown>) => { record.pr_number = '999' }],
+    ['wrong blocker', (record: Record<string, unknown>) => { record.blocker_id = 'other-blocker' }],
+  ])('keeps a resolution fail-closed with %s binding', (_story, mutate) => {
+    const changed = legacy513Evidence()
+    changed.durableContext.blockerResolutions = [rewriteResolution(changed.durableContext.blockerResolutions![0]!, mutate)]
+    expect(authorizeContextSync(changed)).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('does not legitimize a resolution whose recorded base was never the applicable current base', () => {
+    const changed = legacy513Evidence()
+    changed.durableContext.blockerResolutions = [rewriteResolution(changed.durableContext.blockerResolutions![0]!, (record) => {
+      record.protected_base = { branch: 'main', sha: 'a'.repeat(40) }
+    })]
+    expect(authorizeContextSync(changed)).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('does not let a valid resolution bypass independent failed current-head checks', () => {
+    const changed = legacy513Evidence()
+    changed.currentHeadVerification = {
+      ...changed.currentHeadVerification!,
+      checks: { status: 'FAILURE', complete: true, failed: true, pending: false, required: true },
+    }
+    expect(authorizeContextSync(changed)).toMatchObject({ allowed: true, route: 'FIX' })
   })
 })
