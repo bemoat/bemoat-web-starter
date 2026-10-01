@@ -135,6 +135,9 @@ function publicationIdentityMatches(
 ): boolean {
   try {
     const binding = resolveMergeReviewVerdictBinding(body)
+    const approvedBaseSha = body.match(/^\*\*Approved base:\*\*.*?@([^`\s]+)`?[ \t]*$/m)?.[1]
+    if (approvedBaseSha !== undefined &&
+      (!/^[0-9a-f]{40}$/i.test(approvedBaseSha) || approvedBaseSha.toLowerCase() !== activePr.baseSha.toLowerCase())) return false
     return (!binding.repository || binding.repository.toLowerCase() === evidence.repository.nameWithOwner.toLowerCase()) &&
       (!binding.issue || binding.issue === evidence.issue.number) &&
       (!binding.pr || binding.pr === activePr.number) &&

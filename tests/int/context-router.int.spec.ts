@@ -2717,6 +2717,29 @@ ${reviewUrl}`) {
     }
   })
 
+  it.each([
+    ['different protected-base SHA', currentBase],
+    ['malformed protected-base SHA', 'not-a-full-sha'],
+  ])('keeps a publication-era review with an explicit %s at STOP', (_label, baseSha) => {
+    const body = publicationReview().body.replace(
+      '## REVIEW_VERDICT\n\n',
+      `## REVIEW_VERDICT\n**Approved base:** main@${baseSha}\n\n`,
+    )
+
+    expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
+      .toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('accepts a publication-era review whose explicit protected-base SHA matches the bound HANDOFF', () => {
+    const body = publicationReview().body.replace(
+      '## REVIEW_VERDICT\n\n',
+      `## REVIEW_VERDICT\n**Approved base:** main@${oldBase}\n\n`,
+    )
+
+    expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
+      .toMatchObject({ allowed: true, route: 'FIX' })
+  })
+
   it('requires an existing historical summary to agree with the native review lineage', () => {
     const summary = publicationSummary()
     const conflictingBodies = [
