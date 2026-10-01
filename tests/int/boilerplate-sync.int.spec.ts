@@ -242,6 +242,7 @@ describe('boilerplate sync managed paths', () => {
       'tests/int/toolchain-contract.int.spec.ts',
       'tests/int/vitest-process-lock.int.spec.ts',
       'tests/fixtures/child-shape',
+      'tests/fixtures/node-api-buffer',
     ]
 
     for (const path of harnessPaths) {

@@ -147,7 +147,8 @@
     "tests/fixtures/planning",
     "tests/fixtures/acceptance",
     "tests/fixtures/boilerplate-sync",
-    "tests/fixtures/child-shape"
+    "tests/fixtures/child-shape",
+    "tests/fixtures/node-api-buffer"
   ],
   "seedOnlyPaths": [
     "src/app/(frontend)",
