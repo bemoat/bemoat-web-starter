@@ -5,7 +5,7 @@ import type {
 } from './model.ts'
 import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
-import { hasBlockingFinding } from './semantic-review-evidence.ts'
+import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './semantic-review-evidence.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
@@ -107,6 +107,7 @@ function isProtectedOrIntegrationBranch(branch: string): boolean {
 }
 
 function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleBaseError: string | null = null): ContextDecision {
+  const allowPublicationEraReviewRecovery = ignoredStaleBaseError !== null
   const baseReasons = [
     ...evidence.evidenceErrors.filter((error) => error !== ignoredStaleBaseError),
     ...identityErrors(evidence, ignoredStaleBaseError !== null),
@@ -178,12 +179,13 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
     })
   }
 
-  const handoffResolution = resolveCurrentHandoff(evidence, activePr)
+  const handoffResolution = resolveCurrentHandoff(evidence, activePr, allowPublicationEraReviewRecovery)
   if (handoffResolution.conflict) {
     return decision(evidence, 'STOP', [handoffResolution.conflict.reason], handoffResolution.conflict.nextAction)
   }
   const applicableHandoff = handoffResolution.record
-  const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, evidence, activePr)
+  const publicationEraLineage = allowPublicationEraReviewRecovery && applicableHandoff !== null ? publicationEraReviewLineageForHandoff(applicableHandoff, evidence, activePr) : null
+  const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, evidence, activePr, allowPublicationEraReviewRecovery)
   if (applicableHandoff?.route === 'STOP') {
     const source = handoffResolution.evidence
     const blockerResolution = source
@@ -221,7 +223,7 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
   let blockingSemanticReview = false
   if (semanticReviewRequired) {
     const verdicts = evidence.durableContext.historicalResults.filter((r) =>
-      /^##\s+REVIEW_VERDICT\b/i.test(r.body),
+      /^##\s+REVIEW_VERDICT\b/i.test(r.body) && !publicationEraLineage?.summaryCommentIds.some((id) => String(id) === String(r.id)),
     )
     const currentHeadVerdicts: Array<{ id: string | number; body: string; parsed: ProductionMergeReviewVerdict | null; valid: boolean; acceptedVerdict: string | null }> = []
 
@@ -247,7 +249,7 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
           : null
         const validCorrection = acceptedVerdict === 'CORRECTION REQUIRED' &&
           (hasBlockingFinding(body, activePr.headSha) ||
-            isCurrentHandoffReviewVerdict(applicableHandoff, evidence, activePr, commentUrl))
+            isCurrentHandoffReviewVerdict(applicableHandoff, evidence, activePr, commentUrl, allowPublicationEraReviewRecovery))
         if (classification.valid && (acceptedVerdict === 'ELIGIBLE FOR FOUNDER REVIEW' || validCorrection)) {
           currentHeadVerdicts.push({ id, body, parsed, valid: true, acceptedVerdict })
         }
@@ -268,6 +270,7 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
     }
 
     for (const review of verification.reviews.nativeReviews ?? []) {
+      if (publicationEraLineage?.reviewId === review.id) continue
       if (!/^##\s+REVIEW_VERDICT\b/i.test(review.body)) continue
       if (!review.commitId || !isFullSha(review.commitId)) {
         currentHeadVerdicts.push({ id: review.id ?? '<unknown>', body: review.body, parsed: null, valid: false, acceptedVerdict: null })

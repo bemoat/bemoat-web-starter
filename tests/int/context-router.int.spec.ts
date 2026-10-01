@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { routeContext } from '../../scripts/context/router.ts'
+import { authorizeContextSync } from '../../scripts/context/sync.ts'
 import { parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
-import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
+import type { NativeReviewEvidence, NormalizedContextEvidence } from '../../scripts/context/model.ts'
 import {
   classifyMergeReviewVerdict,
   parseProductionMergeReviewVerdict,
@@ -2485,5 +2486,300 @@ describe('#503 supported native review lineage', () => {
 
   it('fails closed for conflicting exact-head native verdicts even without a HANDOFF', () => {
     expect(routeContext(evidenceFor([nativeBlockingReview(), nativeReview({ id: 201 })], [])).route).toBe('STOP')
+  })
+})
+
+describe('#509 publication-era native review lineage during stale-base recovery', () => {
+  const repository = 'boat1994/bemoat-web-starter'
+  const issueNumber = '504'
+  const prNumber = '505'
+  const branch = 'fix/504-install-git-hooks-node-typings'
+  const oldBase = '46857c0fad0b1746e5a13224d97bcef67831ed71'
+  const currentBase = 'a726b5348ec06b6f7e7ec3bcb5cc4dba1f09de9f'
+  const reviewedHead = '41187038e7df1bba755f1a44a971f44e51bfd1f9'
+  const reviewId = 5353114057
+  const handoffId = 5891095039
+  const summaryId = 5891525105
+  const prUrl = `https://github.com/${repository}/pull/${prNumber}`
+  const reviewUrl = `${prUrl}#pullrequestreview-${reviewId}`
+  const issueUrl = `https://github.com/${repository}/issues/${issueNumber}`
+
+  function publicationReview(body = `## REVIEW_VERDICT
+
+Reviewed exact head: ${reviewedHead}
+
+Verdict: CORRECTION REQUIRED
+
+Blocking finding:
+
+- tests/int/install-git-hooks.int.spec.ts:5-17 does not exercise the reported TypeScript 6.0.3 plus @types/node 24.13.1 boundary. It substitutes a local NodeTypedCapturedOutput shape and calls an exported helper whose parameter is unknown. That test proves String(output) runtime behavior for an object, Buffer, and string, but it does not compile the actual execFileSync encoding overload that produced TS2554. The checked-in environment remains on @types/node 24.12.3, and this test can stay green if the original inline Buffer.isBuffer(...).toString(utf8) regression returns in installGitHooks. Add durable type-level coverage using the actual Node API inference under 24.13.1, or an equivalent exact-version compile fixture, so the acceptance criterion is protected rather than asserted only by handoff evidence.
+
+Non-blocking observations: String(Buffer) preserves the default UTF-8 behavior, strings pass through unchanged, both managed-path registries include the new test, the four-file diff is minimal, and focused validation passed 83 tests.`, overrides: Partial<NativeReviewEvidence> = {}) {
+    return {
+      id: reviewId,
+      url: reviewUrl,
+      state: 'COMMENTED',
+      commitId: reviewedHead,
+      body,
+      ...overrides,
+    }
+  }
+
+  function publicationSummary(body = `## REVIEW_VERDICT
+**Task / Issue:** #${issueNumber}
+**Repository:** \`${repository}\`
+**PR / base / head:** PR #${prNumber} · \`main\` · \`${reviewedHead}\`
+**Verdict:** CORRECTION REQUIRED
+
+Blocking finding:
+
+\`tests/int/install-git-hooks.int.spec.ts\` uses a synthetic \`{ toString(): string }\` shape. It verifies runtime conversion but does not durably compile the actual \`execFileSync(..., { encoding: 'utf8' })\` Node API typing boundary under TypeScript 6.0.3 and \`@types/node\` 24.13.1.
+
+Required correction:
+
+Add durable type-level regression coverage using the actual Node API inference under TypeScript 6.0.3 and \`@types/node\` 24.13.1, or an equivalent exact-version compile fixture. Do not broaden beyond Issue #504.
+
+Source semantic review:
+${reviewUrl}`) {
+    return {
+      id: summaryId,
+      body,
+      createdAt: '2026-09-29T13:42:52Z',
+      url: `${issueUrl}#issuecomment-${summaryId}`,
+    }
+  }
+
+  function publicationHandoff(overrides: Partial<HandoffRecord> = {}) {
+    return {
+      ...strictHandoff({
+        schema_version: 2,
+        repository,
+        issue_number: issueNumber,
+        branch,
+        exact_head: reviewedHead,
+        protected_base: { branch: 'main', sha: oldBase },
+        pr: { number: prNumber, url: prUrl, base: 'main', head: branch, head_sha: reviewedHead },
+        verified_evidence: [{ kind: 'review-verdict', value: 'CORRECTION REQUIRED: the regression test uses a synthetic zero-argument toString shape and does not compile the actual execFileSync encoding return-type boundary under TypeScript 6.0.3 plus @types/node 24.13.1, so the explicit boundary acceptance criterion is not durably protected.', url: reviewUrl }],
+        route: 'FIX',
+        next_action: { route: 'FIX', description: 'Apply the bounded correction after protected-base recovery.' },
+      }),
+      id: handoffId,
+      createdAt: '2026-09-29T13:17:32Z',
+      url: `${issueUrl}#issuecomment-${handoffId}`,
+      ...overrides,
+    }
+  }
+
+  function publicationEvidence({
+    handoff = publicationHandoff(),
+    handoffs = [handoff],
+    reviews = [publicationReview()],
+    historicalResults = [publicationSummary()],
+  }: {
+    handoff?: ReturnType<typeof publicationHandoff>
+    handoffs?: Array<ReturnType<typeof publicationHandoff>>
+    reviews?: NativeReviewEvidence[]
+    historicalResults?: Array<{ id: string | number; body: string; createdAt: string; url: string }>
+  } = {}): NormalizedContextEvidence {
+    return baseEvidence({
+      repository: { owner: 'boat1994', name: 'bemoat-web-starter', nameWithOwner: repository, url: `https://github.com/${repository}` },
+      protectedBase: { branch: 'main', sha: currentBase, source: 'live GitHub ref', url: `https://github.com/${repository}/tree/main` },
+      policy: { ...baseEvidence().policy, sourceSha: currentBase },
+      issue: { ...baseEvidence().issue, number: issueNumber, url: issueUrl, workflowProfile: 'STANDARD' },
+      localGit: { ...baseEvidence().localGit, branch, head: reviewedHead, upstream: `origin/${branch}`, originRepository: repository },
+      activePr: {
+        number: prNumber, state: 'OPEN', draft: false, url: prUrl,
+        baseBranch: 'main', baseSha: oldBase, headBranch: branch, headSha: reviewedHead,
+        merged: false, mergeCommitSha: null,
+      },
+      currentHeadVerification: {
+        exactHead: reviewedHead,
+        checks: { status: 'SUCCESS', complete: true, failed: false, pending: false, required: true },
+        reviews: { required: false, approved: true, exactHead: true, approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews: reviews },
+        protection: { available: true, requiredChecks: ['ci'], requiredApprovals: 0 },
+      },
+      durableContext: { latestHandoff: handoff, handoffs, historicalResults },
+      evidenceErrors: [`EVIDENCE_CONFLICT: PR #${prNumber} base does not match live protected main@${currentBase}`],
+    })
+  }
+
+  it('authorizes the exact publication-era native FIX lineage only for stale-base synchronization', () => {
+    const evidence = publicationEvidence()
+    const before = structuredClone(evidence)
+    const ordinary = structuredClone(evidence)
+    ordinary.protectedBase = { ...ordinary.protectedBase, sha: oldBase }
+    ordinary.evidenceErrors = []
+
+    expect(routeContext(ordinary).route).toBe('STOP')
+    expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'FIX' })
+    expect(evidence).toEqual(before)
+  })
+
+  it('does not require an Issue REVIEW_VERDICT summary to supply native review identity', () => {
+    expect(authorizeContextSync(publicationEvidence({ historicalResults: [] }))).toMatchObject({ allowed: true, route: 'FIX' })
+  })
+
+  it('accepts agreeing structured identity fields embedded in the publication-era native review', () => {
+    const body = publicationReview().body.replace(
+      '## REVIEW_VERDICT\n\n',
+      `## REVIEW_VERDICT\n**Repository:** \`${repository}\`\n**Task / Issue:** #${issueNumber}\n**PR / base / head:** PR #${prNumber} · \`main\` · \`${reviewedHead}\`\n\n`,
+    )
+    expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
+      .toMatchObject({ allowed: true, route: 'FIX' })
+  })
+
+  it('keeps old review evidence from satisfying a changed PR head', () => {
+    const evidence = publicationEvidence()
+    const correctionHead = 'c'.repeat(40)
+    evidence.activePr = { ...evidence.activePr as NonNullable<NormalizedContextEvidence['activePr']>, headSha: correctionHead } as NormalizedContextEvidence['activePr']
+    evidence.localGit = { ...evidence.localGit, head: correctionHead }
+    evidence.currentHeadVerification = { ...evidence.currentHeadVerification!, exactHead: correctionHead }
+
+    expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'REVIEW' })
+  })
+
+  it.each([
+    ['repository', (payload: Record<string, unknown>) => { payload.repository = 'other/repository' }],
+    ['Issue', (payload: Record<string, unknown>) => { payload.issue_number = '999' }],
+    ['PR', (payload: Record<string, unknown>) => { (payload.pr as Record<string, unknown>).number = '999' }],
+    ['branch', (payload: Record<string, unknown>) => { payload.branch = 'fix/other-branch' }],
+    ['base', (payload: Record<string, unknown>) => { (payload.protected_base as Record<string, unknown>).sha = currentBase }],
+    ['head', (payload: Record<string, unknown>) => { payload.exact_head = 'd'.repeat(40) }],
+  ])('keeps a legacy review with a wrong HANDOFF %s at STOP', (_label, mutate) => {
+    const original = publicationHandoff()
+    const handoff = mutateHandoffIdentity(original, mutate)
+    expect(authorizeContextSync(publicationEvidence({ handoff, handoffs: [handoff] }))).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it.each([
+    ['review URL', (handoff: ReturnType<typeof publicationHandoff>) => mutateHandoffIdentity(handoff, (payload) => {
+      const reference = (payload.verified_evidence as Array<Record<string, unknown>>)[0]!
+      reference.url = `${prUrl}#pullrequestreview-${reviewId + 1}`
+    })],
+  ])('keeps a legacy review with a mismatched HANDOFF %s at STOP', (_label, mutate) => {
+    const handoff = mutate(publicationHandoff())
+    expect(authorizeContextSync(publicationEvidence({ handoff, handoffs: [handoff] }))).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('keeps a native review with a wrong URL, ID, or commit binding at STOP', () => {
+    const review = publicationReview()
+    for (const badReview of [
+      { ...review, id: reviewId + 1, url: review.url },
+      { ...review, url: `${prUrl}#pullrequestreview-${reviewId + 1}` },
+      { ...review, commitId: 'e'.repeat(40) },
+      { ...review, body: review.body.replace(reviewedHead, 'e'.repeat(40)) },
+      { ...review, body: review.body.replace('CORRECTION REQUIRED', 'ELIGIBLE FOR FOUNDER REVIEW') },
+      { ...review, body: review.body.replace('Blocking finding:', 'No blocking finding:') },
+    ]) {
+      expect(authorizeContextSync(publicationEvidence({ reviews: [badReview] }))).toMatchObject({ allowed: false, route: 'STOP' })
+    }
+  })
+
+  it('rejects a publication-era review when an overlapping structured identity conflicts', () => {
+    const identityPrefix = `**Repository:** \`${repository}\`\n**Task / Issue:** #${issueNumber}\n**PR / base / head:** PR #${prNumber} · \`main\` · \`${reviewedHead}\`\n`
+    const conflictingBodies = [
+      publicationReview().body.replace('## REVIEW_VERDICT\n\n', `## REVIEW_VERDICT\n${identityPrefix.replace(repository, 'other/repository')}\n`),
+      publicationReview().body.replace('## REVIEW_VERDICT\n\n', `## REVIEW_VERDICT\n${identityPrefix.replace(`#${issueNumber}`, '#999')}\n`),
+      publicationReview().body.replace('## REVIEW_VERDICT\n\n', `## REVIEW_VERDICT\n${identityPrefix.replace(`PR #${prNumber}`, 'PR #999')}\n`),
+      publicationReview().body.replace('## REVIEW_VERDICT\n\n', `## REVIEW_VERDICT\n${identityPrefix.replace('`main`', '`staging`')}\n`),
+      publicationReview().body.replace('## REVIEW_VERDICT\n\n', `## REVIEW_VERDICT\n${identityPrefix.replace(reviewedHead, 'f'.repeat(40))}\n`),
+    ]
+    for (const body of conflictingBodies) {
+      expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
+        .toMatchObject({ allowed: false, route: 'STOP' })
+    }
+  })
+
+  it('requires an existing historical summary to agree with the native review lineage', () => {
+    const summary = publicationSummary()
+    const conflictingBodies = [
+      summary.body.replace(`\`${repository}\``, '`other/repository`'),
+      summary.body.replace(`#${issueNumber}`, '#999'),
+      summary.body.replace(`PR #${prNumber}`, 'PR #999'),
+      summary.body.replace('`main`', '`staging`'),
+      summary.body.replace(reviewedHead, 'f'.repeat(40)),
+      summary.body.replace('CORRECTION REQUIRED', 'ELIGIBLE FOR FOUNDER REVIEW'),
+      summary.body.replace(reviewUrl, `${prUrl}#pullrequestreview-${reviewId + 1}`),
+    ]
+    for (const body of conflictingBodies) {
+      expect(authorizeContextSync(publicationEvidence({ historicalResults: [{ ...summary, body }] })))
+        .toMatchObject({ allowed: false, route: 'STOP' })
+    }
+    for (const candidate of [
+      { ...summary, id: summaryId + 1 },
+      { ...summary, url: `${issueUrl}#issuecomment-${summaryId + 1}` },
+      { ...summary, url: `${issueUrl}?view=1#issuecomment-${summaryId}` },
+    ]) {
+      expect(authorizeContextSync(publicationEvidence({ historicalResults: [candidate] })))
+        .toMatchObject({ allowed: false, route: 'STOP' })
+    }
+  })
+
+  it('requires the Handoff review reference value to state one unambiguous blocking outcome', () => {
+    for (const value of [
+      'Implementation checks passed.',
+      'CORRECTION REQUIRED and ELIGIBLE FOR FOUNDER REVIEW',
+    ]) {
+      const handoff = mutateHandoffIdentity(publicationHandoff(), (payload) => {
+        (payload.verified_evidence as Array<Record<string, unknown>>)[0]!.value = value
+      })
+      expect(authorizeContextSync(publicationEvidence({ handoff, handoffs: [handoff] })))
+        .toMatchObject({ allowed: false, route: 'STOP' })
+    }
+  })
+
+  it('requires the append-only Handoff to remain bound to its exact Issue comment ID and URL', () => {
+    const handoff = publicationHandoff()
+    for (const candidate of [
+      { ...handoff, id: handoffId + 1 },
+      { ...handoff, url: `${issueUrl}#issuecomment-${handoffId + 1}` },
+      { ...handoff, url: `${issueUrl}?view=1#issuecomment-${handoffId}` },
+    ]) {
+      expect(authorizeContextSync(publicationEvidence({ handoff: candidate, handoffs: [candidate] })))
+        .toMatchObject({ allowed: false, route: 'STOP' })
+    }
+  })
+
+  it('keeps duplicate HANDOFFs, duplicate review IDs, and competing review summaries at STOP', () => {
+    const handoff = publicationHandoff()
+    const duplicateHandoff = { ...handoff, id: handoffId + 1, url: `${issueUrl}#issuecomment-${handoffId + 1}` }
+    const review = publicationReview()
+    const duplicateSummary = { ...publicationSummary(), id: summaryId + 1, url: `${issueUrl}#issuecomment-${summaryId + 1}` }
+
+    expect(authorizeContextSync(publicationEvidence({ handoffs: [handoff, duplicateHandoff] }))).toMatchObject({ allowed: false, route: 'STOP' })
+    expect(authorizeContextSync(publicationEvidence({ reviews: [review, review] }))).toMatchObject({ allowed: false, route: 'STOP' })
+    expect(authorizeContextSync(publicationEvidence({ reviews: [
+      review,
+      { ...review, id: reviewId + 1, url: `${prUrl}#pullrequestreview-${reviewId + 1}` },
+    ] }))).toMatchObject({ allowed: false, route: 'STOP' })
+    expect(authorizeContextSync(publicationEvidence({ historicalResults: [publicationSummary(), duplicateSummary] }))).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it('retains strict #503 immutable-finding validation for current-format native reviews', () => {
+    const currentBody = `## REVIEW_VERDICT
+**Repository:** \`${repository}\`
+**Task / Issue:** #${issueNumber}
+**PR / base / head:** PR #${prNumber} · \`main\` · \`${reviewedHead}\`
+**Verdict:** CORRECTION REQUIRED
+
+### Immutable finding disposition
+\`\`\`json
+{ "schema_version": 1, "reviewed_head": "${reviewedHead}", "findings": [{ "id": "CTX-509-001", "canonical_summary": "Preserve bounded historical review recovery", "source_thread": "${reviewUrl}", "required_evidence": ["Exact native review identity"] }] }
+\`\`\``
+    const modernHandoff = publicationHandoff()
+    const modernEvidence = publicationEvidence({
+      handoff: mutateHandoffIdentity(modernHandoff, (payload) => {
+        (payload.verified_evidence as Array<Record<string, unknown>>)[0]!.value = 'CORRECTION REQUIRED on the exact reviewed head.'
+      }),
+      reviews: [publicationReview(currentBody)],
+      historicalResults: [],
+    })
+    expect(authorizeContextSync(modernEvidence)).toMatchObject({ allowed: true, route: 'FIX' })
+
+    const missingFinding = publicationEvidence({
+      reviews: [publicationReview(currentBody.replace(/### Immutable finding disposition[\s\S]*/, ''))],
+      historicalResults: [],
+    })
+    expect(authorizeContextSync(missingFinding)).toMatchObject({ allowed: false, route: 'STOP' })
   })
 })
