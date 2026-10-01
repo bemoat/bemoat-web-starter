@@ -2638,10 +2638,14 @@ ${reviewUrl}`) {
     expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'REVIEW' })
   })
 
-  it('does not treat following non-blocking observations as an empty legacy finding', () => {
+  it.each([
+    ['plain', 'Non-blocking observations: the implementation is otherwise sound.'],
+    ['bold', '**Non-blocking observations:** the implementation is otherwise sound.'],
+    ['bulleted', '- Non-blocking observations: the implementation is otherwise sound.'],
+  ])('does not treat following %s observations as an empty legacy finding', (_label, section) => {
     const body = publicationReview().body.replace(
       /Blocking finding:[\s\S]*$/,
-      'Blocking finding:\n\nNon-blocking observations: the implementation is otherwise sound.',
+      `Blocking finding:\n\n${section}`,
     )
     expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
       .toMatchObject({ allowed: false, route: 'STOP' })
