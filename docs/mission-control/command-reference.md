@@ -106,8 +106,11 @@ protected-base SHA, and exact current PR head; its sole `review-verdict`
 reference must identify one submitted native review attached to that same
 head. The older review may omit structured identity and immutable-finding
 fields, but it must state that exact reviewed head, one `CORRECTION REQUIRED`
-verdict, and a nonempty blocking finding. Any identity present in that review
-must agree with the HANDOFF. A same-head Issue summary, when present, only
+verdict, and a nonempty blocking finding. Any structured repository, Issue,
+PR, base, branch, protected-base SHA, or reviewed-head identity present in
+that review must be well formed, unique, and agree exactly with the HANDOFF
+and active PR; an absent field may be supplied only by that uniquely bound
+HANDOFF. A same-head Issue summary, when present, only
 corroborates the native review: it must match the same repository, Issue, PR,
 base, and head and name that exact native review under `Source semantic
 review`. Missing, malformed, wrong-identity, duplicate, or competing evidence

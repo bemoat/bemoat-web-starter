@@ -138,6 +138,9 @@ function publicationIdentityMatches(
     const approvedBaseSha = body.match(/^\*\*Approved base:\*\*.*?@([^`\s]+)`?[ \t]*$/m)?.[1]
     if (approvedBaseSha !== undefined &&
       (!/^[0-9a-f]{40}$/i.test(approvedBaseSha) || approvedBaseSha.toLowerCase() !== activePr.baseSha.toLowerCase())) return false
+    const branchFields = [...body.matchAll(/^[ \t]*(?:\*\*Branch:\*\*|__Branch:__|Branch:)[ \t]*(.*?)[ \t]*$/gim)]
+    const branch = branchFields[0]?.[1].match(/^(?:`([^`\s]+)`|([^`\s]+))$/)
+    if (branchFields.length > 1 || (branchFields.length === 1 && (branch?.[1] ?? branch?.[2]) !== activePr.headBranch)) return false
     return (!binding.repository || binding.repository.toLowerCase() === evidence.repository.nameWithOwner.toLowerCase()) &&
       (!binding.issue || binding.issue === evidence.issue.number) &&
       (!binding.pr || binding.pr === activePr.number) &&

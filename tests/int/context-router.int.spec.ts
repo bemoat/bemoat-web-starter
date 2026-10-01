@@ -2628,6 +2628,34 @@ ${reviewUrl}`) {
       .toMatchObject({ allowed: true, route: 'FIX' })
   })
 
+  it('accepts a matching explicit branch only for stale-base synchronization', () => {
+    const body = publicationReview().body.replace(
+      '## REVIEW_VERDICT\n\n',
+      `## REVIEW_VERDICT\n**Branch:** \`${branch}\`\n\n`,
+    )
+    const evidence = publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })
+    const ordinary = structuredClone(evidence)
+    ordinary.protectedBase = { ...ordinary.protectedBase, sha: oldBase }
+    ordinary.evidenceErrors = []
+
+    expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'FIX' })
+    expect(routeContext(ordinary).route).toBe('STOP')
+  })
+
+  it.each([
+    ['different branch', 'fix/other-branch'],
+    ['malformed branch', `${branch} trailing-text`],
+    ['duplicate branch fields', `**Branch:** \`${branch}\`\n**Branch:** \`${branch}\``],
+  ])('keeps an explicit %s in the publication-era review at STOP', (_label, branchField) => {
+    const body = publicationReview().body.replace(
+      '## REVIEW_VERDICT\n\n',
+      `## REVIEW_VERDICT\n**Branch:** ${branchField}\n\n`,
+    )
+
+    expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
+      .toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
   it('keeps old review evidence from satisfying a changed PR head', () => {
     const evidence = publicationEvidence()
     const correctionHead = 'c'.repeat(40)
