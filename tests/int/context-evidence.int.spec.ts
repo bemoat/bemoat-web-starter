@@ -13,6 +13,16 @@ function response(stdout: string): ContextCommandResult {
   return { status: 0, stdout, stderr: '', error: null }
 }
 
+function nativeReviewApiResponse(
+  args: readonly string[],
+  reviewsByPr: Record<string, unknown[]> = {},
+): ContextCommandResult | null {
+  const endpoint = args.find((arg) => /^repos\/[^/]+\/[^/]+\/pulls\/[1-9]\d*\/reviews\?per_page=100$/.test(arg))
+  const number = endpoint?.match(/\/pulls\/([1-9]\d*)\/reviews\?per_page=100$/)?.[1]
+  if (!number) return null
+  return response(JSON.stringify([reviewsByPr[number] ?? []]))
+}
+
 describe('bemoat:context neutral evidence adapters', () => {
   it.each([
     ['dirty', { 'status --short': ' M file\n' }],
@@ -108,7 +118,8 @@ describe('bemoat:context neutral evidence adapters', () => {
   })
 
   it('reads protected-base SHA and policy identity from live GitHub content', () => {
-    const policy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\n---\n\n# Guide\n'
+    const historicalStop = `513:5913355141:${'a'.repeat(40)}:${'b'.repeat(64)}`
+    const policy = `---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\nlegacy_stop_handoffs: ${historicalStop}\n---\n\n# Guide\n`
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.includes('git/ref/heads/main')) {
@@ -135,6 +146,8 @@ describe('bemoat:context neutral evidence adapters', () => {
         path: 'docs/mission-control/mission-control-guide.md',
         policyId: 'bemoat-mission-control',
         version: '1.3.0',
+        trustedFounderLogin: 'boat1994',
+        legacyStopHandoffs: [historicalStop],
         sourceSha: 'c'.repeat(40),
         url: 'https://github.com/boat1994/bemoat-web-starter/blob/' + 'a'.repeat(40) + '/docs/mission-control/mission-control-guide.md',
       },
@@ -142,10 +155,49 @@ describe('bemoat:context neutral evidence adapters', () => {
     })
   })
 
+  it('rejects ambiguous trusted Founder identity in protected policy', () => {
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) return response(JSON.stringify({
+        sha: 'c'.repeat(40),
+        content: Buffer.from('---\npolicy_id: bemoat-mission-control\nversion: 1.4.0\ntrusted_founder_login: boat1994\ntrusted_founder_login: another-owner\n---\n').toString('base64'),
+        encoding: 'base64',
+      }))
+      return response('')
+    }
+    expect(readProtectedPolicy({ repo: 'boat1994/bemoat-web-starter', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
+  })
+
+  it('does not copy the starter Founder identity into a child repository', () => {
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) return response(JSON.stringify({
+        sha: 'c'.repeat(40),
+        content: Buffer.from('---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\ntrusted_founder_login: boat1994\n---\n').toString('base64'),
+        encoding: 'base64',
+      }))
+      return response('')
+    }
+    expect(readProtectedPolicy({ repo: 'boat1994/child-project', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
+  })
+
   it('binds the Issue, one active PR, and exact-head verification', () => {
     const head = 'b'.repeat(40)
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
+      const reviewApiResponse = nativeReviewApiResponse(args, {
+        '411': [{
+          id: 5020446813,
+          html_url: 'https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-5020446813',
+          state: 'COMMENTED',
+          commit_id: head,
+          body: `## REVIEW_VERDICT\n**Repository:** \`boat1994/bemoat-web-starter\`\n**Task / Issue:** #410\n**PR / base / head:** PR #411 · \`main\` · \`${head}\`\n**Verdict:** ELIGIBLE FOR FOUNDER REVIEW`,
+          user: { login: 'reviewer' },
+        }],
+      })
+      if (reviewApiResponse) return reviewApiResponse
       if (key.startsWith('issue view 410')) {
         return response(JSON.stringify({
           number: 410,
@@ -211,6 +263,7 @@ describe('bemoat:context neutral evidence adapters', () => {
           exactHead: false,
           nativeReviews: [{
             id: 5020446813,
+            url: 'https://github.com/boat1994/bemoat-web-starter/pull/411#pullrequestreview-5020446813',
             state: 'COMMENTED',
             commitId: head,
             body: expect.stringContaining('ELIGIBLE FOR FOUNDER REVIEW'),
@@ -226,6 +279,8 @@ describe('bemoat:context neutral evidence adapters', () => {
     const mergeCommit = 'd'.repeat(40)
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
+      const reviewApiResponse = nativeReviewApiResponse(args)
+      if (reviewApiResponse) return reviewApiResponse
       if (key.startsWith('issue view 421')) {
         return response(JSON.stringify({
           number: 421,
@@ -395,7 +450,7 @@ describe('bemoat:context neutral evidence adapters', () => {
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
       if (key.startsWith('issue view 434')) {
-        return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [{ id: 1001, body: '## HANDOFF PR #431', createdAt: '2026-09-01T00:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1001' }, { id: 1002, body: '## REVIEW_VERDICT PR #432', createdAt: '2026-09-01T01:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1002' }] }))
+        return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [{ id: 1001, body: '## HANDOFF PR #431', createdAt: '2026-09-01T00:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1001', author: { login: 'boat1994' }, authorAssociation: 'OWNER' }, { id: 1002, body: '## REVIEW_VERDICT PR #432', createdAt: '2026-09-01T01:00:00Z', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434#issuecomment-1002' }] }))
       }
       if (key.startsWith('pr list')) return response(JSON.stringify([1, 2].map((number) => ({ number: 430 + number, url: `https://github.com/boat1994/bemoat-web-starter/pull/${430 + number}`, headRefName: `fix/434-history-${number}`, closingIssuesReferences: [{ number: 434 }] }))))
       const match = key.match(/^pr view (43[1-2])/)
@@ -418,7 +473,7 @@ describe('bemoat:context neutral evidence adapters', () => {
     })
     expect(evidence.activePrs).toEqual([])
     expect(evidence.comments).toMatchObject([
-      { id: '1001', body: expect.stringContaining('HANDOFF') },
+      { id: '1001', body: expect.stringContaining('HANDOFF'), authorLogin: 'boat1994', authorAssociation: 'OWNER' },
       { id: '1002', body: expect.stringContaining('REVIEW_VERDICT') },
     ])
     expect(evidence.errors).toEqual([])
@@ -441,6 +496,8 @@ describe('bemoat:context neutral evidence adapters', () => {
     const head = 'b'.repeat(40)
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
+      const reviewApiResponse = nativeReviewApiResponse(args)
+      if (reviewApiResponse) return reviewApiResponse
       if (key.startsWith('issue view 434')) return response(JSON.stringify({ number: 434, title: 'ignore historical merged PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [] }))
       if (key.startsWith('pr list')) return response(JSON.stringify([
         { number: 431, url: 'https://github.com/boat1994/bemoat-web-starter/pull/431', headRefName: 'fix/434-history-1', closingIssuesReferences: [{ number: 434 }] },
@@ -462,6 +519,8 @@ describe('bemoat:context neutral evidence adapters', () => {
   it('keeps genuinely competing OPEN PRs as active candidates', () => {
     const run: ContextCommandRunner = (_command, args) => {
       const key = args.join(' ')
+      const reviewApiResponse = nativeReviewApiResponse(args)
+      if (reviewApiResponse) return reviewApiResponse
       if (key.startsWith('issue view 434')) return response(JSON.stringify({ number: 434, title: 'competing open PRs', state: 'OPEN', url: 'https://github.com/boat1994/bemoat-web-starter/issues/434', body: '# body', comments: [] }))
       if (key.startsWith('pr list')) return response(JSON.stringify([435, 436].map((number) => ({ number, url: 'https://github.com/boat1994/bemoat-web-starter/pull/' + number, headRefName: 'fix/434-open-' + number, closingIssuesReferences: [{ number: 434 }] }))))
       const match = key.match(/^pr view (43[5-6])/)
@@ -507,5 +566,115 @@ describe('bemoat:context neutral evidence adapters', () => {
     expect(evidence.activePrs).toEqual([])
     expect(evidence.exactHead).toBeNull()
     expect(evidence.errors).toEqual([])
+  })
+})
+
+describe('native pull request review identity acquisition', () => {
+  const repo = 'boat1994/bemoat-web-starter'
+  const issueNumber = '410'
+  const prNumber = '411'
+  const head = 'b'.repeat(40)
+  const databaseId = 5355572368
+  const nodeId = 'PRR_kwDOS4T8888AAAABPzeMkA'
+  const reviewUrl = `https://github.com/${repo}/pull/${prNumber}#pullrequestreview-${databaseId}`
+  const reviewBody = '## REVIEW_VERDICT\n**Verdict:** CORRECTION REQUIRED'
+
+  function readEvidence(restReviewPages: unknown[]) {
+    const graphqlReview: Record<string, unknown> = {
+      id: nodeId,
+      databaseId: null,
+      url: null,
+      state: 'COMMENTED',
+      commit: { oid: head },
+      body: reviewBody,
+      author: { login: 'boat1994' },
+    }
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      if (_command === 'gh' && key.startsWith('issue view')) {
+        return response(JSON.stringify({ number: 410, title: 'context', state: 'OPEN', url: `https://github.com/${repo}/issues/${issueNumber}`, body: '# body', comments: [] }))
+      }
+      if (_command === 'gh' && key.startsWith('pr list')) {
+        return response(JSON.stringify([{ number: 411, url: `https://github.com/${repo}/pull/${prNumber}`, headRefName: 'fix/410-context-review', closingIssuesReferences: [{ number: 410 }] }]))
+      }
+      if (_command === 'gh' && key.startsWith('pr view 411')) {
+        return response(JSON.stringify({
+          number: 411,
+          state: 'OPEN',
+          isDraft: false,
+          url: `https://github.com/${repo}/pull/${prNumber}`,
+          baseRefName: 'main',
+          baseRefOid: 'a'.repeat(40),
+          headRefName: 'fix/410-context-review',
+          headRefOid: head,
+          mergeCommit: null,
+          reviews: [graphqlReview],
+          statusCheckRollup: [{ name: 'CI', state: 'SUCCESS', conclusion: 'SUCCESS' }],
+        }))
+      }
+      if (_command === 'gh' && args[0] === 'api' && args.some((arg) => arg.includes(`/pulls/${prNumber}/reviews`))) {
+        return response(JSON.stringify(restReviewPages))
+      }
+      if (_command === 'gh' && key.includes('branches/main/protection')) {
+        return response(JSON.stringify({ required_status_checks: { contexts: ['CI'] } }))
+      }
+      return response('')
+    }
+
+    return readGithubEvidence({
+      cwd: '/repo',
+      repo,
+      issueNumber,
+      branch: 'fix/410-context-review',
+      protectedBaseBranch: 'main',
+      run,
+    })
+  }
+
+  it('normalizes the GraphQL review through the native database ID and canonical REST URL', () => {
+    const restReview = {
+      id: databaseId,
+      node_id: nodeId,
+      html_url: reviewUrl,
+      state: 'COMMENTED',
+      commit_id: head,
+      body: reviewBody,
+      user: { login: 'boat1994' },
+    }
+    const evidence = readEvidence([[restReview]])
+
+    expect(evidence.exactHead?.reviews.nativeReviews).toEqual([{
+      id: databaseId,
+      url: reviewUrl,
+      state: 'COMMENTED',
+      body: reviewBody,
+      commitId: head,
+    }])
+    expect(evidence.errors).toEqual([])
+  })
+
+  it('does not treat an opaque GraphQL node ID as a canonical native review identity', () => {
+    const evidence = readEvidence([[]])
+
+    expect(evidence.exactHead?.reviews.nativeReviews).toEqual([])
+    expect(evidence.exactHead?.reviews.nativeReviews).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: nodeId }),
+    ]))
+  })
+
+  it('fails closed when a native review lacks a numeric database identity', () => {
+    const evidence = readEvidence([[
+      {
+        id: null,
+        node_id: nodeId,
+        html_url: reviewUrl,
+        state: 'COMMENTED',
+        commit_id: head,
+        body: reviewBody,
+        user: { login: 'boat1994' },
+      },
+    ]])
+
+    expect(evidence.errors.join(' ')).toMatch(/EVIDENCE_CONFLICT|BLOCKED_EXTERNAL/)
   })
 })

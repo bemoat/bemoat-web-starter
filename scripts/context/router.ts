@@ -5,6 +5,9 @@ import type {
 } from './model.ts'
 import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
+import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './semantic-review-evidence.ts'
+import { resolveStopBlockers } from './blocker-resolution.ts'
+import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
 function evidenceUrls(evidence: NormalizedContextEvidence): string[] {
@@ -37,7 +40,7 @@ function commandAction(description: string): ContextDecision['nextAction'] {
   return { type: 'COMMAND', command: null, description }
 }
 
-function identityErrors(evidence: NormalizedContextEvidence): string[] {
+function identityErrors(evidence: NormalizedContextEvidence, allowWellFormedStaleBase = false): string[] {
   const errors: string[] = []
   const repo = evidence.repository?.nameWithOwner ?? ''
   if (!evidence.issue || typeof evidence.issue.number !== 'string' || !isPositiveInteger(evidence.issue.number)) {
@@ -67,9 +70,7 @@ function identityErrors(evidence: NormalizedContextEvidence): string[] {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} state and merge commit evidence disagree`)
     }
     const merged = stateMerged && Boolean(pr?.merged) && validMergeCommit
-    if (!pr || typeof pr.baseBranch !== 'string' || !pr.baseBranch.trim() || typeof pr.baseSha !== 'string' || !isFullSha(pr.baseSha) || pr.baseBranch !== evidence.protectedBase.branch || (!merged && pr.baseSha.toLowerCase() !== evidence.protectedBase.sha.toLowerCase())) {
-      errors.push(`EVIDENCE_CONFLICT: PR #${number} base identity is missing or malformed`)
-    }
+    errors.push(...prBaseIdentityErrors(evidence, pr, number, merged, allowWellFormedStaleBase))
     if (merged && (!pr || typeof pr.mergeCommitSha !== 'string' || !isFullSha(pr.mergeCommitSha))) {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} merge commit identity is missing or malformed`)
     }
@@ -101,45 +102,16 @@ function reviewedHeadForApplicability(body: string): string | null {
   return unique.length === 1 ? unique[0] ?? null : null
 }
 
-function hasBlockingFinding(body: string, expectedHead: string): boolean {
-  const section = body.match(/###\s+Immutable finding disposition\s*\n([\s\S]*?)(?=\n###|\n##|$)/i)?.[1] ?? ''
-  const fenced = [...section.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
-  if (fenced.length > 1) return false
-  const serialized = fenced[0]?.[1]
-    ?? section.match(/`(\{[\s\S]*\})`/)?.[1]
-  if (!serialized) return false
-
-  try {
-    const parsed: unknown = JSON.parse(serialized)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
-    const record = parsed as { schema_version?: unknown; reviewed_head?: unknown; findings?: unknown }
-    if (record.schema_version !== 1 || typeof record.reviewed_head !== 'string' ||
-      record.reviewed_head.toLowerCase() !== expectedHead.toLowerCase()) return false
-    const findings = record.findings
-    if (!Array.isArray(findings) || findings.length === 0) return false
-    const findingIds = new Set<string>()
-    return findings.every((finding) => {
-      if (!finding || typeof finding !== 'object' || Array.isArray(finding)) return false
-      const findingRecord = finding as { id?: unknown; canonical_summary?: unknown; source_thread?: unknown; required_evidence?: unknown }
-      const id = typeof findingRecord.id === 'string' ? findingRecord.id.trim() : ''
-      if (!id || findingIds.has(id)) return false
-      findingIds.add(id)
-      return typeof findingRecord.canonical_summary === 'string' && findingRecord.canonical_summary.trim() !== '' &&
-        typeof findingRecord.source_thread === 'string' && findingRecord.source_thread.trim() !== '' &&
-        Array.isArray(findingRecord.required_evidence) && findingRecord.required_evidence.length > 0 &&
-        findingRecord.required_evidence.every((item) => typeof item === 'string' && item.trim() !== '')
-    })
-  } catch {
-    return false
-  }
-}
-
 function isProtectedOrIntegrationBranch(branch: string): boolean {
   return /^(?:main|master|dev|develop|integration|staging|production)(?:\/.*)?$/i.test(branch)
 }
 
-export function routeContext(evidence: NormalizedContextEvidence): ContextDecision {
-  const baseReasons = [...evidence.evidenceErrors, ...identityErrors(evidence)]
+function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleBaseError: string | null = null): ContextDecision {
+  const allowPublicationEraReviewRecovery = ignoredStaleBaseError !== null
+  const baseReasons = [
+    ...evidence.evidenceErrors.filter((error) => error !== ignoredStaleBaseError),
+    ...identityErrors(evidence, ignoredStaleBaseError !== null),
+  ]
   const activeEvidence = evidence.activePr as ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
   const mergedPr = activeEvidence && !Array.isArray(activeEvidence) && (activeEvidence.merged || activeEvidence.state.toUpperCase() === 'MERGED')
   if (!mergedPr && (!evidence.localGit.clean || evidence.localGit.detached || !evidence.localGit.pushed || !evidence.localGit.durable)) {
@@ -207,20 +179,29 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     })
   }
 
-  const handoffResolution = resolveCurrentHandoff(evidence, activePr)
+  const handoffResolution = resolveCurrentHandoff(evidence, activePr, allowPublicationEraReviewRecovery)
   if (handoffResolution.conflict) {
     return decision(evidence, 'STOP', [handoffResolution.conflict.reason], handoffResolution.conflict.nextAction)
   }
   const applicableHandoff = handoffResolution.record
-  const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, evidence, activePr)
+  const publicationEraLineage = allowPublicationEraReviewRecovery && applicableHandoff !== null ? publicationEraReviewLineageForHandoff(applicableHandoff, evidence, activePr) : null
+  const handoffBlockingReview = applicableHandoff !== null && hasBlockingHandoffReview(applicableHandoff, evidence, activePr, allowPublicationEraReviewRecovery)
   if (applicableHandoff?.route === 'STOP') {
-    return decision(evidence, 'STOP', [
-      `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
-    ], {
-      type: 'STOP',
-      command: null,
-      description: 'Resolve the exact-head HANDOFF STOP before continuing.',
-    })
+    const source = handoffResolution.evidence
+    const blockerResolution = source
+      ? resolveStopBlockers({ record: applicableHandoff, source, evidence, activePr })
+      : 'conflict'
+    if (blockerResolution !== 'resolved') {
+      return decision(evidence, 'STOP', [
+        blockerResolution === 'conflict'
+          ? `EVIDENCE_CONFLICT: exact-head HANDOFF STOP has ambiguous blocker-resolution evidence at ${activePr.headSha}.`
+          : `Exact-head HANDOFF STOP remains unresolved at ${activePr.headSha}.`,
+      ], {
+        type: 'STOP',
+        command: null,
+        description: 'Resolve the exact-head HANDOFF STOP before continuing.',
+      })
+    }
   }
   if (verification.checks.failed) {
     return decision(evidence, 'FIX', [
@@ -242,11 +223,11 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
   let blockingSemanticReview = false
   if (semanticReviewRequired) {
     const verdicts = evidence.durableContext.historicalResults.filter((r) =>
-      /^##\s+REVIEW_VERDICT\b/i.test(r.body),
+      /^##\s+REVIEW_VERDICT\b/i.test(r.body) && !publicationEraLineage?.summaryCommentIds.some((id) => String(id) === String(r.id)),
     )
     const currentHeadVerdicts: Array<{ id: string | number; body: string; parsed: ProductionMergeReviewVerdict | null; valid: boolean; acceptedVerdict: string | null }> = []
 
-    const inspectVerdict = (id: string | number, body: string, commentUrl: string | null = null): void => {
+    const inspectVerdict = (id: string | number, body: string, commentUrl: string | null = null, nativeCurrent = false): void => {
       try {
         const parsed = parseProductionMergeReviewVerdict(body, id)
         const classification = classifyMergeReviewVerdict({
@@ -268,16 +249,16 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
           : null
         const validCorrection = acceptedVerdict === 'CORRECTION REQUIRED' &&
           (hasBlockingFinding(body, activePr.headSha) ||
-            isCurrentHandoffReviewVerdict(applicableHandoff, evidence, activePr, commentUrl))
+            isCurrentHandoffReviewVerdict(applicableHandoff, evidence, activePr, commentUrl, allowPublicationEraReviewRecovery))
         if (classification.valid && (acceptedVerdict === 'ELIGIBLE FOR FOUNDER REVIEW' || validCorrection)) {
           currentHeadVerdicts.push({ id, body, parsed, valid: true, acceptedVerdict })
         }
-        else if (parsed.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()) {
+        else if (nativeCurrent || parsed.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()) {
           currentHeadVerdicts.push({ id, body, parsed, valid: false, acceptedVerdict })
         }
       } catch {
         const reviewedHead = reviewedHeadForApplicability(body)
-        if (!reviewedHead || reviewedHead === activePr.headSha.toLowerCase()) {
+        if (nativeCurrent || !reviewedHead || reviewedHead === activePr.headSha.toLowerCase()) {
           currentHeadVerdicts.push({ id, body, parsed: null, valid: false, acceptedVerdict: null })
         }
       }
@@ -289,17 +270,18 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     }
 
     for (const review of verification.reviews.nativeReviews ?? []) {
+      if (publicationEraLineage?.reviewId === review.id) continue
       if (!/^##\s+REVIEW_VERDICT\b/i.test(review.body)) continue
       if (!review.commitId || !isFullSha(review.commitId)) {
         currentHeadVerdicts.push({ id: review.id ?? '<unknown>', body: review.body, parsed: null, valid: false, acceptedVerdict: null })
         continue
       }
       if (review.commitId.toLowerCase() !== activePr.headSha.toLowerCase()) continue
-      if (review.id === null || !review.state.trim()) {
+      if (!isPositiveInteger(review.id) || !['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase())) {
         currentHeadVerdicts.push({ id: review.id ?? '<unknown>', body: review.body, parsed: null, valid: false, acceptedVerdict: null })
         continue
       }
-      inspectVerdict(review.id, review.body)
+      inspectVerdict(review.id!, review.body, null, true)
     }
 
     let malformedEvidence = false
@@ -363,6 +345,15 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
       })
     }
 
+    if (malformedEvidence || conflictingLiveHeadEvidence) {
+      return decision(evidence, 'STOP', [
+        `EVIDENCE_CONFLICT: malformed or conflicting exact-head semantic review evidence at ${activePr.headSha}.`,
+      ], {
+        type: 'STOP', command: null,
+        description: 'Resolve the exact-head semantic review evidence conflict before continuing.',
+      })
+    }
+
     semanticReviewSatisfied = handoffBlockingReview || (
       !malformedEvidence && !conflictingLiveHeadEvidence && validVerdicts.length >= 1
     )
@@ -397,4 +388,13 @@ export function routeContext(evidence: NormalizedContextEvidence): ContextDecisi
     command: null,
     description: 'Founder authorization is required before the next merge or scope mutation.',
   })
+}
+
+export function routeContext(evidence: NormalizedContextEvidence): ContextDecision {
+  return routeContextInternal(evidence)
+}
+
+// Sync authorization uses this continuation evaluation; ordinary Context does not.
+export function routeContextForStaleBaseSync(evidence: NormalizedContextEvidence): ContextDecision {
+  return routeContextInternal(evidence, staleBaseSyncDiagnostic(evidence))
 }

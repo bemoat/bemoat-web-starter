@@ -17,7 +17,7 @@ export type HandoffEvidence = {
 }
 
 export type HandoffRecord = {
-  schema_version: 2
+  schema_version: 2 | 3
   record_type: 'HANDOFF'
   objective_mode: 'implementation' | 'read_only'
   repository: string
@@ -181,12 +181,12 @@ function validatePullRequest(value: unknown, repository: string, errors: string[
   return true
 }
 
-export function validateHandoffRecord(value: unknown): HandoffRecord {
+export function validateHandoffRecord(value: unknown, options: { allowLegacyStop?: boolean } = {}): HandoffRecord {
   const errors: string[] = []
   if (!isRecord(value)) throw new HandoffValidationError(['HANDOFF body must be a JSON object'])
   errors.push(...unknownFields(value, TOP_LEVEL_KEYS))
-  if (!exactKeys(value, TOP_LEVEL_KEYS)) errors.push('HANDOFF body must contain exactly the schema-v2 fields')
-  if (value.schema_version !== 2) errors.push('schema_version must be 2')
+  if (!exactKeys(value, TOP_LEVEL_KEYS)) errors.push('HANDOFF body must contain exactly the canonical fields')
+  if (value.schema_version !== 2 && value.schema_version !== 3) errors.push('schema_version must be 2 or 3')
   if (value.record_type !== 'HANDOFF') errors.push('record_type must be HANDOFF')
   if (value.objective_mode !== 'implementation' && value.objective_mode !== 'read_only') {
     errors.push('objective_mode must be implementation or read_only')
@@ -217,6 +217,20 @@ export function validateHandoffRecord(value: unknown): HandoffRecord {
   if (value.pr !== null) validatePullRequest(value.pr, repository, errors)
   validateEvidence(value.verified_evidence, errors)
   const routeValue = route(value.route, 'route', errors) ? value.route : null
+  if (routeValue === 'STOP') {
+    if (value.schema_version === 2 && options.allowLegacyStop === false) {
+      errors.push('New STOP publication requires schema-v3 with explicit stop-blocker IDs')
+    }
+    if (value.schema_version === 3 && Array.isArray(value.verified_evidence)) {
+      const blockerIds = value.verified_evidence
+        .filter((entry: unknown): entry is Record<string, unknown> => isRecord(entry) && entry.kind === 'stop-blocker')
+        .map((entry: Record<string, unknown>) => entry.value)
+      if (blockerIds.length === 0 || blockerIds.some((id: unknown) => typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)) ||
+          new Set(blockerIds).size !== blockerIds.length) {
+        errors.push('schema-v3 STOP requires unique explicit stop-blocker IDs')
+      }
+    }
+  }
   if (!isRecord(value.next_action) || !exactKeys(value.next_action, ['route', 'description'])) {
     errors.push('next_action must contain exactly route and description')
   } else {
@@ -254,7 +268,7 @@ export function validateHandoffRecord(value: unknown): HandoffRecord {
   if (errors.length > 0) throw new HandoffValidationError(errors)
 
   return {
-    schema_version: 2,
+    schema_version: value.schema_version as HandoffRecord['schema_version'],
     record_type: 'HANDOFF',
     objective_mode: value.objective_mode as HandoffRecord['objective_mode'],
     repository: value.repository as string,
@@ -300,7 +314,7 @@ function fail(errors: string[]): never {
   throw new HandoffValidationError(errors)
 }
 
-export function parseHandoffBody(body: string): HandoffRecord {
+export function parseHandoffBody(body: string, options: { allowLegacyStop?: boolean } = {}): HandoffRecord {
   let value: unknown
   try {
     value = JSON.parse(body)
@@ -309,7 +323,7 @@ export function parseHandoffBody(body: string): HandoffRecord {
       `HANDOFF body must contain valid JSON: ${error instanceof Error ? error.message : String(error)}`,
     ])
   }
-  return validateHandoffRecord(value)
+  return validateHandoffRecord(value, options)
 }
 
 export function renderHandoffComment(record: HandoffRecord): string {

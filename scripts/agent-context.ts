@@ -30,6 +30,9 @@ function createContextOutput(evidence: NormalizedContextEvidence, decision: Cont
     active_pr: evidence.activePr,
     current_head_verification: evidence.currentHeadVerification,
     durable_context: evidence.durableContext,
+    ...(evidence.historicalBlockerResolutionProofs?.length
+      ? { historical_blocker_resolution_proofs: evidence.historicalBlockerResolutionProofs }
+      : {}),
     route: decision.route,
     reasons: decision.reasons,
     next_action: {

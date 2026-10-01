@@ -1,10 +1,10 @@
 import { parseIssueBody } from './issue-parser.ts'
 import { prOwnsIssue } from './pr-issue-ownership.ts'
+import { hasUniqueCanonicalReviewIdentity, nativeReviewRows, reviewCounts } from './semantic-review-evidence.ts'
 import type {
   ActivePullRequestEvidence,
   HeadVerificationEvidence,
   IssueEvidence,
-  NativeReviewEvidence,
   ProtectionEvidence,
   RepositoryEvidence,
   RoleEvidence,
@@ -186,28 +186,6 @@ function checkEvidence(statusChecks: unknown, requiredChecks: string[]): HeadVer
   }
 }
 const extractDatabaseId = (url: string | null | undefined) => url ? (url.match(/#(?:issuecomment|pullrequestreview)-(\d+)$/i)?.[1] ?? null) : null
-
-function reviewEvidence(value: unknown): NativeReviewEvidence {
-  const record = isRecord(value) ? value : {}, url = typeof record.url === 'string' ? record.url : null
-  const rawId = extractDatabaseId(url) ?? record.id ?? record.databaseId ?? record.database_id ?? record.node_id
-  const id = typeof rawId === 'string' || (typeof rawId === 'number' && Number.isSafeInteger(rawId)) ? rawId : null
-  const state = typeof record.state === 'string' ? record.state : '', body = typeof record.body === 'string' ? record.body : '', rawCommitId = record.commitId ?? record.commit_id ?? (isRecord(record.commit) ? record.commit.oid : null)
-  return { id, state, body, commitId: typeof rawCommitId === 'string' && rawCommitId.trim() ? rawCommitId : null }
-}
-function reviewCounts(reviews: unknown[], headSha: string): { approvedCount: number; exactHeadApprovedCount: number; nativeReviews: NativeReviewEvidence[] } {
-  const latest = new Map<string, { approved: boolean; exactHead: boolean }>()
-  reviews.forEach((value, index) => {
-    if (!isRecord(value)) return
-    const identity = asString(isRecord(value.user) ? value.user.login : null) ??
-      asString(isRecord(value.author) ? value.author.login : null) ??
-      asString(value.authorLogin) ?? `review-${index}`
-    const state = String(value.state ?? '').toUpperCase()
-    const commitId = String(value.commitId ?? value.commit_id ?? (isRecord(value.commit) ? value.commit.oid : ''))
-    latest.set(identity, { approved: state === 'APPROVED', exactHead: state === 'APPROVED' && commitId === headSha })
-  })
-  const current = [...latest.values()].filter((review) => review.approved)
-  return { approvedCount: current.length, exactHeadApprovedCount: current.filter((review) => review.exactHead).length, nativeReviews: reviews.map((value) => reviewEvidence(value)) }
-}
 function candidateNumber(value: unknown): string | null {
   if (!isPositiveInteger(value)) return null
   return String(value)
@@ -237,7 +215,15 @@ export function readGithubEvidence({
   const issuePayload = issueResult.value
   const comments: RoleEvidence[] = Array.isArray(issuePayload?.comments) ? issuePayload.comments.filter(isRecord).map((comment) => {
     const url = String(comment.url ?? '')
-    return { id: extractDatabaseId(url) ?? (comment.id as string | number | undefined) ?? '', body: String(comment.body ?? ''), createdAt: String(comment.createdAt ?? ''), url }
+    const author = isRecord(comment.author) ? comment.author : null
+    return {
+      id: extractDatabaseId(url) ?? (comment.id as string | number | undefined) ?? '',
+      body: String(comment.body ?? ''),
+      createdAt: String(comment.createdAt ?? ''),
+      url,
+      authorLogin: typeof author?.login === 'string' ? author.login : null,
+      authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,
+    }
   }) : []
 
   let issue: IssueEvidence | null = null
@@ -311,10 +297,10 @@ export function readGithubEvidence({
   }
 
   const activePrs: ActivePullRequestEvidence[] = []
-  const verifications: HeadVerificationEvidence[] = []
+  const verificationInputs: { number: string; headSha: string; statusChecks: unknown }[] = []
   for (const candidate of candidates.values()) {
     const number = candidateNumber(candidate.number) as string
-    const prResult = readJson<Record<string, unknown>>(run, 'gh', ['pr', 'view', number, '--repo', repo, '--json', 'number,state,isDraft,url,baseRefName,baseRefOid,headRefName,headRefOid,mergeCommit,reviews,statusCheckRollup'], { cwd, env })
+    const prResult = readJson<Record<string, unknown>>(run, 'gh', ['pr', 'view', number, '--repo', repo, '--json', 'number,state,isDraft,url,baseRefName,baseRefOid,headRefName,headRefOid,mergeCommit,statusCheckRollup'], { cwd, env })
     const pr = prResult.value
     if (!pr) {
       errors.push(`BLOCKED_EXTERNAL: PR #${number} evidence is unavailable${prResult.error ? ` (${prResult.error})` : ''}`)
@@ -340,22 +326,6 @@ export function readGithubEvidence({
     if (!merged && protectedBaseSha && (baseBranch !== protectedBaseBranch || baseSha.toLowerCase() !== protectedBaseSha.toLowerCase())) {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} base does not match live protected ${protectedBaseBranch}@${protectedBaseSha}`)
     }
-    const reviews = Array.isArray(pr.reviews) ? pr.reviews : []
-    const counts = reviewCounts(reviews, headSha)
-    const requiredApprovals = protection.requiredApprovals
-    const verification: HeadVerificationEvidence = {
-      exactHead: headSha,
-      checks: checkEvidence(pr.statusCheckRollup, protection.requiredChecks),
-      reviews: {
-        required: requiredApprovals > 0,
-        approved: requiredApprovals === 0 || counts.approvedCount >= requiredApprovals,
-        exactHead: requiredApprovals === 0 || counts.exactHeadApprovedCount >= requiredApprovals,
-        approvedCount: counts.approvedCount,
-        exactHeadApprovedCount: counts.exactHeadApprovedCount,
-        nativeReviews: counts.nativeReviews,
-      },
-      protection,
-    }
     activePrs.push({
       number,
       state,
@@ -367,14 +337,38 @@ export function readGithubEvidence({
       headSha,
       merged, mergeCommitSha: merged ? mergeCommitSha : null,
     })
-    verifications.push(verification)
+    verificationInputs.push({ number, headSha, statusChecks: pr.statusCheckRollup })
   }
   const unmergedPrs = activePrs.filter((pr) => !pr.merged)
   // Unmerged PRs are current candidates. Merged PRs remain selectable only for closed-Issue terminal reconstruction.
   const selectedPrs = unmergedPrs.length > 0 ? unmergedPrs : issue?.state.toUpperCase() === 'CLOSED' ? activePrs : []
-  const selectedNumbers = new Set(selectedPrs.map((pr) => pr.number))
-  const selectedVerifications = activePrs.flatMap((pr, index) =>
-    selectedNumbers.has(pr.number) && verifications[index] ? [verifications[index]] : [])
+  const selectedVerifications = selectedPrs.flatMap((selectedPr) => {
+    const input = verificationInputs.find(({ number }) => number === selectedPr.number)
+    if (!input) return []
+
+    const reviewResult = readJson<unknown>(run, 'gh', ['api', '--paginate', '--slurp', `repos/${repo}/pulls/${input.number}/reviews?per_page=100`], { cwd, env })
+    const reviews = nativeReviewRows(reviewResult.value)
+    if (!reviews) {
+      errors.push(`BLOCKED_EXTERNAL: native reviews for PR #${input.number} are unavailable${reviewResult.error ? ` (${reviewResult.error})` : ''}`)
+    } else if (!hasUniqueCanonicalReviewIdentity(reviews, repo, input.number)) {
+      errors.push(`EVIDENCE_CONFLICT: native review identity for PR #${input.number} is malformed or ambiguous`)
+    }
+    const counts = reviewCounts(reviews ?? [], input.headSha)
+    const requiredApprovals = protection.requiredApprovals
+    return [{
+      exactHead: input.headSha,
+      checks: checkEvidence(input.statusChecks, protection.requiredChecks),
+      reviews: {
+        required: requiredApprovals > 0,
+        approved: requiredApprovals === 0 || counts.approvedCount >= requiredApprovals,
+        exactHead: requiredApprovals === 0 || counts.exactHeadApprovedCount >= requiredApprovals,
+        approvedCount: counts.approvedCount,
+        exactHeadApprovedCount: counts.exactHeadApprovedCount,
+        nativeReviews: counts.nativeReviews,
+      },
+      protection,
+    } satisfies HeadVerificationEvidence]
+  })
   const exactHead = selectedPrs.length === 1 ? selectedVerifications[0] ?? null : null
   return {
     repository: repositoryEvidence(repo),

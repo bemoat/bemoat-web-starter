@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 
 import type { ActivePullRequestEvidence, ContextDecision, NormalizedContextEvidence, RepositoryEvidence, RoleEvidence } from './model.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
-import { parseProductionMergeReviewVerdict } from './merge-review-verdict.ts'
+import { hasCurrentHandoffReviewVerdict } from './semantic-review-evidence.ts'
 
 export interface ContextCommandResult {
   status: number
@@ -110,7 +110,7 @@ function isExactIssueCommentUrl(
   comment: RoleEvidence,
   evidence: NormalizedContextEvidence,
 ): boolean {
-  if (value !== comment.url) return false
+  if (value !== comment.url || !isPositiveInteger(comment.id)) return false
   try {
     const url = new URL(value)
     return url.origin === 'https://github.com' &&
@@ -122,56 +122,19 @@ function isExactIssueCommentUrl(
   }
 }
 
-function hasCurrentReviewVerdict(
-  handoff: HandoffRecord,
-  evidence: NormalizedContextEvidence,
-  activePr: ActivePullRequestEvidence,
-  route: 'FIX' | 'FOUNDER_GATE',
-  requiredVerdict: 'CORRECTION REQUIRED' | 'ELIGIBLE FOR FOUNDER REVIEW',
-): boolean {
-  if (
-    handoff.route !== route || handoff.branch !== activePr.headBranch ||
-    handoff.protected_base.branch !== activePr.baseBranch ||
-    handoff.protected_base.sha.toLowerCase() !== activePr.baseSha.toLowerCase() ||
-    handoff.pr === null || handoff.pr.base !== activePr.baseBranch ||
-    handoff.pr.head !== activePr.headBranch || handoff.pr.head_sha.toLowerCase() !== activePr.headSha.toLowerCase()
-  ) return false
-
-  const references = handoff.verified_evidence.filter(({ kind }) => kind === 'review-verdict')
-  if (references.length !== 1) return false
-  const reference = references[0]
-  if (!reference?.url) return false
-
-  const comments = evidence.durableContext.historicalResults.filter((comment) =>
-    comment.url === reference.url && isExactIssueCommentUrl(reference.url!, comment, evidence))
-  if (comments.length !== 1) return false
-  const comment = comments[0]
-  if (!comment || !/^##\s+REVIEW_VERDICT\b/i.test(comment.body)) return false
-
-  try {
-    const verdict = parseProductionMergeReviewVerdict(comment.body, comment.id)
-    return verdict.verdict === requiredVerdict && verdict.non_superseded === true &&
-      verdict.repository === evidence.repository.nameWithOwner.toLowerCase() &&
-      String(verdict.issue) === evidence.issue.number && String(verdict.pr) === activePr.number &&
-      verdict.base === activePr.baseBranch &&
-      verdict.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()
-  } catch {
-    return false
-  }
-}
-
 export function hasBlockingHandoffReview(
   handoff: HandoffRecord, evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  allowPublicationEraReviewRecovery = false,
 ): boolean {
-  return hasCurrentReviewVerdict(handoff, evidence, activePr, 'FIX', 'CORRECTION REQUIRED')
+  return hasCurrentHandoffReviewVerdict(handoff, evidence, activePr, 'FIX', 'CORRECTION REQUIRED', allowPublicationEraReviewRecovery)
 }
 
 function hasEligibleFounderHandoffReview(
   handoff: HandoffRecord, evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): boolean {
-  return hasCurrentReviewVerdict(handoff, evidence, activePr, 'FOUNDER_GATE', 'ELIGIBLE FOR FOUNDER REVIEW')
+  return hasCurrentHandoffReviewVerdict(handoff, evidence, activePr, 'FOUNDER_GATE', 'ELIGIBLE FOR FOUNDER REVIEW')
 }
 
 export function currentHandoffConflict(
@@ -301,16 +264,18 @@ function handoffIdentityStatus(
 function resolveSupersedingHandoff(
   applicable: HandoffCandidate[], evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  allowPublicationEraReviewRecovery = false,
 ): HandoffCandidate | null {
-  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW')) return null
+  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW' || record.route === 'VERIFY')) return null
   return applicable.find(({ record }) => record.route === 'FIX'
-    ? hasBlockingHandoffReview(record, evidence, activePr)
+    ? hasBlockingHandoffReview(record, evidence, activePr, allowPublicationEraReviewRecovery)
     : record.route === 'FOUNDER_GATE' && hasEligibleFounderHandoffReview(record, evidence, activePr)) ?? null
 }
 
 export function resolveApplicableHandoffs(
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  allowPublicationEraReviewRecovery = false,
 ): HandoffResolution {
   const candidates = evidence.durableContext.handoffs ??
     (evidence.durableContext.latestHandoff ? [evidence.durableContext.latestHandoff] : [])
@@ -342,34 +307,41 @@ export function resolveApplicableHandoffs(
       malformedCurrent.push(candidate)
       continue
     }
+    if (allowPublicationEraReviewRecovery && handoff.route === 'FIX' &&
+      !hasBlockingHandoffReview(handoff, evidence, activePr) &&
+      !isExactIssueCommentUrl(candidate.url, candidate, evidence)) {
+      malformedCurrent.push(candidate)
+      continue
+    }
 
     applicable.push({ evidence: candidate, record: handoff })
   }
 
   const invalidCurrentFix = applicable.find(({ record }) =>
-    record.route === 'FIX' && !hasBlockingHandoffReview(record, evidence, activePr),
+    record.route === 'FIX' && !hasBlockingHandoffReview(record, evidence, activePr, allowPublicationEraReviewRecovery),
   ) ?? null
   return {
     applicable,
     malformedCurrent,
     invalidCurrentFix,
-    superseding: resolveSupersedingHandoff(applicable, evidence, activePr),
+    superseding: resolveSupersedingHandoff(applicable, evidence, activePr, allowPublicationEraReviewRecovery),
   }
 }
-
 export interface CurrentHandoffResolution {
   record: HandoffRecord | null
+  evidence: RoleEvidence | null
   conflict: ReturnType<typeof currentHandoffConflict>
 }
-
 export function resolveCurrentHandoff(
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  allowPublicationEraReviewRecovery = false,
 ): CurrentHandoffResolution {
-  const resolution = resolveApplicableHandoffs(evidence, activePr)
+  const resolution = resolveApplicableHandoffs(evidence, activePr, allowPublicationEraReviewRecovery)
   const conflict = currentHandoffConflict(resolution, activePr.headSha)
   return {
     record: conflict ? null : resolution.superseding?.record ?? resolution.applicable[0]?.record ?? null,
+    evidence: conflict ? null : resolution.superseding?.evidence ?? resolution.applicable[0]?.evidence ?? null,
     conflict,
   }
 }
@@ -391,7 +363,8 @@ export function isCurrentHandoffReviewVerdict(
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
   commentUrl: string | null,
+  allowPublicationEraReviewRecovery = false,
 ): boolean {
-  return handoff !== null && commentUrl !== null && hasBlockingHandoffReview(handoff, evidence, activePr) &&
+  return handoff !== null && commentUrl !== null && hasBlockingHandoffReview(handoff, evidence, activePr, allowPublicationEraReviewRecovery) &&
     handoff.verified_evidence.some(({ kind, url }) => kind === 'review-verdict' && url === commentUrl)
 }
