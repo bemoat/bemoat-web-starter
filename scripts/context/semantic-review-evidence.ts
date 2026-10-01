@@ -169,8 +169,7 @@ function exactLegacyReviewBody(
     const plain = line.replace(/^[ \t]*(?:(?:>[ \t]*)+)?(?:(?:[-*+]|\d+[.)])[ \t]+)?/, '')
     const label = plain.replace(/(?:\*\*|__|[*_]|`)/g, '').trimStart()
     return /^#{1,6}[ \t]+\S/.test(plain) ||
-      /^(?:non-blocking observations|required correction|recommendations?|next steps|summary|rationale|notes|evidence|resolution):/i.test(label) ||
-      /^(?:\*\*|__|[*_]).+(?:\*\*|__|[*_]):/.test(plain)
+      /^(?:non-blocking observations|required correction|recommendations?|next steps|summary|rationale|notes|evidence|resolution):/i.test(label)
   })
   const findingText = reviewLines.slice(0, nextSection < 0 ? reviewLines.length : nextSection).join('\n')
     .replace(/^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+|>[ \t]*)/gm, '')

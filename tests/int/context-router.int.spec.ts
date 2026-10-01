@@ -2638,10 +2638,13 @@ ${reviewUrl}`) {
     expect(authorizeContextSync(evidence)).toMatchObject({ allowed: true, route: 'REVIEW' })
   })
 
-  it('accepts a substantive finding whose prose contains a colon', () => {
+  it.each([
+    ['plain colon prose', 'TypeScript error: the actual code path still fails.'],
+    ['bold label prose', '**Root cause**: the actual code path still fails.'],
+  ])('accepts a substantive finding with %s', (_label, finding) => {
     const body = publicationReview().body.replace(
       /Blocking finding:[\s\S]*?(?=\nNon-blocking observations:)/,
-      'Blocking finding:\n\nTypeScript error: the actual code path still fails.',
+      `Blocking finding:\n\n${finding}`,
     )
     expect(authorizeContextSync(publicationEvidence({ reviews: [publicationReview(body)], historicalResults: [] })))
       .toMatchObject({ allowed: true, route: 'FIX' })
