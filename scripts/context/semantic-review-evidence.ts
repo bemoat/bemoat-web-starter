@@ -164,8 +164,15 @@ function exactLegacyReviewBody(
   if (findings.length !== 1) return false
   const findingStart = (findings[0]?.index ?? -1) + (findings[0]?.[0].length ?? 0)
   const followingText = findingStart >= 0 ? body.slice(findingStart) : ''
-  const nextSection = followingText.search(/^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:#{1,6}[ \t]+\S|(?:\*\*|__|[*_])?\p{Lu}[\p{L}\p{N} /_-]{1,60}:(?:\*\*|__|[*_])?[ \t]*)/mu)
-  const findingText = (nextSection < 0 ? followingText : followingText.slice(0, nextSection))
+  const reviewLines = followingText.split(/\r?\n/)
+  const nextSection = reviewLines.findIndex((line) => {
+    const plain = line.replace(/^[ \t]*(?:(?:>[ \t]*)+)?(?:(?:[-*+]|\d+[.)])[ \t]+)?/, '')
+    const label = plain.replace(/(?:\*\*|__|[*_]|`)/g, '').trimStart()
+    return /^#{1,6}[ \t]+\S/.test(plain) ||
+      /^(?:non-blocking observations|required correction|recommendations?|next steps|summary|rationale|notes|evidence|resolution):/i.test(label) ||
+      /^(?:\*\*|__|[*_]).+(?:\*\*|__|[*_]):/.test(plain)
+  })
+  const findingText = reviewLines.slice(0, nextSection < 0 ? reviewLines.length : nextSection).join('\n')
     .replace(/^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+|>[ \t]*)/gm, '')
     .trim()
   if (!/[\p{L}\p{N}]/u.test(findingText) || !publicationIdentityMatches(body, evidence, activePr)) return false
