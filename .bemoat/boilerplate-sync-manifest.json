@@ -50,6 +50,7 @@
     "scripts/agent-context.ts",
     "scripts/agent-context-sync-base.ts",
     "scripts/context",
+    "scripts/context/blocker-resolution-history.ts",
     "scripts/agent-handoff.ts",
     "scripts/handoff",
     "scripts/adapters/command-runner.ts",

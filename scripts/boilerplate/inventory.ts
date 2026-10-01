@@ -23,7 +23,7 @@ export const managedPaths = [
   'scripts/deploy-smoke-test.ts', 'scripts/guards/repo-safety.ts', 'scripts/guards/types.ts',
   'scripts/guard-harness-contract.ts', 'scripts/harness-contract',
   'scripts/guards/build-script-contract.ts', 'scripts/build.ts',
-  'scripts/agent-context.ts', 'scripts/agent-context-sync-base.ts', 'scripts/context', 'scripts/agent-handoff.ts', 'scripts/handoff',
+  'scripts/agent-context.ts', 'scripts/agent-context-sync-base.ts', 'scripts/context', 'scripts/context/blocker-resolution-history.ts', 'scripts/agent-handoff.ts', 'scripts/handoff',
   'scripts/adapters/command-runner.ts',
   'scripts/cli',
   'scripts/guard-cloudflare-env.ts', 'scripts/guards/cloudflare-env.ts', 'scripts/guard-pack.ts', 'scripts/guards/pack.ts', 'scripts/guards/planning-contract-runtime.ts', 'scripts/guards/planning-contract-live.ts', 'scripts/guards/legacy-managed-state.ts',
