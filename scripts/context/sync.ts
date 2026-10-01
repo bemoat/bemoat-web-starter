@@ -1,6 +1,7 @@
 import type { ActivePullRequestEvidence, ContextDecision, NormalizedContextEvidence } from './model.ts'
 import { isFullSha } from './runtime.ts'
-import { routeContext } from './router.ts'
+import { routeContextForStaleBaseSync } from './router.ts'
+import { staleBaseError } from './stale-base.ts'
 import { runContextCommand, type ContextCommandResult, type ContextCommandRunner } from './runtime.ts'
 import { verifyContextSyncSource } from './sync-worktree.ts'
 import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
@@ -50,10 +51,6 @@ function commandResult(result: ContextCommandResult): string | null {
 function remoteSha(output: string | null): string | null {
   const match = output?.match(/^([0-9a-f]{40})\s+refs\/heads\/[^\s]+$/im)
   return match?.[1] ?? null
-}
-
-function staleBaseError(evidence: NormalizedContextEvidence, prNumber: string): string {
-  return `EVIDENCE_CONFLICT: PR #${prNumber} base does not match live protected ${evidence.protectedBase.branch}@${evidence.protectedBase.sha}`
 }
 
 function latestHandoffBindsScope(evidence: NormalizedContextEvidence, activePr: ActivePullRequestEvidence): boolean {
@@ -115,10 +112,7 @@ export function authorizeContextSync(evidence: NormalizedContextEvidence): Autho
   if (!evidence.issue.objective?.trim() || !scopeBound) {
     return { allowed: false, route: 'STOP', reasons: ['EVIDENCE_CONFLICT: Issue objective and scope are required to bind the synchronization'] }
   }
-  const preMovement = structuredClone(evidence)
-  preMovement.protectedBase.sha = activePr.baseSha
-  preMovement.evidenceErrors = []
-  const before = routeContext(preMovement)
+  const before = routeContextForStaleBaseSync(evidence)
   if (!['VERIFY', 'FIX', 'REVIEW', 'FOUNDER_GATE'].includes(before.route)) {
     return { allowed: false, route: 'STOP', reasons: ['EVIDENCE_CONFLICT: pre-movement context is not otherwise valid for continuation'] }
   }

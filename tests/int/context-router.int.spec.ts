@@ -2120,7 +2120,7 @@ describe('bemoat:context pure routing', () => {
       }))
 
       expect(decision.route).toBe('STOP')
-      expect(decision.reasons.join(' ')).toMatch(/base identity/i)
+      expect(decision.reasons.join(' ')).toMatch(/base does not match live protected/i)
     })
 
     it('stops when a sibling merge advances protected main under an active PR', () => {
