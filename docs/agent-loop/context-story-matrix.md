@@ -29,6 +29,7 @@ map, not a new state machine, routing configuration, or test DSL.
 | Open active PR, failed exact-head CI | current base/head × CI failure | `FIX` | B | `context-router.int.spec.ts`: failed exact-head checks |
 | Open active PR, green CI, missing semantic review | STANDARD profile × review absence | `REVIEW` | B | semantic review policy cases |
 | Exact-head blocking semantic review with usable immutable finding | current head × blocking review | `FIX` | B | native `CORRECTION REQUIRED` case |
+| Publication-era native `FIX` review predates #503 and the PR base is stale | same old head × unique durable HANDOFF × exact native review ID/URL | `FIX` only through the stale-base sync continuation; ordinary Context stays `STOP` | A fixed by #509; now B regression coverage | `context-router.int.spec.ts`: `#509 publication-era native review lineage during stale-base recovery` |
 | Exact-head clean semantic review and satisfied native requirements | current head × clean review | `FOUNDER_GATE` | B | clean native review case |
 | Stale active PR base with failed, pending, or fully satisfied downstream gates | base drift × CI/review state | `STOP` before downstream routing | B | story-first stale-base precedence table |
 | Otherwise-valid stale active PR with exact same-scope identity and durable local state | stale-base `STOP` × live identity × native ancestry | one bounded `bemoat:context:sync-base` continuation, then `VERIFY` on the new head | B | `context-sync.int.spec.ts`: authorized continuation and fail-closed siblings |

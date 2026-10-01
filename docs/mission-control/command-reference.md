@@ -99,6 +99,29 @@ findings with unique IDs, canonical summaries, source threads, and required
 evidence. HANDOFF prose cannot replace this finding contract. Historical
 Issue-comment REVIEW_VERDICT lineage remains readable for migration.
 
+The publication-era native-review compatibility path is limited to
+`bemoat:context:sync-base` evaluating otherwise-valid stale-base evidence. A
+unique, durable FIX HANDOFF must bind the repository, Issue, PR, branch, old
+protected-base SHA, and exact current PR head; its sole `review-verdict`
+reference must identify one submitted native review attached to that same
+head. The older review may omit structured identity and immutable-finding
+fields, but it must state that exact reviewed head, one `CORRECTION REQUIRED`
+verdict, and a nonempty blocking finding. Any structured repository, Issue,
+PR, base, branch, protected-base SHA, or reviewed-head identity present in
+that review must be well formed, unique, and agree exactly with the HANDOFF
+and active PR; an absent field may be supplied only by that uniquely bound
+HANDOFF. A same-head Issue summary, when present, only
+corroborates the native review: it must match the same repository, Issue, PR,
+base, and head and name that exact native review under `Source semantic
+review`. Missing, malformed, wrong-identity, duplicate, or competing evidence
+remains `STOP`.
+
+This compatibility cannot satisfy ordinary Context, current-format #503 native
+review validation, or review requirements after the PR head changes. It does
+not use timestamps or comment order, rewrite HANDOFF history, or add a review
+transport. Existing sync-base ancestry, merge-tree, source identity,
+protected-base identity, and local durability gates remain required.
+
 A REVIEW HANDOFF and its identity-bound FIX or FOUNDER_GATE outcome can coexist;
 Context resolves their evidence without rewriting either record or using
 comment order or timestamps. Missing or stale referenced FIX evidence,
