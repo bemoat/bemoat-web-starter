@@ -6,6 +6,7 @@ import { resolveApprovedBase } from './approved-base.ts'
 import { repositoryEvidence, runContextCommand } from './runtime.ts'
 import type { ContextCommandResult, ContextCommandRunner } from './runtime.ts'
 import { normalizeContextEvidence, type NormalizedContextEvidence } from './model.ts'
+import { readHistoricalBlockerResolutionProofs } from './blocker-resolution-history.ts'
 
 export { readGithubEvidence, readLocalGitEvidence, readProtectedPolicy, runContextCommand }
 export type { ContextCommandResult, ContextCommandRunner }
@@ -85,6 +86,22 @@ export function collectContextEvidence({
 
   const resolvedSha = policyResult.sha ?? approvedBase.sha ?? ''
   const resolvedBranch = approvedBase.branch ?? ''
+  const historicalBlockerResolutionProofs = github.activePrs.length === 1 && policyResult.policy && resolvedBranch && resolvedSha
+    ? readHistoricalBlockerResolutionProofs({
+      repo: repo ?? 'unknown/unknown',
+      currentBase: { branch: resolvedBranch, sha: resolvedSha },
+      policy: policyResult.policy,
+      resolutions: roleEvidence.blockerResolutions,
+      contextBinding: {
+        issueNumber,
+        prNumber: github.activePrs[0]!.number,
+        headSha: github.activePrs[0]!.headSha,
+      },
+      run,
+      cwd,
+      env,
+    })
+    : []
 
   return normalizeContextEvidence({
     repository,
@@ -106,6 +123,7 @@ export function collectContextEvidence({
       blockerResolutions: roleEvidence.blockerResolutions,
       invalidBlockerResolutions: roleEvidence.invalidBlockerResolutions,
     },
+    ...(historicalBlockerResolutionProofs.length > 0 ? { historicalBlockerResolutionProofs } : {}),
     evidenceErrors: [...new Set([
       ...errors,
       ...approvedBase.errors,

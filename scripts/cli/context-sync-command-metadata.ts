@@ -28,11 +28,13 @@ export function contextSyncCommands(dependencies: CommandMetadataDependencies) {
         'Old base ancestor of protected main and PR head.',
         'Clean attached pushed durable target state tracking the canonical origin PR branch, plus remote readback.',
         'Merge-tree preflight and exact post-write head.',
+        'Applicable historical resolution carry-forward proof, when needed: historical policy validity, approved-base ancestry, identical canonical contract blobs, and invariant current bindings; this proof grants no synchronization authority.',
       ],
       reads: [
         'command-source Git root/HEAD/status/origin in explicit-target mode',
         'target Git refs/status/ancestry/merge-tree',
         'GitHub Issue/PR/base/checks/reviews',
+        'historical/current canonical contract snapshots and commit comparison for applicable old-base BLOCKER_RESOLUTION evidence',
       ],
       writes: [
         'one native Git merge and push of the same active PR branch; no Issue/comment/PR metadata/PR merge/scope mutation',

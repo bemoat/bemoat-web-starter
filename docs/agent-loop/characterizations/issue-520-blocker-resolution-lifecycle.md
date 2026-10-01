@@ -2,7 +2,7 @@
 
 ## Baseline and authority
 
-Characterization uses protected baseline `main@eccb36837c7e0c2fdda0aa2871999364507aa937`. The fixture is synthetic and reproduces #513 / PR #514 identities; no real #513 Context or sync-base command, GitHub mutation, or repository mutation is performed. Production code and policy are unchanged.
+Characterization uses protected baseline `main@eccb36837c7e0c2fdda0aa2871999364507aa937`. The fixture is synthetic and reproduces #513 / PR #514 identities; no real #513 Context or sync-base command, GitHub mutation, or repository mutation is performed. Production code and policy were unchanged during the initial characterization recorded below.
 
 Merged policy and command reference bind each resolution to the current protected-base branch and SHA, current policy identity and source SHA, source STOP, repository, Issue, active PR, exact PR head, blocker, and trusted Founder identity. Stale, wrong, duplicate, competing, or ambiguous resolution evidence remains STOP. Timestamp and latest-comment order do not determine authority. The current command reference does not define a publication-time validity record, an ancestry carry-forward rule, or a historical policy-compatibility proof.
 
@@ -40,11 +40,11 @@ No story produced an **Implementation defect** against the current merged contra
 - General resolution controls: duplicate/competing records, timestamp independence, immutable STOP, exact Founder identity, all-blockers resolution, and no route authority beyond independently evaluated checks remain covered by `context-router.int.spec.ts`.
 - Sync safety: ancestry, conflict, exact identity, local durability, drift, and readback remain covered by `context-sync.int.spec.ts`; this characterization invokes only the pure authorization evaluator.
 
-## Founder/protocol question
+## Historical Founder/protocol question (resolved by the approved contract below)
 
 May an immutable resolution that was valid when published carry forward after protected-base advancement when source STOP, Issue, PR, exact head, blocker, and relevant policy semantics remain invariant? If so, what reproducible proof must establish original validity, approved-base ancestry, and policy compatibility? Until merged policy answers this uniquely, current fail-closed STOP remains authoritative. No mechanism is selected.
 
-## Issue #520 acceptance criteria audit
+## Initial characterization acceptance criteria audit (historical)
 
 1. **Story-first characterization of all 14 cases on protected baseline — Not done in full.** All 14 are mapped; synthetic lifecycle and bounded regression coverage run against unchanged protected-baseline production. Real story 12 remains prohibited before merge and fresh authorization. No production semantic change has begun.
 2. **Distinguish publication-valid from genuinely stale/invalid evidence with reproducible proof — Not done.** Existing record/comment and unchanged blob can be read back, but the merged contract provides no general proof semantics; Founder/protocol decision needed.
@@ -67,9 +67,46 @@ May an immutable resolution that was valid when published carry forward after pr
 
 Only synthetic fixtures and pure route/sync authorization evaluators are used. No `bemoat:context 513` or `bemoat:context:sync-base 513` operation is part of this characterization; no comments, branches, PRs, merges, or recovery writes are created by the tests.
 
-This is a characterization-only branch delta. No implementation PR is opened, as the requested production mechanism is blocked on the protocol decision. Existing managed test paths and the managed characterization directory cover these changes; no inventory/manifest update is required. Child synchronization and real recovery wait for a separately authorized correction and Founder merge.
+## Founder-approved contract baseline — 2026-10-01
 
-## Commands and results
+Founder approval in `docs/superpowers/specs/bemoat/mission-control/blocker-resolution-history/design.md` resolves the historical carry-forward protocol gap recorded above. The newly approved contract permits an immutable old-base resolution to keep resolving only its named blocker if it replays against the exact historical canonical snapshot, the recorded base is an ancestor of the exact current approved base, and the historical/current blobs match for both the mission-control guide and command reference. All existing repository, Issue, PR, exact-head, STOP source, blocker, Founder identity, policy, duplicate, and competing-evidence checks remain mandatory. The resolution still grants no route or sync authority; current evidence is recomputed, and ordinary stale-PR Context remains STOP.
+
+The baseline fixture uses exact source facts: B1 `22728c339722198cd937c7c6f1c0420dc06c1f81`; B2 `eccb36837c7e0c2fdda0aa2871999364507aa937`; compare status `ahead`, `ahead_by=2`, `behind_by=0`, and merge base B1; guide blob `ecc49947022953ee87a82aefbc3b69888f70a59d`; command-reference blob `f7e23941bd16335994abbada14ed568dc09764ed` at both bases. At this baseline run, the proof was a test-only transient extension on `NormalizedContextEvidence`; production did not yet consume it and no durable transport was added. It binds resolution comment ID and SHA-256 of the exact body, canonical repository, historical/current base branch and SHA, historical policy, both historical/current contract blob identities, and the raw compare facts. The implemented interface retains these facts as freshly collected in-memory evidence, separate from durable HANDOFF records.
+
+### Approved-contract baseline run
+
+Command:
+
+```bash
+PATH=/tmp/bemoat-520-bin:/home/boat/.nvm/versions/node/v24.16.0/bin:$PATH npm_config_scripts_prepend_node_path=false pnpm exec vitest run --config ./vitest.config.mts tests/int/context-stale-base.int.spec.ts tests/int/context-router.int.spec.ts
+```
+
+Latest result against unchanged production: **3 failed, 242 passed** across 2 files. The three red variants are the same canonical lifecycle story with otherwise-current `REVIEW`, independent `VERIFY`, and independent `FIX` evidence. Each supplies the complete proposed transient proof, yet `authorizeContextSync` returns `STOP`; the existing evaluator ignores the new proof property and requires the resolution to bind B2. All three are **Implementation defect** under the now-explicit Founder contract. The ordinary `routeContext` assertions remain green at `STOP`, as required. Negative stories for absent/duplicate proof, either changed contract blob, wrong historical/current policy or base/repository/comment bindings, changed resolution bytes, native or declared Founder mismatch, competing resolution records with individually matching proofs, unavailable/diverged ancestry, immutable evaluation, and the original #518/#509 anchors remain fail-closed and green. The first run had a test fixture identifier typo (`commandReferenceSha`); it was corrected before the recorded semantic runs and is not counted as a semantic red.
+
+### Coverage across the required 14 stories
+
+| # | Approved-contract result | Baseline evidence |
+| --- | --- | --- |
+| 1 | Current-base resolution remains valid; ordinary stale-PR Context remains STOP. | Existing #518 test passes; current-bound sync path remains covered. |
+| 2 | Proven B1→B2 carry-forward should allow only the otherwise-current sync evaluation. | Red in all three REVIEW/VERIFY/FIX variants: `STOP` instead of the independently recomputed route. **Implementation defect.** |
+| 3 | Either compatibility blob changing must deny carry-forward. | Guide and command-reference mismatch neighbors both return STOP. |
+| 4 | A changed PR head makes the old STOP inapplicable; recompute current evidence without relying on that resolution. | Existing changed-head fixture compares results with and without the old resolution. |
+| 5 | Wrong repository, Issue, PR, or blocker remains STOP. | Current exact-binding fixture neighbors remain green; inherited router tests cover source and identity mismatch. |
+| 6 | A never-valid historical base cannot be made valid by proof. | Wrong historical-base proof remains STOP. |
+| 7 | Duplicate, competing, ambiguous, or malformed resolutions/proofs remain STOP. | Existing router duplicate/competition anchors remain green; missing/mismatched proof variants remain STOP. |
+| 8 | Timestamp and comment ordering do not confer authority. | Existing router order/timestamp anchors remain green; proof binds comment identity and bytes, not order. |
+| 9 | Historical records stay append-only; proof evaluation is transient and does not mutate inputs. | Existing immutable-source coverage remains green; no new durable proof record is introduced. |
+| 10 | Resolution itself grants no workflow route or merge permission. | The three intended outcomes are derived separately as REVIEW, VERIFY, and FIX; old normal Context stays STOP. Existing router tests cover pending/failed checks. |
+| 11 | Sync-base ancestry, conflict, identity, durability, drift, scope, and readback gates remain mandatory. | Only pure authorization is invoked; existing sync safety suite remains a bounded regression anchor. |
+| 12 | Real #513 / PR #514 post-merge dogfood. | Not run; still deferred until correction validation, exact-head CI, independent review, Founder merge, and fresh authorization. |
+| 13 | #509 review-lineage strictness remains unchanged. | Existing #509 router regression remains green; no #509 recovery. |
+| 14 | #518 classification and sync safety remain unchanged. | Existing #518 stale-base and sync tests remain green. |
+
+This new section updates the earlier protocol-gap finding: the Founder contract now uniquely defines the allowed historical proof and expected continuation. It does not change the earlier recorded baseline result or authorize this characterization worker to implement production behavior, run real #513 synchronization, or write GitHub state.
+
+The original characterization commit remains immutable. The subsequent correction implements the explicitly approved contract; it does not rewrite the original STOP or resolution, introduce a durable evidence type, or alter either compatibility-anchor document. The new historical acquisition module is registered in the managed inventory and sync manifest. Child synchronization and real recovery still wait for correction merge and the required fresh authorization.
+
+## Initial characterization commands and results (historical)
 
 Run on 2026-10-01 with Node `v24.16.0`, pnpm `10.27.0`, and the canonical repository root. The existing standalone pnpm launcher was selected through `/tmp/bemoat-520-bin`; `npm_config_scripts_prepend_node_path=false` preserved the Node 24 script runtime. Missing dependencies were restored with an offline frozen-lockfile install, with scripts disabled; tracked package files are unchanged.
 
@@ -98,4 +135,51 @@ pnpm run bemoat:handoff -- --help --json
 - Test runtime emitted the existing Payload no-email-adapter warning; no production email, deployment, or migration operation was run.
 - Exact-head correction CI and independent review: pending because there is no production correction PR. No successful real #513 command evidence is claimed.
 
-The controller outcome is **STOP at the Founder/protocol question above**. Fresh Context without an active PR can still return `IMPLEMENT`; a HANDOFF cannot manufacture workflow authority or a different native route. Do not equate that mechanical route with an answer to the unresolved semantic contract.
+The initial controller outcome was **STOP at the Founder/protocol question above**. Fresh Context without an active PR can still return `IMPLEMENT`; a HANDOFF cannot manufacture workflow authority or a different native route. Do not equate that mechanical route with an answer to the unresolved semantic contract.
+
+
+## Approved correction and current acceptance audit
+
+The Founder decision authorizes deterministic historical carry-forward with four independent proofs: replay of strict immutable resolution and historical policy identity; exact approved-branch ancestry; identical guide and command-reference blobs; and invariant current repository/Issue/PR/head/source STOP/blocker identity. Acquisition uses read-only GitHub endpoints pinned to full commit SHAs and binds the resulting facts to the exact comment ID and body digest. Missing, malformed, duplicate, competing, incompatible, or unprovable evidence remains STOP. No timestamps or comment ordering are used.
+
+Context collects this proof only for the sole current active PR and exact head. The evaluator preserves the current-bound path and checks the historical policy's STOP blocker derivation before accepting carry-forward. It then independently recomputes the route; ordinary stale-base Context still stops, and sync authorization retains every existing safety gate. The public CLI exposes nonempty transient proof facts for audit without changing durable transport or caller inputs. The guide and command-reference files remain byte-for-byte unchanged so the correction itself does not invalidate the historical compatibility proof.
+
+| Criterion | Status | Correction evidence |
+| --- | --- | --- |
+| 1. All 14 characterization cases before production changes | Not done in full | All 14 mapped; three approved-contract reds recorded before implementation. Synthetic and bounded neighboring coverage exists; real story 12 is necessarily post-merge. |
+| 2. Reproducible distinction between historically valid and invalid records | Done | Exact historical snapshot replay, immutable body/comment binding, deterministic native ancestry, and both blob comparisons; negative neighboring stories. |
+| 3. Smallest safe semantics selected after Founder decision | Done | Approved design and bounded implementation; current-bound behavior retained, no new durable evidence type or workflow transition. |
+| 4. No timestamp/latest-comment authority | Done | Existing ordering stories retained; proof uses native identities and bytes. |
+| 5. Append-only immutable history | Done | Input immutability story and read-only acquisition; real resolution 5923392741 and source STOP untouched. |
+| 6. Duplicate/competing/ambiguous evidence fails closed | Done | Existing resolution ambiguity stories plus missing/duplicate/malformed historical proof neighbors. |
+| 7. Resolution grants no workflow/merge authority | Done | REVIEW/VERIFY/FIX outcomes independently recomputed; ordinary stale-base Context remains STOP. |
+| 8. #518 stale-base/sync safety preserved | Done for regression coverage | Existing ancestry/conflict/identity/durability/drift/readback suite unchanged; no real sync invoked. |
+| 9. #509 review lineage preserved | Done for regression coverage | Existing router lineage stories retained. |
+| 10. Focused and canonical validation | Done | Focused: 10 files / 381 tests. Both canonical pipelines: 58 files / 891 tests, guards, zero-warning lint, typecheck; exit 0. |
+| 11. Exact-head CI | Waiting for CI / human review | Must pass on the correction PR's exact committed head. |
+| 12. Independent semantic review | Waiting for CI / human review | Separate Sol Med exact-head review required. |
+| 13. Founder merge gate | Done | No autonomous merge; native Context must reach the human gate. |
+| 14. Real #513/PR #514 supported recovery | Not done | Required after correction CI/review and Founder-approved merge, with fresh authorization. |
+| 15. Fresh #513 Context after recovery | Not done | Depends on criterion 14; no #513 production authority granted. |
+| 16. Keep #520/#518 open pending dogfood | Done | PR uses non-closing linkage; excluded issues are unchanged. |
+
+
+### Final correction verification
+
+Luna Med verified the stable corrected tree using Node v24.16.0 and pnpm10 with the launcher environment recorded above:
+
+```bash
+pnpm exec vitest run --config ./vitest.config.mts \
+  tests/int/context-stale-base.int.spec.ts tests/int/context-router.int.spec.ts \
+  tests/int/context-sync.int.spec.ts tests/int/approved-base.int.spec.ts \
+  tests/int/context-corrections.int.spec.ts tests/int/context-evidence.int.spec.ts \
+  tests/int/context-parser.int.spec.ts tests/int/context-acquisition.int.spec.ts \
+  tests/int/context-cli.int.spec.ts tests/int/cli-command-registry.int.spec.ts
+pnpm run check
+pnpm run bemoat:check
+git diff --check
+```
+
+Focused verification passed 10 files / 381 tests. Both full pipelines exited 0: all 11 guards passed, lint passed with zero warnings, typecheck passed, and 58 files / 891 tests passed. The initial guard run identified missing task-identity blocks in the new paired documents; these were added. Lint then identified one unused test callback argument; it was removed. Full tests identified the structural inventory expectation of 77 after adding the new runtime module; the expectation was updated to 78 without changing structural limits, exceptions, or the protected oracle. The final pipelines verify those corrections. Sandbox subprocess EPERM failures were rerun with authorized execution and did not recur. These maintenance failures do not redefine the three contract-semantic red stories.
+
+The existing Payload no-email-adapter warning remains; no production operation was performed. Exact-head GitHub CI, independent semantic review, and final native Context are recorded in the PR and HANDOFF after durable delivery. Real #513 recovery and fresh Context remain outstanding post-merge acceptance work, so this correction uses non-closing Issue linkage.

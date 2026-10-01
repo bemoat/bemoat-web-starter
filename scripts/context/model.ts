@@ -125,6 +125,25 @@ export interface DurableContextEvidence {
   invalidBlockerResolutions?: RoleEvidence[]
 }
 
+export interface HistoricalBlockerResolutionProof {
+  resolutionCommentId: string
+  resolutionBodySha256: string
+  repository: string
+  historicalBase: { branch: string; sha: string }
+  currentBase: { branch: string; sha: string }
+  historicalPolicy: PolicyEvidence
+  historicalContractBlobs: { missionControlGuideSha: string; commandReferenceSha: string }
+  currentContractBlobs: { missionControlGuideSha: string; commandReferenceSha: string }
+  ancestry: {
+    status: 'ahead'
+    baseSha: string
+    currentSha: string
+    mergeBaseSha: string
+    aheadBy: number
+    behindBy: number
+  }
+}
+
 export interface NormalizedContextEvidence {
   repository: RepositoryEvidence
   protectedBase: ProtectedBaseEvidence
@@ -134,6 +153,7 @@ export interface NormalizedContextEvidence {
   activePr: ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
   currentHeadVerification: HeadVerificationEvidence | null
   durableContext: DurableContextEvidence
+  historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
   evidenceErrors: string[]
 }
 
