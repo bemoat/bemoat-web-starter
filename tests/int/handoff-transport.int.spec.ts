@@ -417,4 +417,34 @@ describe('bemoat:handoff neutral transport', () => {
     await expect(async () => runHandoffWorkflow({ issueNumber: ISSUE, body: JSON.stringify(validRecord()), cwd: '/repo', env: process.env, run: customRunner })).rejects.toMatchObject({ classification: 'EVIDENCE_CONFLICT' })
     expect(world.postCount).toBe(0)
   })
+
+  it('does not publish a HANDOFF when the claimed PR native repository identity is malformed', async () => {
+    const world: World = { comments: [], postCount: 0, calls: [] }
+    const malformedNativeIdentity: HandoffCommandRunner = (command, args, options = {}) => {
+      if (command === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+        return ok(JSON.stringify({
+          number: 412,
+          url: PR_URL,
+          baseRefName: 'main',
+          baseRefOid: BASE_SHA,
+          headRefName: BRANCH,
+          headRefOid: HEAD_SHA,
+          state: 'OPEN',
+          title: 'bounded work',
+          body: '',
+          closingIssuesReferences: [{ number: Number(ISSUE), repository: { nameWithOwner: '' } }],
+        }))
+      }
+      return runnerFor(world)(command, args, options)
+    }
+
+    await expect(async () => runHandoffWorkflow({
+      issueNumber: ISSUE,
+      body: JSON.stringify(validRecord()),
+      cwd: '/repo',
+      env: process.env,
+      run: malformedNativeIdentity,
+    })).rejects.toMatchObject({ classification: 'EVIDENCE_CONFLICT' })
+    expect(world.postCount).toBe(0)
+  })
 })
