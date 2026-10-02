@@ -42,8 +42,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function asString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function nativeRepositoryIdentityMatches(repository: unknown, repo: string): boolean {
+  if (!isRecord(repository)) return false
+
+  const expectedParts = repo.split('/')
+  if (expectedParts.length !== 2 || expectedParts.some((part) => !part)) return false
+  const [expectedOwner, expectedName] = expectedParts
+  const hasNameWithOwner = hasOwn(repository, 'nameWithOwner')
+  const hasOwner = hasOwn(repository, 'owner')
+  const hasName = hasOwn(repository, 'name')
+  const hasUrl = hasOwn(repository, 'url')
+
+  if (hasNameWithOwner && repository.nameWithOwner !== repo) return false
+
+  if (hasOwner !== hasName) return false
+  if (hasOwner) {
+    if (!isRecord(repository.owner) || repository.owner.login !== expectedOwner || repository.name !== expectedName) return false
+  }
+
+  if (hasUrl) {
+    if (typeof repository.url !== 'string') return false
+    try {
+      const url = new URL(repository.url)
+      if (
+        url.protocol !== 'https:' || url.hostname !== 'github.com' || url.port !== '' ||
+        url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '' ||
+        ![`/${repo}`, `/${repo}/`].includes(url.pathname)
+      ) return false
+    } catch {
+      return false
+    }
+  }
+
+  // The URL can corroborate a repository identity, but cannot establish one alone.
+  return hasNameWithOwner || hasOwner && hasName
 }
 
 function escapeRegExp(value: string): string {
@@ -59,9 +95,8 @@ function nativeClosingIssuesOwnIssue(
   return closingIssuesReferences.some((value) => {
     if (!isRecord(value)) return false
     if (String(value.number ?? '') !== issueNumber) return false
-    if (!isRecord(value.repository)) return true
-    const nameWithOwner = asString(value.repository.nameWithOwner)
-    return !nameWithOwner || nameWithOwner === repo
+    if (!hasOwn(value, 'repository')) return true
+    return nativeRepositoryIdentityMatches(value.repository, repo)
   })
 }
 

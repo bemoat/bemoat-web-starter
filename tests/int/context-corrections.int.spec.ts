@@ -103,6 +103,47 @@ function githubRunner({
   }
 }
 
+function nativeIdentityContextRunner(closingIssuesReferences: unknown[], issueState = 'CLOSED'): ContextCommandRunner {
+  const repo = 'boat1994/bemoat-web-starter'
+  const base = 'a'.repeat(40)
+  const head = 'b'.repeat(40)
+  const merge = 'c'.repeat(40)
+  const prUrl = `https://github.com/${repo}/pull/807`
+  const policy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\n---\n'
+  return (command, args) => {
+    const key = args.join(' ')
+    if (command === 'git') {
+      const local: Record<string, string> = {
+        'branch --show-current': 'feature/495-characterization\n',
+        'rev-parse HEAD': `${head}\n`,
+        'status --short': '',
+        'rev-parse --abbrev-ref --symbolic-full-name @{upstream}': 'origin/feature/495-characterization\n',
+        'remote get-url origin': `git@github.com:${repo}.git\n`,
+        'ls-remote --heads origin feature/495-characterization': `${head}\trefs/heads/feature/495-characterization\n`,
+      }
+      return response(local[key] ?? '')
+    }
+    if (key.includes('git/ref/heads/dev')) return response('', 1, 'Not Found')
+    if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: base } }))
+    if (key.includes('contents/docs/mission-control/mission-control-guide.md')) {
+      return response(JSON.stringify({ sha: 'd'.repeat(40), content: Buffer.from(policy).toString('base64'), encoding: 'base64' }))
+    }
+    if (key.startsWith('issue view 410')) {
+      return response(JSON.stringify({ number: 410, title: 'native identity', state: issueState, url: `https://github.com/${repo}/issues/410`, body: 'Task size: core\nMission Control mode: not required\n\n## Goal\n\nCheck native identity.\n', comments: [] }))
+    }
+    if (key.startsWith('pr list')) {
+      return response(JSON.stringify([{ number: 807, title: 'unrelated', body: '', url: prUrl, headRefName: 'topic/no-issue-number', closingIssuesReferences }]))
+    }
+    if (key.startsWith('pr view 807')) {
+      return response(prPayload({ number: 807, state: 'MERGED', url: prUrl, headRefName: 'topic/no-issue-number', mergeCommit: { oid: merge } }))
+    }
+    if (key.includes('/pulls/807/reviews?per_page=100')) return response('[[]]')
+    if (key.includes('branches/main/protection')) return response('', 1, 'HTTP 404 Not Found')
+    if (key.includes('/rulesets?')) return response(nativeRuleset())
+    return response('')
+  }
+}
+
 describe('bounded context corrections', () => {
   it('accepts effective native ruleset evidence when legacy branch protection returns 404', () => {
     const evidence = readGithubEvidence({
@@ -628,6 +669,55 @@ describe('bounded context corrections', () => {
       evidenceErrors: genuineMerged.errors,
     }
     expect(routeContext(genuineRoute).route).toBe('COMPLETE')
+  })
+
+  it.each([
+    ['empty nameWithOwner', { nameWithOwner: '' }],
+    ['foreign owner/name/url without nameWithOwner', { owner: { login: 'someone' }, name: 'elsewhere', url: 'https://github.com/someone/elsewhere' }],
+    ['non-object repository', 'malformed'],
+    ['null repository', null],
+    ['empty repository object', {}],
+    ['array repository', []],
+    ['incomplete owner/name', { owner: { login: 'boat1994' } }],
+    ['malformed nonempty nameWithOwner', { nameWithOwner: 'not a repository identity' }],
+    ['foreign nameWithOwner', { nameWithOwner: 'someone/elsewhere' }],
+    ['matching nameWithOwner with contradictory owner/name/url', { nameWithOwner: 'boat1994/bemoat-web-starter', owner: { login: 'someone' }, name: 'elsewhere', url: 'https://github.com/someone/elsewhere' }],
+    ['matching nameWithOwner with foreign url', { nameWithOwner: 'boat1994/bemoat-web-starter', url: 'https://github.com/someone/elsewhere' }],
+    ['matching nameWithOwner with incomplete owner/name', { nameWithOwner: 'boat1994/bemoat-web-starter', owner: { login: 'boat1994' } }],
+    ['matching nameWithOwner with null owner/name', { nameWithOwner: 'boat1994/bemoat-web-starter', owner: null, name: 'bemoat-web-starter' }],
+  ])('does not route merged native reference with invalid repository identity: %s', (_name, repository) => {
+    const evidence = collectContextEvidence({
+      cwd: '/tmp/issue495-native-identity',
+      env: { ...process.env, GH_REPO: 'boat1994/bemoat-web-starter' },
+      issueNumber: '410',
+      run: nativeIdentityContextRunner([{ number: 410, repository }]),
+    })
+
+    expect(evidence.activePr).toBeNull()
+    expect(routeContext(evidence).route).not.toBe('COMPLETE')
+  })
+
+  it('preserves omitted and valid native repository identities and merged terminal routing', () => {
+    const repo = 'boat1994/bemoat-web-starter'
+    expect(prOwnsIssue({ closingIssuesReferences: [{ number: 410 }] }, repo, '410')).toBe(true)
+    expect(prOwnsIssue({ closingIssuesReferences: [{ number: 410, repository: undefined }] }, repo, '410')).toBe(false)
+
+    const validReferences = [
+      [{ number: 410 }],
+      [{ number: 410, repository: { nameWithOwner: 'boat1994/bemoat-web-starter' } }],
+      [{ number: 410, repository: { owner: { login: 'boat1994' }, name: 'bemoat-web-starter', url: 'https://github.com/boat1994/bemoat-web-starter' } }],
+    ]
+
+    for (const closingIssuesReferences of validReferences) {
+      const evidence = collectContextEvidence({
+        cwd: '/tmp/issue495-native-identity',
+        env: { ...process.env, GH_REPO: 'boat1994/bemoat-web-starter' },
+        issueNumber: '410',
+        run: nativeIdentityContextRunner(closingIssuesReferences),
+      })
+      expect(evidence.activePr).toMatchObject({ number: '807', merged: true })
+      expect(routeContext(evidence).route).toBe('COMPLETE')
+    }
   })
 })
 
