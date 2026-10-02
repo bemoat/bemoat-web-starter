@@ -7,6 +7,7 @@ import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isP
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './semantic-review-evidence.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
+import { routeNoPrContext } from './no-pr-routing.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
@@ -144,18 +145,8 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
 
   const activePr = evidence.activePr as ActivePullRequestEvidence | null
   if (!activePr) {
-    if (evidence.issue.state.toUpperCase() === 'CLOSED') {
-      return decision(evidence, 'STOP', [
-        'EVIDENCE_CONFLICT: Issue is closed without a uniquely resolved merged PR',
-      ], {
-        type: 'STOP',
-        command: null,
-        description: 'Resolve the closed Issue and PR evidence before continuing.',
-      })
-    }
-    return decision(evidence, 'IMPLEMENT', [
-      'No active PR is present and the local topic branch is durable.',
-    ], commandAction('Implement the bounded Issue objective on the durable topic branch.'))
+    const noPrDecision = routeNoPrContext(evidence)
+    return decision(evidence, noPrDecision.route, noPrDecision.reasons, noPrDecision.nextAction)
   }
 
   if (activePr.merged || activePr.state === 'MERGED') {

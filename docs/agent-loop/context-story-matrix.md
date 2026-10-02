@@ -10,6 +10,7 @@ map, not a new state machine, routing configuration, or test DSL.
 | Invariant | Authority | Protected behavior |
 | --- | --- | --- |
 | Routing is a pure function of current native GitHub/Git evidence. | Issue #410 deterministic route contract | No prior legacy workflow state, receipt, counter, or session memory selects a route. |
+| In the no-PR path, an explicitly numbered topic branch must belong to the queried Issue. | Issue #525 bounded branch-ownership decision | A `<type>/<issue>-<slug>` branch whose Issue number differs from the queried Issue routes `STOP` with `EVIDENCE_CONFLICT`; matching branches continue, legacy unnumbered behavior is preserved only, and PR ownership remains a separate evidence path. |
 | Required evidence is exact and fail-closed. | Issue #410 generic safety contract | Missing, malformed, stale, conflicting, unavailable, or ambiguous evidence routes `STOP` or keeps an unsatisfied review gate. |
 | Non-terminal continuation requires durable local work. | Issue #410 portability contract | Dirty, detached, unpushed, local-only, or wrong-repository work routes `STOP`. |
 | First-time issue-branch identity is durable before non-terminal Context continuation. | Merged policy v1.3.0 durability rule plus Issue #410 portability contract | Branch setup publishes and reads back an exact zero-delta topic ref before Context can route `IMPLEMENT`; Context does not perform the mutation. |
@@ -24,6 +25,7 @@ map, not a new state machine, routing configuration, or test DSL.
 | Story | Risk interaction | Expected route | Baseline class | Coverage |
 | --- | --- | --- | --- | --- |
 | Open Issue, no PR, durable topic branch | PR absence × local durability | `IMPLEMENT` | B | `context-router.int.spec.ts`: clean durable work without a PR |
+| No PR, durable topic branch explicitly names a different Issue, including one-digit and historical mismatches | queried Issue identity × branch Issue identity | `STOP` with `EVIDENCE_CONFLICT`; matching branch continues; unnumbered behavior is preservation coverage only and policy is out of scope | A fixed by Issue #525 | `context-evidence.int.spec.ts`: real temporary Git through evidence collection and routing; separate PR-owned and merged-terminal controls |
 | Clean starter `main` or child integration `dev` → absent topic ref → zero-delta publish/readback → Context | base identity × branch absence × remote durability | `IMPLEMENT` only after exact durable readback; otherwise `STOP` | B (`MISSING_COVERAGE`) | `issue-branch-bootstrap.int.spec.ts`: starter/child lifecycle, non-durable siblings, mutation-free readback |
 | Open active PR, pending exact-head CI | current base/head × CI pending | `VERIFY` | B | `context-router.int.spec.ts`: incomplete exact-head checks |
 | Open active PR, failed exact-head CI | current base/head × CI failure | `FIX` | B | `context-router.int.spec.ts`: failed exact-head checks |
