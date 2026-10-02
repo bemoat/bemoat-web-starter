@@ -9,7 +9,7 @@ import {
   parseProductionMergeReviewVerdict,
   resolveMergeReviewVerdictBinding,
 } from '../../scripts/context/merge-review-verdict.ts'
-import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 
 const sha = 'a'.repeat(40)
 const headSha = 'b'.repeat(40)
@@ -2859,5 +2859,56 @@ ${reviewUrl}`) {
       historicalResults: [],
     })
     expect(authorizeContextSync(missingFinding)).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+})
+
+describe('advisory model preferences cannot supply workflow evidence', () => {
+  // A model recommendation or worker report is not native CI, review, Founder,
+  // STOP-resolution, or next-objective authorization evidence.
+  const workerReport = {
+    role: 'independent_semantic_delta_review', model_class: 'Sol', effort: 'High',
+    rationale: 'Worker reports completion.', escalation_trigger: 'Conflicting evidence',
+    completed: true, recommended_next_route: 'COMPLETE', next_objective: 'Start dependent work',
+  }
+
+  it.each([
+    ['no PR', {}, 'IMPLEMENT'],
+    ['conflicting evidence', { evidenceErrors: ['EVIDENCE_CONFLICT: unresolved authority'] }, 'STOP'],
+    ['pending CI', {
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        checks: { status: 'PENDING', complete: false, failed: false, pending: true, required: true },
+      }),
+    }, 'VERIFY'],
+    ['failed CI', {
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        checks: { status: 'FAILURE', complete: true, failed: true, pending: false, required: true },
+      }),
+    }, 'FIX'],
+    ['missing independent review', {
+      activePr: prEvidence(), currentHeadVerification: verification(),
+    }, 'REVIEW'],
+    ['independent review present, Founder approval still required', {
+      activePr: prEvidence(),
+      currentHeadVerification: verification({
+        reviews: { required: false, approved: true, exactHead: true, approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews: [nativeReview()] },
+      }),
+    }, 'FOUNDER_GATE'],
+  ] satisfies Array<[string, Partial<NormalizedContextEvidence>, string]>)('preserves %s despite a completed worker and a recommendation to continue', (_label, overrides, expected) => {
+    const evidence = baseEvidence(overrides)
+    const withAdvisoryReport = { ...evidence, modelRecommendation: workerReport }
+    const result = routeContext(withAdvisoryReport)
+    expect(result.route).toBe(expected)
+    expect(result).toEqual(routeContext(evidence))
+  })
+
+  it('cannot turn a model recommendation into a HANDOFF schema extension or next-objective route', () => {
+    const envelope = strictHandoff().body.match(/```json\n([\s\S]+)\n```\n$/)!
+    const record = JSON.parse(envelope[1]!)
+    expect(() => parseHandoffBody(JSON.stringify({ ...record, modelRecommendation: workerReport }))).toThrow()
+    expect(() => parseHandoffBody(JSON.stringify({
+      ...record, next_action: { route: 'START_NEXT_OBJECTIVE', description: 'Worker completed.' },
+    }))).toThrow()
   })
 })
