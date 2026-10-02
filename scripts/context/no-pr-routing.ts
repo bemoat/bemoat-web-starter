@@ -21,7 +21,7 @@ function hasApplicableNoPrStop(evidence: NormalizedContextEvidence): boolean {
       return false
     }
     const protectedBase = identity.protected_base as Record<string, unknown>
-    if (protectedBase.branch !== evidence.protectedBase.branch || protectedBase.sha !== evidence.protectedBase.sha) return false
+    if (protectedBase.branch !== evidence.protectedBase.branch) return false
 
     try {
       const record = parseHandoffBody(JSON.stringify(identity))

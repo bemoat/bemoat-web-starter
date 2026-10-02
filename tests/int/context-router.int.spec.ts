@@ -479,6 +479,13 @@ describe('bemoat:context pure routing', () => {
     expect(routeWithNoPrStop(noPrStopHandoff()).route).toBe('STOP')
   })
 
+  it('keeps an unresolved no-PR schema-v3 STOP when only the protected-base SHA advances', () => {
+    const decision = routeWithNoPrStop(noPrStopHandoff(), {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'c'.repeat(40) },
+    })
+    expect(decision.route).toBe('STOP')
+  })
+
   it('stops applying a no-PR schema-v3 STOP after the local head advances', () => {
     const handoff = noPrStopHandoff()
     expect(routeWithNoPrStop(handoff, {
@@ -489,23 +496,28 @@ describe('bemoat:context pure routing', () => {
   it.each([
     ['stale exact head', { exact_head: 'c'.repeat(40) }],
     ['stale branch', { branch: 'fix/410-other-branch' }],
-    ['wrong protected base', { protected_base: { branch: 'main', sha: 'd'.repeat(40) } }],
+    ['wrong protected-base branch', { protected_base: { branch: 'dev', sha } }],
     ['wrong repository', { repository: 'other/repository' }],
     ['wrong Issue', { issue_number: '999' }],
   ] as const)('does not let a no-PR schema-v3 STOP with %s control routing', (_story, overrides) => {
-    expect(routeWithNoPrStop(noPrStopHandoff(overrides)).route).toBe('IMPLEMENT')
+    expect(routeWithNoPrStop(noPrStopHandoff(overrides), {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'e'.repeat(40) },
+    }).route).toBe('IMPLEMENT')
   })
 
   it('does not let an incomplete no-PR schema-v3 STOP control routing', () => {
     const malformed = mutateHandoffIdentity(noPrStopHandoff(), (payload) => {
       payload.verified_evidence = []
     })
-    expect(routeWithNoPrStop(malformed).route).toBe('IMPLEMENT')
+    expect(routeWithNoPrStop(malformed, {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'e'.repeat(40) },
+    }).route).toBe('IMPLEMENT')
   })
 
   it('does not let a no-PR schema-v3 STOP with a spoofed native comment URL control routing', () => {
     const handoff = noPrStopHandoff()
     expect(routeWithNoPrStop(handoff, {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'e'.repeat(40) },
       durableContext: {
         latestHandoff: { ...handoff, url: 'https://github.com/other/repository/issues/410#issuecomment-900' },
         handoffs: [{ ...handoff, url: 'https://github.com/other/repository/issues/410#issuecomment-900' }],
