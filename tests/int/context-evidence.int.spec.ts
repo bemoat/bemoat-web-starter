@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import {
   collectContextEvidence,
@@ -8,6 +11,8 @@ import {
   type ContextCommandResult,
   type ContextCommandRunner,
 } from '../../scripts/context/evidence.ts'
+import { routeContext } from '../../scripts/context/router.ts'
+import { runContextCommand } from '../../scripts/context/runtime.ts'
 
 function response(stdout: string): ContextCommandResult {
   return { status: 0, stdout, stderr: '', error: null }
@@ -21,6 +26,140 @@ function nativeReviewApiResponse(
   const number = endpoint?.match(/\/pulls\/([1-9]\d*)\/reviews\?per_page=100$/)?.[1]
   if (!number) return null
   return response(JSON.stringify([reviewsByPr[number] ?? []]))
+}
+
+const contextRepo = 'boat1994/bemoat-web-starter'
+const contextPolicy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\n---\n\n# Mission Control\n'
+const contextIssueBody = '## Goal\n\nCharacterize branch ownership.\n\n## Scope\n\nRead-only characterization.\n\n## Acceptance Criteria\n- Wrong issue branch must not route IMPLEMENT.\n\nTask size: small\nMission Control mode: optional\n'
+
+function setupContextRepo(branch: string, detached = false, withUpstream = true) {
+  const cwd = mkdtempSync(join(tmpdir(), 'bemoat-context-branch-ownership-'))
+  const git = (args: string[]) => {
+    const result = runContextCommand('git', args, { cwd })
+    if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`)
+    return result.stdout.trim()
+  }
+
+  git(['init', '-b', 'main'])
+  git(['config', 'user.email', 'context-test@example.invalid'])
+  git(['config', 'user.name', 'Context test'])
+  writeFileSync(join(cwd, 'baseline.txt'), 'baseline\n')
+  git(['add', 'baseline.txt'])
+  git(['commit', '-m', 'baseline'])
+  if (branch !== 'main') git(['switch', '-c', branch])
+  git(['remote', 'add', 'origin', `git@github.com:${contextRepo}.git`])
+  if (!detached && withUpstream) {
+    git(['config', `branch.${branch}.remote`, 'origin'])
+    git(['config', `branch.${branch}.merge`, `refs/heads/${branch}`])
+    git(['update-ref', `refs/remotes/origin/${branch}`, git(['rev-parse', 'HEAD'])])
+  }
+  if (detached) git(['checkout', '--detach'])
+
+  return { cwd, head: git(['rev-parse', 'HEAD']) }
+}
+
+function contextStoryRunner({
+  cwd,
+  head,
+  branch,
+  durable,
+  issueNumber,
+  activePr,
+  merged,
+}: {
+  cwd: string
+  head: string
+  branch: string
+  durable: boolean
+  issueNumber: string
+  activePr?: boolean
+  merged?: boolean
+}): ContextCommandRunner {
+  return (command, args, options = {}) => {
+    const key = args.join(' ')
+    if (command === 'git') {
+      if (args[0] === 'ls-remote') {
+        if (!durable) return response('')
+        return response(`${head}\trefs/heads/${branch}\n`)
+      }
+      return runContextCommand(command, args, { ...options, cwd })
+    }
+    if (command !== 'gh') return response('')
+    const reviewApiResponse = nativeReviewApiResponse(args)
+    if (reviewApiResponse) return reviewApiResponse
+    if (key.includes('git/ref/heads/dev')) return { status: 1, stdout: '', stderr: 'Not Found', error: null }
+    if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }))
+    if (key.includes('contents/docs/mission-control/mission-control-guide.md')) {
+      return response(JSON.stringify({ sha: 'c'.repeat(40), content: Buffer.from(contextPolicy).toString('base64'), encoding: 'base64' }))
+    }
+    if (args[0] === 'issue' && args[1] === 'view') {
+      return response(JSON.stringify({
+        number: Number(issueNumber),
+        title: 'branch ownership characterization',
+        state: merged ? 'CLOSED' : 'OPEN',
+        url: `https://github.com/${contextRepo}/issues/${issueNumber}`,
+        body: contextIssueBody,
+        comments: [],
+      }))
+    }
+    if (args[0] === 'pr' && args[1] === 'list') {
+      if (!activePr) return response('[]')
+      return response(JSON.stringify([{
+        number: 526,
+        url: `https://github.com/${contextRepo}/pull/526`,
+        headRefName: branch,
+        closingIssuesReferences: [{ number: Number(issueNumber) }],
+      }]))
+    }
+    if (args[0] === 'pr' && args[1] === 'view') {
+      const isMerged = Boolean(merged)
+      return response(JSON.stringify({
+        number: 526,
+        state: isMerged ? 'MERGED' : 'OPEN',
+        isDraft: false,
+        url: `https://github.com/${contextRepo}/pull/526`,
+        baseRefName: 'main',
+        baseRefOid: 'a'.repeat(40),
+        headRefName: branch,
+        headRefOid: head,
+        mergeCommit: isMerged ? { oid: 'e'.repeat(40) } : null,
+        statusCheckRollup: [],
+      }))
+    }
+    if (key.includes(`/branches/main/protection`)) return response('{}')
+    return response('')
+  }
+}
+
+function routeContextStory(story: {
+  issueNumber: string
+  branch: string
+  durable?: boolean
+  detached?: boolean
+  withUpstream?: boolean
+  activePr?: boolean
+  merged?: boolean
+}) {
+  const { cwd, head } = setupContextRepo(story.branch, story.detached, story.withUpstream)
+  try {
+    const evidence = collectContextEvidence({
+      cwd,
+      issueNumber: story.issueNumber,
+      env: { GH_REPO: contextRepo, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
+      run: contextStoryRunner({
+        cwd,
+        head,
+        branch: story.branch,
+        durable: story.durable ?? true,
+        issueNumber: story.issueNumber,
+        activePr: story.activePr,
+        merged: story.merged,
+      }),
+    })
+    return { evidence, decision: routeContext(evidence) }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
 }
 
 describe('bemoat:context neutral evidence adapters', () => {
@@ -47,6 +186,67 @@ describe('bemoat:context neutral evidence adapters', () => {
     const evidence = readLocalGitEvidence({ cwd: '/repo', run })
     expect(evidence.durable).toBe(false)
     expect(evidence.reasons.join(' ')).toMatch(/LOCAL_STATE_NOT_DURABLE/)
+  })
+
+  it.each([
+    ['#525 on a #477 branch', '525', 'test/477-commercial-journey-dogfood'],
+    ['#495 on a #477 branch', '495', 'test/477-commercial-journey-dogfood'],
+    ['historical #216 on a #215 branch', '216', 'test/215-commercial-journey-dogfood'],
+    ['single-digit #8 on a #7 branch', '8', 'fix/7-small-neighbor'],
+    ['neighboring #526 branch for #525', '525', 'fix/526-neighboring-change'],
+  ])('stops no-PR routing for %s', (name, issueNumber, branch) => {
+    const { evidence, decision } = routeContextStory({ issueNumber, branch })
+    expect(evidence.localGit).toMatchObject({ clean: true, pushed: true, durable: true, detached: false })
+    expect(evidence.evidenceErrors, name).toEqual([])
+    expect(evidence.activePr, name).toBeNull()
+    expect(decision.route, name).toBe('STOP')
+    expect(decision.reasons.join('\n'), name).toMatch(/EVIDENCE_CONFLICT:.*branch.*Issue/i)
+  })
+
+  it('preserves matching, unnumbered, protected, and local-durability routing boundaries', () => {
+    expect(routeContextStory({ issueNumber: '525', branch: 'fix/525-branch-issue-ownership' }).decision.route).toBe('IMPLEMENT')
+    expect(routeContextStory({ issueNumber: '8', branch: 'fix/8-small-change' }).decision.route).toBe('IMPLEMENT')
+    expect(routeContextStory({ issueNumber: '525', branch: 'test/branch-ownership' }).decision.route).toBe('IMPLEMENT')
+
+    for (const branch of ['main', 'dev']) {
+      const { decision } = routeContextStory({ issueNumber: '525', branch })
+      expect(decision.route, branch).toBe('STOP')
+      expect(decision.reasons.join('\n'), branch).toMatch(/protected or integration branch/)
+    }
+
+    const nondurableStories = [
+      { issueNumber: '525', branch: 'fix/477-detached', detached: true, durable: false },
+      { issueNumber: '525', branch: 'fix/477-local-only', withUpstream: false, durable: false },
+      { issueNumber: '525', branch: 'fix/477-unpushed', durable: false },
+    ]
+    for (const story of nondurableStories) {
+      const { decision } = routeContextStory(story)
+      expect(decision.route, story.branch).toBe('STOP')
+      expect(decision.reasons.join('\n'), story.branch).toMatch(/LOCAL_STATE_NOT_DURABLE/)
+    }
+  })
+
+  it('keeps PR-owned branch and merged terminal routing ahead of no-PR branch ownership', () => {
+    const active = routeContextStory({
+      issueNumber: '525',
+      branch: 'test/477-pr-owned-by-525',
+      activePr: true,
+    })
+    expect(active.evidence.activePr).toMatchObject({ number: '526', headBranch: 'test/477-pr-owned-by-525' })
+    expect(active.evidence.evidenceErrors).toEqual([])
+    expect(active.decision.route).toBe('FOUNDER_GATE')
+    expect(active.decision.reasons.join('\n')).not.toMatch(/branch.*Issue/i)
+
+    const merged = routeContextStory({
+      issueNumber: '525',
+      branch: 'test/477-terminal-pr-owned-by-525',
+      activePr: true,
+      merged: true,
+      detached: true,
+    })
+    expect(merged.evidence.evidenceErrors, JSON.stringify(merged.evidence)).toEqual([])
+    expect(merged.decision.route, JSON.stringify({ activePr: merged.evidence.activePr, reasons: merged.decision.reasons })).toBe('COMPLETE')
+    expect(merged.decision.reasons.join('\n')).not.toMatch(/branch.*Issue/i)
   })
 
   it('assembles normalized context evidence from read-only adapters', () => {
