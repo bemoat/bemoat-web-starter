@@ -21,15 +21,55 @@ describe('Mission Control delegation and execution model policy', () => {
     expect(guide).toMatch(/when useful.*same capable worker through a coherent inspect\/implement\/focused-check\/correction chain.*authorized delivery steps/i)
   })
 
-  it('keeps model names in the loader as role-based execution preferences only', () => {
-    const loader = read('prompts/mission-control/chatgpt-project-loader.md')
-    expect(loader).toMatch(/Luna Medium.*read-only.*evidence.*inventory.*deterministic.*mechanical verification.*focused validation/i)
-    expect(loader).toMatch(/Luna High.*implementation.*repository analysis/i)
-    expect(loader).toMatch(/small deterministic objectives?.*Luna directly/i)
-    expect(loader).toMatch(/named-model fallback.*equivalent role.*lowest-cost model sufficient/i)
-    expect(loader).toMatch(/model.*does not.*workflow authority/i)
-    expect(loader).not.toMatch(/choose the lowest-cost sufficient worker and keep it on the objective through deterministic internal steps and policy-allowed delivery actions/i)
-    expect(loader).toMatch(/one accountable controller owns the bounded objective.*may delegate suitable bounded, non-overlapping internal subwork/i)
-    expect(loader).toMatch(/same capable mutation worker.*optional efficiency preference when useful.*not.*objective-wide authority/i)
+  describe('advisory Model Routing Profile v1', () => {
+    const profile = () => {
+      const loader = readFileSync(resolve(root, 'prompts/mission-control/chatgpt-project-loader.md'), 'utf8')
+      const block = loader.match(/```json\s*([\s\S]*?)```/)
+      expect(block, 'the existing loader exposes the advisory profile').not.toBeNull()
+      return JSON.parse(block![1]!)
+    }
+
+    it('limits recommendation inputs and outputs without granting workflow authority', () => {
+      const contract = profile()
+      expect(contract.authority).toBe('advisory_only')
+      expect(contract.inputs).toEqual([
+        'deterministic_or_semantic', 'read_only_or_mutation',
+        'complexity_or_ambiguity', 'blast_radius', 'reviewer_independence',
+      ])
+      expect(contract.output_fields).toEqual([
+        'role', 'model_class', 'effort', 'rationale', 'escalation_trigger',
+      ])
+      expect(contract.forbidden_effects).toEqual([
+        'change_context_route', 'create_authority', 'reinterpret_stop_or_founder_gate',
+        'bypass_founder_approval', 'bypass_exact_head_ci', 'bypass_independent_review',
+        'bypass_required_handoff_or_readback', 'authorize_next_objective',
+        'start_dependent_or_future_work',
+      ])
+    })
+
+    it('covers exactly the five supported roles with sufficient versionless defaults', () => {
+      const contract = profile()
+      expect(contract.defaults.map((entry: Record<string, string>) => [entry.role, entry.model_class, entry.effort])).toEqual([
+        ['controller', 'Sol', 'Medium'],
+        ['read_only_characterization', 'Luna', 'Medium'],
+        ['implementation', 'Luna', 'High'],
+        ['deterministic_verification', 'Luna', 'Medium'],
+        ['independent_semantic_delta_review', 'Sol', 'Medium'],
+      ])
+      for (const recommendation of contract.defaults) {
+        expect(Object.keys(recommendation).sort()).toEqual([...contract.output_fields].sort())
+        expect(recommendation.rationale.trim().length).toBeGreaterThan(0)
+        expect(recommendation.escalation_trigger.trim().length).toBeGreaterThan(0)
+      }
+    })
+
+    it('restricts escalation and prevents controller or implementer reuse as independent reviewer', () => {
+      const contract = profile()
+      expect(contract.escalation).toEqual({
+        model_class: 'Sol', effort: 'High',
+        triggers: ['ambiguity', 'conflicting_evidence', 'policy_or_spec_boundary'],
+      })
+      expect(contract.independent_reviewer_excludes).toEqual(['controller', 'implementer'])
+    })
   })
 })
