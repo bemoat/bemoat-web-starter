@@ -12,20 +12,12 @@ function hasApplicableNoPrStop(evidence: NormalizedContextEvidence): boolean {
 
   return candidates.some((source) => {
     const payload = extractHandoffPayload(source.body)
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false
-    const identity = payload as Record<string, unknown>
-    if (identity.schema_version !== 3 || identity.route !== 'STOP' || identity.pr !== null ||
-        identity.repository !== evidence.repository.nameWithOwner || identity.issue_number !== evidence.issue.number ||
-        identity.branch !== evidence.localGit.branch || identity.exact_head !== head ||
-        !identity.protected_base || typeof identity.protected_base !== 'object' || Array.isArray(identity.protected_base)) {
-      return false
-    }
-    const protectedBase = identity.protected_base as Record<string, unknown>
-    if (protectedBase.branch !== evidence.protectedBase.branch) return false
-
     try {
-      const record = parseHandoffBody(JSON.stringify(identity))
+      const record = parseHandoffBody(JSON.stringify(payload))
       return record.schema_version === 3 && record.route === 'STOP' && record.pr === null &&
+        record.repository === evidence.repository.nameWithOwner && record.issue_number === evidence.issue.number &&
+        record.branch === evidence.localGit.branch && record.exact_head === head &&
+        record.protected_base.branch === evidence.protectedBase.branch &&
         record.local_durability.durable && renderHandoffComment(record) === source.body &&
         isExactIssueCommentUrl(source.url, source, evidence)
     } catch {
