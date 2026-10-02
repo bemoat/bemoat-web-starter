@@ -199,6 +199,36 @@ function stopHandoff(blockerIds: string[] = ['named-blocker']) {
   })
 }
 
+function noPrStopHandoff(overrides: Partial<HandoffRecord> = {}) {
+  return strictHandoff({
+    schema_version: 3,
+    objective_mode: 'read_only',
+    pr: null,
+    route: 'STOP',
+    verified_evidence: [{ kind: 'stop-blocker', value: 'bemoat-legacy-sync-help-mutated-local-checkout', url: null }],
+    next_action: { route: 'STOP', description: 'Resolve the named blocker.' },
+    ...overrides,
+  })
+}
+
+function routeWithNoPrStop(
+  handoff: ReturnType<typeof noPrStopHandoff>,
+  overrides: Partial<NormalizedContextEvidence> = {},
+) {
+  return routeContext(baseEvidence({
+    activePr: null,
+    currentHeadVerification: null,
+    durableContext: {
+      latestHandoff: handoff,
+      handoffs: [handoff],
+      historicalResults: [],
+      blockerResolutions: [],
+      invalidBlockerResolutions: [],
+    },
+    ...overrides,
+  }))
+}
+
 function blockerResolutionComment(
   stop: ReturnType<typeof strictHandoff>,
   blockerId = 'named-blocker',
@@ -443,6 +473,66 @@ describe('bemoat:context pure routing', () => {
     }))
 
     expect(decision.route).toBe('STOP')
+  })
+
+  it('keeps a current-head schema-v3 STOP with an explicit blocker ahead of the no-PR IMPLEMENT fallback', () => {
+    expect(routeWithNoPrStop(noPrStopHandoff()).route).toBe('STOP')
+  })
+
+  it('keeps an unresolved no-PR schema-v3 STOP when only the protected-base SHA advances', () => {
+    const decision = routeWithNoPrStop(noPrStopHandoff(), {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'c'.repeat(40) },
+    })
+    expect(decision.route).toBe('STOP')
+  })
+
+  it('stops applying a no-PR schema-v3 STOP after the local head advances', () => {
+    const handoff = noPrStopHandoff()
+    expect(routeWithNoPrStop(handoff, {
+      localGit: { ...baseEvidence().localGit, head: 'c'.repeat(40) },
+    }).route).toBe('IMPLEMENT')
+  })
+
+  it.each([
+    ['stale exact head', { exact_head: 'c'.repeat(40) }],
+    ['stale branch', { branch: 'fix/410-other-branch' }],
+    ['wrong protected-base branch', { protected_base: { branch: 'dev', sha } }],
+    ['wrong repository', { repository: 'other/repository' }],
+    ['wrong Issue', { issue_number: '999' }],
+  ] as const)('does not let a no-PR schema-v3 STOP with %s control routing', (_story, overrides) => {
+    expect(routeWithNoPrStop(noPrStopHandoff(overrides), {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'e'.repeat(40) },
+    }).route).toBe('IMPLEMENT')
+  })
+
+  it('does not let an incomplete no-PR schema-v3 STOP control routing', () => {
+    const malformed = mutateHandoffIdentity(noPrStopHandoff(), (payload) => {
+      payload.verified_evidence = []
+    })
+    expect(routeWithNoPrStop(malformed, {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'e'.repeat(40) },
+    }).route).toBe('IMPLEMENT')
+  })
+
+  it('does not let a no-PR schema-v3 STOP with a spoofed native comment URL control routing', () => {
+    const handoff = noPrStopHandoff()
+    expect(routeWithNoPrStop(handoff, {
+      protectedBase: { ...baseEvidence().protectedBase, sha: 'e'.repeat(40) },
+      durableContext: {
+        latestHandoff: { ...handoff, url: 'https://github.com/other/repository/issues/410#issuecomment-900' },
+        handoffs: [{ ...handoff, url: 'https://github.com/other/repository/issues/410#issuecomment-900' }],
+        historicalResults: [],
+        blockerResolutions: [],
+        invalidBlockerResolutions: [],
+      },
+    }).route).toBe('IMPLEMENT')
+  })
+
+  it('preserves the no-PR fallback behavior for schema-v2 STOP records', () => {
+    const legacy = mutateHandoffIdentity(strictHandoff({ route: 'STOP' }), (payload) => {
+      payload.pr = null
+    })
+    expect(routeWithNoPrStop(legacy).route).toBe('IMPLEMENT')
   })
 
   it('re-evaluates a current-head STOP after one exact Founder resolution record', () => {

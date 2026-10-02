@@ -105,7 +105,7 @@ export interface HandoffResolution {
   superseding: HandoffCandidate | null
 }
 export type HandoffCandidate = { evidence: RoleEvidence; record: HandoffRecord }
-function isExactIssueCommentUrl(
+export function isExactIssueCommentUrl(
   value: string,
   comment: RoleEvidence,
   evidence: NormalizedContextEvidence,
@@ -178,7 +178,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function extractHandoffPayload(body: string): unknown | null {
+export function extractHandoffPayload(body: string): unknown | null {
   const match = body.match(/```json\s*([\s\S]*?)```/i)
   if (!match) return null
   try {
