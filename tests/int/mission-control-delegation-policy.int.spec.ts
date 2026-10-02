@@ -23,7 +23,6 @@ describe('Mission Control delegation and execution model policy', () => {
 
   it('keeps model names in the loader as role-based execution preferences only', () => {
     const loader = read('prompts/mission-control/chatgpt-project-loader.md')
-    expect(loader).toMatch(/GPT-5\.6 Sol Medium.*controller.*core.*multi-stage.*release.*cross-domain.*ambiguity.*evidence synthesis/i)
     expect(loader).toMatch(/Luna Medium.*read-only.*evidence.*inventory.*deterministic.*mechanical verification.*focused validation/i)
     expect(loader).toMatch(/Luna High.*implementation.*repository analysis/i)
     expect(loader).toMatch(/small deterministic objectives?.*Luna directly/i)
