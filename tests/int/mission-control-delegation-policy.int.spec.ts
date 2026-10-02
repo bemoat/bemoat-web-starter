@@ -33,6 +33,12 @@ describe('Mission Control delegation and execution model policy', () => {
       expect(artifactSection('Verified live authority / route')).toMatch(/Global MC cannot execute repository-local CLI.*route remains unresolved until Execution\/IDE MC runs fresh Context/i)
       expect(artifactSection('Verified live authority / route')).toMatch(/this reason alone is not a `CONTRACT VIOLATION`.*required live .*evidence is verified/i)
       expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/Global MC delegates CLI Discovery to Execution\/IDE MC/i)
+      const loader = read('prompts/mission-control/chatgpt-project-loader.md').replace(/\s+/g, ' ')
+      expect(loader).toMatch(/Global MC verifies live GitHub.*merged loader.*merged policy/i)
+      expect(loader).toMatch(/Global MC does not run repository-local Bemoat CLI and does not guess Context routes/i)
+      expect(loader).toMatch(/Execution\/IDE MC performs registered CLI Discovery and runs fresh.*bemoat:context.*before mutation/i)
+      expect(loader).toMatch(/`COMMAND` means continue in the same Execution controller session.*`FOUNDER_GATE` means no mutation and return to Founder.*`STOP`, unsupported state, or evidence conflict means no mutation and stop fail-closed/i)
+      expect(loader).not.toMatch(/Run pnpm run bemoat:context <issue-number> --json when the current environment can execute repository-local CLI/i)
     })
 
     it('requires Execution/IDE MC to resolve fresh Context before any mutation and forbids guessing', () => {

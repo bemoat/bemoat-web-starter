@@ -22,13 +22,15 @@ bemoat:context → one bounded objective → bemoat:handoff → fresh reconstruc
 4. Discover each Bemoat command through its registered public contract and safe
    help invocation before use in the environment that can execute repository
    commands. Global MC delegates CLI Discovery to Execution/IDE MC.
-5. Run `pnpm run bemoat:context <issue-number> --json` when the current
-   environment can execute repository-local CLI. If Global MC cannot, it may
-   emit a preflight handoff only when verified live authority is complete and
-   the fresh Context route is the sole unresolved field; Execution/IDE MC must
-   perform registered CLI Discovery and fresh Context before any mutation.
-   Use the fresh route and evidence rather than chat, copied SHAs, or local
-   reports.
+5. Global MC verifies live GitHub repository/base/Issue/PR/head evidence and
+   the merged loader and policy. Global MC does not run repository-local
+   Bemoat CLI and does not guess Context routes. Execution/IDE MC performs
+   registered CLI Discovery and runs fresh `pnpm run bemoat:context
+   <issue-number> --json` before mutation. Use that fresh route and evidence
+   rather than chat, copied SHAs, or local reports: `COMMAND` means continue
+   in the same Execution controller session; `FOUNDER_GATE` means no mutation
+   and return to Founder; `STOP`, unsupported state, or evidence conflict
+   means no mutation and stop fail-closed.
 6. Execute exactly one authorized bounded objective. Follow the canonical
    guide's **Bounded objective execution** rule: one accountable controller
    owns the bounded objective and may delegate suitable bounded,
