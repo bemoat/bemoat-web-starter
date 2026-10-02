@@ -28,6 +28,52 @@ describe('Mission Control delegation and execution model policy', () => {
       .replace(/\s+/g, ' ')
   }
 
+  describe('Global MC to Execution/IDE preflight contract', () => {
+    it('permits a preflight handoff when Context is unavailable only because Global MC lacks local CLI', () => {
+      expect(artifactSection('Verified live authority / route')).toMatch(/Global MC cannot execute repository-local CLI.*route remains unresolved until Execution\/IDE MC runs fresh Context/i)
+      expect(artifactSection('Verified live authority / route')).toMatch(/this reason alone is not a `CONTRACT VIOLATION`.*required live .*evidence is verified/i)
+      expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/Global MC delegates CLI Discovery to Execution\/IDE MC/i)
+    })
+
+    it('requires Execution/IDE MC to resolve fresh Context before any mutation and forbids guessing', () => {
+      expect(artifactSection('Verified live authority / route')).toMatch(/Execution\/IDE MC must run fresh Context and inspect `next_action.type` before mutation/i)
+      expect(artifactSection('Startup / reconstruction instructions')).toMatch(/registered CLI Discovery.*fresh.*bemoat:context <issue-number> --json.*inspect.*route.*before mutation/i)
+      expect(artifactSection('Execution / delegation rules')).toMatch(/No controller or worker may.*before fresh Context.*COMMAND/i)
+      expect(artifactSection('Verified live authority / route')).toMatch(/do not guess.*route/i)
+    })
+
+    it('continues in the same session only when next_action.type is COMMAND', () => {
+      const continuation = artifactSection('Continuation rule')
+      expect(continuation).toMatch(/next_action\.type.*COMMAND.*continue automatically.*same controller session/i)
+      expect(continuation).toMatch(/do not return to Global MC.*solely.*Context.*COMMAND/i)
+      expect(continuation).toMatch(/next separately bounded objective/i)
+      expect(continuation).toMatch(/do not pre-authorize future objectives/i)
+    })
+
+    it('returns FOUNDER_GATE without mutation and identifies the required decision', () => {
+      expect(artifactSection('Continuation rule')).toMatch(/FOUNDER_GATE.*do not mutate.*return to Founder.*required decision/i)
+      expect(artifactSection('Founder decision status')).toMatch(/FOUNDER_GATE.*human decision from the Founder.*no worker/i)
+      expect(artifactSection('Stop conditions')).toMatch(/FOUNDER_GATE.*no mutation/i)
+    })
+
+    it('stops fail-closed without mutation for STOP and unsupported evidence', () => {
+      expect(artifactSection('Continuation rule')).toMatch(/STOP.*unsupported state.*evidence conflict.*do not mutate.*stop fail.closed/i)
+      expect(artifactSection('Stop conditions')).toMatch(/STOP.*FOUNDER_GATE.*no mutation/i)
+    })
+
+    it('treats missing authority, guessed routes, omitted pre-mutation Context, and early mutation as violations', () => {
+      const authority = artifactSection('Verified live authority / route')
+      expect(authority).toMatch(/lacks required live authority.*CONTRACT VIOLATION/i)
+      expect(authority).toMatch(/guesses or omits this pre-mutation Context step.*CONTRACT VIOLATION/i)
+      expect(authority).toMatch(/permits mutation before Context returns `COMMAND`.*CONTRACT VIOLATION/i)
+    })
+
+    it('reconstructs fresh evidence when it changes before mutation', () => {
+      expect(artifactSection('Startup / reconstruction instructions')).toMatch(/evidence changes.*reconstruct again/i)
+      expect(artifactSection('Execution / delegation rules')).toMatch(/No controller or worker may.*before fresh Context.*COMMAND/i)
+    })
+  })
+
   it('requires the canonical 15 ordered sections inside the Ready-to-paste artifact', () => {
     const artifact = readyToPasteArtifactContract()
     const headings = [...artifact.matchAll(/^## \d+\. (.+)$/gm)].map((match) => match[1])
@@ -49,7 +95,8 @@ describe('Mission Control delegation and execution model policy', () => {
       'Required return contract',
     ])
     expect(artifact).toMatch(/inside this Ready-to-paste artifact/i)
-    expect(artifact).toMatch(/withhold.*missing.*unresolved.*contradictory/i)
+    expect(artifact.replace(/\s+/g, ' ')).toMatch(/withhold.*missing or contradictory.*unresolved except for the fresh Context route/i)
+    expect(artifact.replace(/\s+/g, ' ')).toMatch(/unresolved except for the fresh Context route when it is unavailable solely because Global MC cannot run repository-local CLI and required live authority is verified/i)
     expect(artifact).toMatch(/do not return to Founder for this deterministic correction/i)
   })
 
@@ -110,7 +157,7 @@ describe('Mission Control delegation and execution model policy', () => {
 
   it('requires reconstruction, scope, validation, and report details beyond section headings', () => {
     expect(artifactSection('Repository / Issue / PR identity')).toMatch(/exact head.*protected base.*policy identity/i)
-    expect(artifactSection('Startup / reconstruction instructions')).toMatch(/merged policy.*registered contract and safe help.*fresh public Context/i)
+    expect(artifactSection('Startup / reconstruction instructions')).toMatch(/load the merged policy.*registered CLI Discovery with its declared safe help.*fresh.*bemoat:context/i)
     expect(artifactSection('Permitted scope')).toMatch(/current objective.*does not authorize.*future Issue/i)
     expect(artifactSection('Prohibited scope')).toMatch(/production.*migration.*secret.*deploy.*merge.*unrelated/i)
     expect(artifactSection('Validation requirements')).toMatch(/focused regressions.*repository-required validation tier.*exact commands and results.*exact-head CI and independent review.*policy requires/i)
