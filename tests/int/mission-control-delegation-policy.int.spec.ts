@@ -7,6 +7,122 @@ const root = process.cwd()
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8').replace(/\s+/g, ' ')
 
 describe('Mission Control delegation and execution model policy', () => {
+  function readyToPasteArtifactContract() {
+    const loader = readFileSync(resolve(root, 'prompts/mission-control/chatgpt-project-loader.md'), 'utf8')
+    const heading = loader.indexOf('## Ready-to-paste execution artifact contract')
+    if (heading < 0) return ''
+    const fence = loader.indexOf('```ready-to-paste\n', heading)
+    if (fence < 0) return ''
+    const contentStart = fence + '```ready-to-paste\n'.length
+    const contentEnd = loader.indexOf('```', contentStart)
+    return contentEnd < 0 ? '' : loader.slice(contentStart, contentEnd)
+  }
+
+  function artifactSection(title: string) {
+    const headings = [...readyToPasteArtifactContract().matchAll(/^## \d+\. (.+)$/gm)]
+    const found = headings.find((heading) => heading[1] === title)
+    if (!found || found.index === undefined) return ''
+    const nextHeading = headings.find((heading) => (heading.index ?? -1) > found.index!)
+    return readyToPasteArtifactContract()
+      .slice(found.index + found[0].length, nextHeading?.index)
+      .replace(/\s+/g, ' ')
+  }
+
+  it('requires the canonical 15 ordered sections inside the Ready-to-paste artifact', () => {
+    const artifact = readyToPasteArtifactContract()
+    const headings = [...artifact.matchAll(/^## \d+\. (.+)$/gm)].map((match) => match[1])
+    expect(headings).toEqual([
+      'Repository / Issue / PR identity',
+      'Current bounded objective',
+      'Verified live authority / route',
+      'Startup / reconstruction instructions',
+      'Permitted scope',
+      'Prohibited scope',
+      'Model routing',
+      'Execution / delegation rules',
+      'Validation requirements',
+      'Durable result / HANDOFF / readback',
+      'Fresh Context requirement',
+      'Continuation rule',
+      'Stop conditions',
+      'Founder decision status',
+      'Required return contract',
+    ])
+    expect(artifact).toMatch(/inside this Ready-to-paste artifact/i)
+    expect(artifact).toMatch(/withhold.*missing.*unresolved.*contradictory/i)
+    expect(artifact).toMatch(/do not return to Founder for this deterministic correction/i)
+  })
+
+  it('keeps all applicable model roles and escalation inside the artifact', () => {
+    const artifact = artifactSection('Model routing')
+    for (const role of [
+      'controller', 'read_only_characterization', 'implementation',
+      'deterministic_verification', 'independent_semantic_delta_review', 'escalation',
+    ]) expect(artifact).toContain(role)
+    expect(artifact).toMatch(/NOT_APPLICABLE.*reason/i)
+    expect(artifact).toMatch(/Model Routing Profile v1/i)
+    expect(artifact).toMatch(/resolved values for all five fields/i)
+    expect(artifact).toMatch(/independent reviewer.*differ.*controller.*implementer/i)
+    expect(artifact).toMatch(/advisory only/i)
+    expect(artifact).toMatch(/model identity.*authority/i)
+    expect(artifact).toMatch(/for every applicable role.*resolved values.*model_class.*effort.*rationale.*escalation_trigger/i)
+    expect(artifact).toMatch(/mark an unused role.*NOT_APPLICABLE.*specific reason/i)
+    expect(artifact).toMatch(/escalation guidance with.*model_class.*effort.*triggers?.*or mark escalation.*NOT_APPLICABLE.*specific reason/i)
+    expect(artifact).toMatch(/self-check.*each role and escalation has resolved values/i)
+  })
+
+  it('carries deterministic COMMAND continuation without internal-substep ping-pong', () => {
+    const artifact = artifactSection('Continuation rule')
+    expect(artifact).toMatch(/fresh GitHub.*merged policy.*applicable CLI Discovery.*fresh Context.*recompute route/i)
+    expect(artifact).toMatch(/COMMAND.*continue automatically.*same controller session/i)
+    expect(artifact).toMatch(/FOUNDER_GATE.*return to Founder/i)
+    expect(artifact).toMatch(/STOP.*unsupported.*evidence conflict.*stop/i)
+    expect(artifact).toMatch(/none of these internal steps alone requires a Founder return/i)
+    for (const step of [
+      'CLI Discovery', 'zero-delta branch bootstrap', 'Context rerun',
+      'HANDOFF readback', 'deterministic inventory',
+    ]) expect(artifact).toContain(step)
+  })
+
+  it('forbids mutation-capable instructions at STOP and FOUNDER_GATE', () => {
+    const stop = artifactSection('Stop conditions')
+    const founder = artifactSection('Founder decision status')
+    expect(stop).toMatch(/STOP.*FOUNDER_GATE.*no mutation/i)
+    expect(stop).toMatch(/implementation.*NOT_APPLICABLE/i)
+    expect(founder).toMatch(/human decision.*no worker.*cross/i)
+  })
+
+  it('requires fresh Context before each next objective and keeps real gates as Founder returns', () => {
+    const continuation = artifactSection('Continuation rule')
+    const freshContext = artifactSection('Fresh Context requirement')
+    const durableHandoff = artifactSection('Durable result / HANDOFF / readback')
+    expect(continuation).toMatch(/do not pre-authorize future objectives/i)
+    expect(continuation).toMatch(/separately bounded objective(?:s)?/i)
+    expect(continuation).toMatch(/after each durable objective and applicable HANDOFF\/readback.*fresh GitHub.*merged policy.*applicable CLI Discovery.*fresh Context.*recompute route/i)
+    expect(continuation).toMatch(/FOUNDER_GATE.*return to Founder.*STOP.*terminal/i)
+    expect(freshContext).toMatch(/before selecting the next objective/i)
+    expect(durableHandoff).toMatch(/Handoff.*readback/i)
+    expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/static repository tests.*do not.*live ChatGPT response.*post-merge #532 dogfood/i)
+    const template = readyToPasteArtifactContract()
+    expect(template).not.toMatch(/whether callable runtime integration was proven/i)
+    expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/conditional.*starter.*#512/i)
+  })
+
+  it('requires reconstruction, scope, validation, and report details beyond section headings', () => {
+    expect(artifactSection('Repository / Issue / PR identity')).toMatch(/exact head.*protected base.*policy identity/i)
+    expect(artifactSection('Startup / reconstruction instructions')).toMatch(/merged policy.*registered contract and safe help.*fresh public Context/i)
+    expect(artifactSection('Permitted scope')).toMatch(/current objective.*does not authorize.*future Issue/i)
+    expect(artifactSection('Prohibited scope')).toMatch(/production.*migration.*secret.*deploy.*merge.*unrelated/i)
+    expect(artifactSection('Validation requirements')).toMatch(/focused regressions.*repository-required validation tier.*exact commands and results.*exact-head CI and independent review.*policy requires/i)
+    const report = artifactSection('Required return contract')
+    for (const field of [
+      'repository/protected-base/policy identity', 'fresh Context route', 'acceptance audit',
+      'branch/exact head', 'changed files and diff size', 'focused regressions',
+      'full required validation', 'PR and exact-head CI', 'independent review',
+      'HANDOFF/readback', 'fresh Context after the result', 'risks', 'Founder decision',
+    ]) expect(report).toContain(field)
+  })
+
   it('keeps delegated work within one accountable objective and preserves independent gates', () => {
     const guide = read('docs/mission-control/mission-control-guide.md')
     expect(guide).toMatch(/one accountable controller per bounded objective/i)
