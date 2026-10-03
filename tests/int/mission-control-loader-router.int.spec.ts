@@ -28,14 +28,23 @@ describe('Global Mission Control progressive-disclosure router', () => {
     ]) expect(normalizedLoader).toMatch(invariant)
   })
 
-  it('keeps a concise operator summary in the always-loaded response contract', () => {
-    expect(normalizedLoader).toMatch(/ordinary Global MC responses.*concise operator-facing summary.*before.*long artifact/i)
-    expect(normalizedLoader).toMatch(/current objective/i)
-    expect(normalizedLoader).toMatch(/current route\/status/i)
-    expect(normalizedLoader).toMatch(/suggested model.*execution routing/i)
-    expect(normalizedLoader).toMatch(/next permitted action.*why/i)
-    expect(normalizedLoader).toMatch(/Founder decision status/i)
-    expect(normalizedLoader).toMatch(/branch.*PR.*head/i)
+  it('requires the fixed operator block before long artifacts', () => {
+    const labels = [
+      'Current objective',
+      'Current route/status',
+      'Suggested model',
+      'Next action',
+      'Founder decision',
+      'Live identity',
+    ]
+    const positions = labels.map((label) => loader.indexOf(`**${label}:**`))
+
+    expect(positions.every((position) => position >= 0)).toBe(true)
+    expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    expect(normalizedLoader).toMatch(/exact concise operator block before any long artifact/i)
+    expect(normalizedLoader).toMatch(/do not substitute a generic live-state bullet list/i)
+    expect(normalizedLoader).toMatch(/Resolve Suggested model whenever model recommendations or an Execution handoff are triggered/i)
+    expect(normalizedLoader).toMatch(/Require Next action in this pre-artifact block/i)
   })
 
   it('routes each phase trigger to a real canonical contract and loads it only when triggered', () => {

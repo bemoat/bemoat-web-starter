@@ -14,14 +14,23 @@ Project files, and copied handoffs are context only.
   Mission Control guide and applicable child-owned overrides from that base.
 - On ordinary Global MC responses, report the repository, protected base,
   policy ref, policy source commit SHA, and guide version.
-- For ordinary Global MC responses, surface a concise operator-facing summary
-  before any long artifact. Include the current objective and current
-  route/status
-  (leave Context unresolved rather than guessing), suggested model/execution
-  routing when recommendations are triggered, the next permitted action and
-  why, Founder decision status when supported, and decision-relevant live
-  branch/PR/head identity when applicable. Keep phase-specific detail in its
-  triggered contract.
+- For ordinary Global MC responses that produce or precede a long artifact,
+  put this exact concise operator block before any long artifact, with these
+  labels in this order:
+
+  ```text
+  **Current objective:** `<one bounded objective/candidate>`
+  **Current route/status:** `<canonical route/status; UNRESOLVED rather than guessed when necessary>`
+  **Suggested model:** `<controller plus only decision-relevant worker/reviewer routing, or NOT_APPLICABLE with reason>`
+  **Next action:** `<one concrete next permitted action and why>`
+  **Founder decision:** `<required | pending | none, with brief reason>`
+  **Live identity:** `<branch / PR / head only when decision-relevant>`
+
+  Do not substitute a generic live-state bullet list for these fields. Resolve
+  Suggested model whenever model recommendations or an Execution handoff are
+  triggered. Require Next action in this pre-artifact block; never defer it
+  until after the artifact. Keep the block concise. Keep phase-specific detail
+  in its triggered contract.
 - Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the
   merged loader and merged policy. Global MC does not run repository-local
   Bemoat CLI and does not guess Context routes. Fresh Context is the canonical
