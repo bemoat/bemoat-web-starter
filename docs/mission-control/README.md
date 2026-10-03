@@ -21,6 +21,8 @@ Canonical files:
 | mission-control-guide.md | Current policy, review boundaries, fail-closed safety, and sync rules |
 | command-reference.md | Public command and CLI Discovery contract |
 | handoff-template.md | Strict HANDOFF fields and publication example |
+| review-verdict-template.md | Parser-compatible native semantic review publication |
+| blocker-resolution-template.md | Strict Founder blocker-resolution publication |
 | ../../prompts/mission-control/chatgpt-project-loader.md | Copyable current Project loader |
 | ../agent-loop/role-handoff-contract.md | Compact GitHub transport details |
 

@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template for work delegated to coding agents. Keep scope explicit so agents do not edit the wrong repo or forbidden paths.
+        Use this template for work delegated to coding agents. Keep scope explicit so agents do not edit the wrong repo or forbidden paths. Mission Control workflow metadata below is required. API/connector-created Issues must include the same declarations as plain text in the Issue body; follow docs/agent-loop/issue-intake-contract.md.
 
   - type: textarea
     id: context
@@ -71,14 +71,26 @@ body:
     id: task_size
     attributes:
       label: Task size
-      description: Guides how much brief and checklist agents need. See docs/agent-loop/checklist.md#task-size-tiers.
+      description: Required for Context workflow derivation. If uncertain, classify conservatively before creating the Issue. See docs/agent-loop/checklist.md#task-size-tiers.
       options:
-        - small — typo, copy, one-file low-risk change
-        - medium — new component, block, layout, or design-reference conversion
-        - core — schema, sync, CI, guards, agent rules, or cross-project reuse
-        - unsure — agent classifies before editing
+        - small
+        - medium
+        - core
     validations:
-      required: false
+      required: true
+
+  - type: dropdown
+    id: mission_control_mode
+    attributes:
+      label: Mission Control mode
+      description: Required for Context workflow derivation. “Not required” follows existing optional-mode behavior; “unsure” keeps STANDARD safeguards.
+      options:
+        - required
+        - optional
+        - not required
+        - unsure
+    validations:
+      required: true
 
   - type: markdown
     attributes:
