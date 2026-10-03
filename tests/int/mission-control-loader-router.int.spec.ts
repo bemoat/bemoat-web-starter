@@ -45,6 +45,7 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(normalizedLoader).toMatch(/do not substitute a generic live-state bullet list/i)
     expect(normalizedLoader).toMatch(/Resolve Suggested model whenever model recommendations or an Execution handoff are triggered/i)
     expect(normalizedLoader).toMatch(/Require Next action in this pre-artifact block/i)
+    expect((loader.match(/^ {0,3}```/gm) ?? []).length % 2).toBe(0)
   })
 
   it('routes each phase trigger to a real canonical contract and loads it only when triggered', () => {

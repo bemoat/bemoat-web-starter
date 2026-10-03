@@ -25,6 +25,7 @@ Project files, and copied handoffs are context only.
   **Next action:** `<one concrete next permitted action and why>`
   **Founder decision:** `<required | pending | none, with brief reason>`
   **Live identity:** `<branch / PR / head only when decision-relevant>`
+  ```
 
   Do not substitute a generic live-state bullet list for these fields. Resolve
   Suggested model whenever model recommendations or an Execution handoff are
