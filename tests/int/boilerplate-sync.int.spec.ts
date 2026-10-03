@@ -161,6 +161,38 @@ describe('synced harness CI and hooks', () => {
 })
 
 describe('boilerplate sync managed paths', () => {
+  it.each([
+    'AGENTS.md',
+    'docs/agent-loop/context-story-matrix.md',
+    '.agents/skills/regression.md',
+  ])('delivers authority-bound semantic test oracles to children through %s', async (path) => {
+    // Issue #545 defines these guidance obligations; this protects their delivery,
+    // not the semantic correctness of arbitrary test assertions.
+    const mod = await import('../../scripts/sync-boilerplate.ts')
+    const sourceRoot = process.cwd()
+    const config = mod.getSourceSyncConfig(sourceRoot)
+    const childRoot = mkdtempSync(join(tmpdir(), 'bemoat-545-oracle-guidance-'))
+
+    try {
+      for (const requiredPath of [path, 'tests/int/boilerplate-sync.int.spec.ts']) {
+        expect(isManagedFilePath(requiredPath, mod.managedPaths)).toBe(true)
+        expect(isManagedFilePath(requiredPath, config.managedPaths)).toBe(true)
+      }
+      mod.copyManagedPath(sourceRoot, childRoot, path)
+      const guidance = readFileSync(join(childRoot, path), 'utf8').replace(/\s+/g, ' ')
+      for (const obligation of [
+        'Derive each semantic test oracle from canonical authority, never from the candidate implementation.',
+        'Assert a specific expected route/state/outcome only when canonical authority uniquely determines it.',
+        'If authority only forbids an outcome, assert that exclusion; do not invent a fallback outcome.',
+        'If multiple outcomes remain plausible from canonical authority, classify the case as a protocol/spec gap and stop before encoding one as expected behavior.',
+      ]) {
+        expect(guidance, `${path} must retain the Issue #545 oracle obligation`).toContain(obligation)
+      }
+    } finally {
+      rmSync(childRoot, { recursive: true, force: true })
+    }
+  })
+
   it('includes repository agent instructions and editor agent rules', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/boilerplate/inventory.ts'), 'utf8')
 

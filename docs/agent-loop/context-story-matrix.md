@@ -7,6 +7,25 @@ map, not a new state machine, routing configuration, or test DSL.
 
 ## Canonical invariants
 
+Derive each semantic test oracle from canonical authority, never from the
+candidate implementation. Record the authority and the behavior it establishes
+before writing the assertion.
+
+- Assert a specific expected route/state/outcome only when canonical authority
+  uniquely determines it.
+- If authority only forbids an outcome, assert that exclusion; do not invent a
+  fallback outcome.
+- If multiple outcomes remain plausible from canonical authority, classify the
+  case as a protocol/spec gap and stop before encoding one as expected behavior.
+  An authority-backed exclusion remains valid; it does not resolve the gap or
+  authorize choosing a fallback.
+
+For example, authority that malformed COMPLETE evidence must not terminalize
+as `COMPLETE` supports an exclusion assertion. It does not establish
+`IMPLEMENT` as the expected route without separate, uniquely determining
+authority. Existing exact-route stories still apply when their cited authority
+uniquely establishes the outcome. Keep the A/B/C classification below intact.
+
 | Invariant | Authority | Protected behavior |
 | --- | --- | --- |
 | Routing is a pure function of current native GitHub/Git evidence. | Issue #410 deterministic route contract | No prior legacy workflow state, receipt, counter, or session memory selects a route. |
