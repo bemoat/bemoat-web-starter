@@ -14,6 +14,14 @@ Project files, and copied handoffs are context only.
   Mission Control guide and applicable child-owned overrides from that base.
 - On ordinary Global MC responses, report the repository, protected base,
   policy ref, policy source commit SHA, and guide version.
+- For ordinary Global MC responses, surface a concise operator-facing summary
+  before any long artifact. Include the current objective and current
+  route/status
+  (leave Context unresolved rather than guessing), suggested model/execution
+  routing when recommendations are triggered, the next permitted action and
+  why, Founder decision status when supported, and decision-relevant live
+  branch/PR/head identity when applicable. Keep phase-specific detail in its
+  triggered contract.
 - Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the
   merged loader and merged policy. Global MC does not run repository-local
   Bemoat CLI and does not guess Context routes. Fresh Context is the canonical
