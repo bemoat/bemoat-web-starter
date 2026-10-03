@@ -69,25 +69,31 @@ State the required durable result. Publish one strict HANDOFF and verify its exa
 After the durable objective result and applicable HANDOFF/readback, resolve fresh GitHub evidence, read the merged policy, perform applicable CLI Discovery, and run fresh Context before selecting the next objective.
 
 ## 12. Continuation rule
-After Execution/IDE MC runs fresh Context: if `next_action.type` is `COMMAND`,
+The one-time post-preflight implementation trigger remains required before the
+first source-file edit after issue preflight, as described in `AGENTS.md` and
+`docs/agent-loop/issue-driven-branch-workflow.md`. A fresh `COMMAND` does not
+satisfy or waive that trigger; if it has not yet been given, return the bounded
+intent summary and wait for that trigger before editing. After that trigger has
+been satisfied, when fresh Context returns `next_action.type` as `COMMAND`,
 continue automatically with the authorized next separately bounded objective
-in the same controller session; do not return to Global MC
-solely to relay this result. Do not end the active controller turn with a
-status-only response, return to Founder to relay the route, or ask for
-confirmation after `COMMAND`. Start the next separately bounded objective
-immediately, only after it is authorized by that fresh Context result. Apply
-this rule again after every durable objective. After each durable objective
-and applicable HANDOFF/readback: fresh GitHub → merged policy → applicable CLI
-Discovery → fresh Context → recompute route. Under `COMMAND`, continue
-automatically with the next separately bounded objective in the same controller
-session. If two successive fresh Context results are `COMMAND`, start each
-newly authorized objective in the same session after its own result. Objective
-completion alone is not a Founder gate. For `FOUNDER_GATE`, do not mutate and
-return to Founder once for the required decision, then stop at the gate. For
-`STOP`, unsupported state, or evidence conflict, do not mutate; stop fail-closed
-and report the exact blocker. If evidence changes before execution, reconstruct
-again. Do not pre-authorize future objectives; a separate real gate still
-controls when required. On terminal completion, return.
+in the same controller session; do not return to Global MC solely to relay this
+result. Do not end the active controller turn with a status-only response,
+return to Founder to relay the route, or ask for confirmation again after
+`COMMAND`. Start the next separately bounded objective immediately, only after
+it is authorized by that fresh Context result. Apply this rule again after
+every durable objective.
+After each durable objective and applicable HANDOFF/readback: fresh GitHub →
+merged policy → applicable CLI Discovery → fresh Context → recompute route.
+Under `COMMAND`, continue automatically with the next separately bounded
+objective in the same controller session. If two successive fresh Context
+results are `COMMAND`, start each newly authorized objective in the same
+session after its own result. Objective completion alone is not a Founder gate.
+For `FOUNDER_GATE`, do not mutate and return to Founder once for the required
+decision, then stop at the gate. For `STOP`, unsupported state, or evidence
+conflict, do not mutate; stop fail-closed and report the exact blocker. If
+evidence changes before execution, reconstruct again. Do not pre-authorize
+future objectives; a separate real gate still controls when required. On
+terminal completion, return.
 CLI Discovery, zero-delta branch bootstrap, Context rerun, HANDOFF readback, and deterministic inventory are internal substeps when applicable, not a mandatory extra sequence. None of these internal steps alone requires a Founder return.
 
 ## 13. Stop conditions

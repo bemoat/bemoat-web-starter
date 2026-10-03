@@ -37,7 +37,8 @@ describe('Mission Control delegation and execution model policy', () => {
       expect(loader).toMatch(/Global MC verifies live GitHub.*merged loader.*merged policy/i)
       expect(loader).toMatch(/Global MC does not run repository-local Bemoat CLI and does not guess Context routes/i)
       expect(loader).toMatch(/Execution\/IDE MC performs registered CLI Discovery and runs fresh.*bemoat:context.*before mutation/i)
-      expect(loader).toMatch(/`COMMAND` means continue in the same Execution controller session.*`FOUNDER_GATE` means no mutation and return to Founder.*`STOP`, unsupported state, or evidence conflict means no mutation and stop fail-closed/i)
+      expect(loader).toMatch(/one-time post-preflight implementation trigger.*before the first source-file edit.*fresh `COMMAND` does not satisfy or waive that trigger/i)
+      expect(loader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue automatically in the same Execution controller session.*`FOUNDER_GATE` means no mutation and return to Founder.*`STOP`, unsupported state, or evidence conflict means no mutation and stop fail-closed/i)
       expect(loader).not.toMatch(/Run pnpm run bemoat:context <issue-number> --json when the current environment can execute repository-local CLI/i)
     })
 
@@ -50,7 +51,7 @@ describe('Mission Control delegation and execution model policy', () => {
 
     it('continues in the same session only when next_action.type is COMMAND', () => {
       const continuation = artifactSection('Continuation rule')
-      expect(continuation).toMatch(/next_action\.type.*COMMAND.*continue automatically.*same controller session/i)
+      expect(continuation).toMatch(/after that trigger has been satisfied.*fresh Context returns `next_action.type` as `COMMAND`.*continue automatically.*same controller session/i)
       expect(continuation).toMatch(/do not return to Global MC.*solely.*Context.*COMMAND/i)
       expect(continuation).toMatch(/next separately bounded objective/i)
       expect(continuation).toMatch(/do not pre-authorize future objectives/i)
@@ -63,6 +64,16 @@ describe('Mission Control delegation and execution model policy', () => {
       expect(continuation).toMatch(/start.*next separately bounded objective.*immediately/i)
       expect(continuation).toMatch(/two successive fresh Context results.*COMMAND.*start each newly authorized objective.*same session/i)
       expect(continuation).toMatch(/objective completion.*alone.*not.*Founder gate/i)
+    })
+
+    it('keeps the first-edit trigger while continuing later COMMAND results automatically', () => {
+      const continuation = artifactSection('Continuation rule')
+      expect(continuation).toMatch(/one-time post-preflight implementation trigger.*before the first source-file edit/i)
+      expect(continuation).toMatch(/fresh `COMMAND` does not satisfy or waive that trigger/i)
+      expect(continuation).toMatch(/after that trigger has been satisfied.*fresh Context.*`COMMAND`.*continue automatically/i)
+      expect(continuation).toMatch(/do not.*ask for confirmation again/i)
+      expect(continuation).toMatch(/FOUNDER_GATE.*required decision/i)
+      expect(continuation).toMatch(/STOP.*unsupported state.*evidence conflict.*stop fail-closed/i)
     })
 
     it('returns FOUNDER_GATE without mutation and identifies the required decision', () => {
