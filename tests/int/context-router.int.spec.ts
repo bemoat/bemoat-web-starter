@@ -229,6 +229,97 @@ function routeWithNoPrStop(
   }))
 }
 
+const noPrCompleteStory = {
+  repository: 'boat1994/bemoat-web-starter',
+  issueNumber: '517',
+  branch: 'chore/517-post-merge-reconstruction',
+  head: '3245b67f9522cdb8a8f62515a3b44f23aef88fd9',
+  base: 'main',
+  commentId: 5969554301,
+}
+
+function noPrCompleteHandoff(overrides: Partial<HandoffRecord> = {}) {
+  const record: HandoffRecord = {
+    schema_version: 2,
+    record_type: 'HANDOFF',
+    objective_mode: 'read_only',
+    repository: noPrCompleteStory.repository,
+    issue_number: noPrCompleteStory.issueNumber,
+    objective: 'Complete the bounded read-only current-main characterization with durable NONE.',
+    permitted_scope: ['Inspect current-main routing and directly owned regression coverage.'],
+    prohibited_scope: ['Do not edit source, tests, or documentation under this objective.'],
+    executing_agent: 'OpenAI Codex accountable Execution/IDE controller',
+    provider: 'OpenAI Codex',
+    branch: noPrCompleteStory.branch,
+    exact_head: noPrCompleteStory.head,
+    protected_base: { branch: noPrCompleteStory.base, sha: noPrCompleteStory.head },
+    pr: null,
+    verified_evidence: [{
+      kind: 'selected-candidate',
+      value: 'NONE. No deletion is justified by the bounded characterization.',
+      url: `https://github.com/${noPrCompleteStory.repository}/blob/${noPrCompleteStory.head}/scripts/context/no-pr-routing.ts`,
+    }],
+    route: 'COMPLETE',
+    next_action: { route: 'COMPLETE', description: 'The bounded read-only characterization is complete with durable NONE.' },
+    stop_conditions: ['Do not edit files or select a future objective without fresh Context.'],
+    local_durability: { required: true, durable: true, reason: null },
+    ...overrides,
+  }
+  return {
+    id: noPrCompleteStory.commentId,
+    body: renderHandoffComment(record),
+    createdAt: '2026-10-03T13:19:41Z',
+    url: `https://github.com/${noPrCompleteStory.repository}/issues/${noPrCompleteStory.issueNumber}#issuecomment-${noPrCompleteStory.commentId}`,
+  }
+}
+
+function routeWithNoPrComplete(
+  handoff: ReturnType<typeof noPrCompleteHandoff>,
+  overrides: Partial<NormalizedContextEvidence> = {},
+) {
+  const current = baseEvidence()
+  return routeContext(baseEvidence({
+    protectedBase: {
+      branch: noPrCompleteStory.base,
+      sha: noPrCompleteStory.head,
+      source: 'live GitHub ref',
+      url: `https://github.com/${noPrCompleteStory.repository}/tree/${noPrCompleteStory.base}`,
+    },
+    issue: {
+      ...current.issue,
+      number: noPrCompleteStory.issueNumber,
+      title: 'post-merge read-only characterization',
+      state: 'OPEN',
+      url: `https://github.com/${noPrCompleteStory.repository}/issues/${noPrCompleteStory.issueNumber}`,
+    },
+    localGit: {
+      ...current.localGit,
+      branch: noPrCompleteStory.branch,
+      head: noPrCompleteStory.head,
+      upstream: `origin/${noPrCompleteStory.branch}`,
+      clean: true,
+      detached: false,
+      pushed: true,
+      durable: true,
+    },
+    activePr: null,
+    currentHeadVerification: null,
+    durableContext: {
+      latestHandoff: handoff,
+      handoffs: [handoff],
+      historicalResults: [],
+      blockerResolutions: [],
+      invalidBlockerResolutions: [],
+    },
+    ...overrides,
+  }))
+}
+
+function expectNoCompleteTerminalization(decision: ReturnType<typeof routeContext>) {
+  expect(decision.route).not.toBe('COMPLETE')
+  expect(decision.nextAction.type).not.toBe('COMPLETE')
+}
+
 function blockerResolutionComment(
   stop: ReturnType<typeof strictHandoff>,
   blockerId = 'named-blocker',
@@ -473,6 +564,103 @@ describe('bemoat:context pure routing', () => {
     }))
 
     expect(decision.route).toBe('STOP')
+  })
+
+  it('routes the production-shaped #517 exact-head no-PR COMPLETE HANDOFF to a terminal COMPLETE action', () => {
+    const decision = routeWithNoPrComplete(noPrCompleteHandoff())
+
+    expect(decision).toMatchObject({
+      route: 'COMPLETE',
+      nextAction: { type: 'COMPLETE', command: null },
+    })
+  })
+
+  it('fails closed when a no-PR COMPLETE competes with another current-head HANDOFF', () => {
+    const complete = noPrCompleteHandoff()
+    const implementRecord = noPrCompleteHandoff({
+      objective: 'Continue implementation on the same current head.',
+      route: 'IMPLEMENT',
+      next_action: { route: 'IMPLEMENT', description: 'Continue the bounded implementation.' },
+    })
+    const implement = {
+      ...implementRecord,
+      id: noPrCompleteStory.commentId + 1,
+      url: `https://github.com/${noPrCompleteStory.repository}/issues/${noPrCompleteStory.issueNumber}#issuecomment-${noPrCompleteStory.commentId + 1}`,
+    }
+
+    const decision = routeWithNoPrComplete(complete, {
+      durableContext: {
+        latestHandoff: complete,
+        handoffs: [complete, implement],
+        historicalResults: [],
+        blockerResolutions: [],
+        invalidBlockerResolutions: [],
+      },
+    })
+
+    expect(decision.route).toBe('STOP')
+    expect(decision.nextAction.type).toBe('STOP')
+    expect(decision.reasons.join(' ')).toContain('EVIDENCE_CONFLICT')
+  })
+
+  it.each([
+    ['wrong repository', { repository: 'other/repository' }],
+    ['wrong Issue', { issue_number: '518' }],
+    ['wrong branch', { branch: 'chore/517-other-branch' }],
+    ['stale exact head', { exact_head: 'c'.repeat(40) }],
+    ['wrong protected-base branch', { protected_base: { branch: 'dev', sha: noPrCompleteStory.head } }],
+    ['non-durable HANDOFF', { local_durability: { required: true, durable: false, reason: 'The result was not pushed.' } }],
+  ] as const)('does not let a no-PR COMPLETE HANDOFF with %s terminalize routing', (_story, overrides) => {
+    expectNoCompleteTerminalization(routeWithNoPrComplete(noPrCompleteHandoff(overrides)))
+  })
+
+  it('does not let a HANDOFF that claims a PR terminalize the no-PR route', () => {
+    const handoff = noPrCompleteHandoff({
+      objective_mode: 'implementation',
+      pr: {
+        number: '544',
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/544',
+        base: 'main',
+        head: noPrCompleteStory.branch,
+        head_sha: noPrCompleteStory.head,
+      },
+    })
+
+    expectNoCompleteTerminalization(routeWithNoPrComplete(handoff))
+  })
+
+  it('does not let a malformed no-PR COMPLETE HANDOFF terminalize routing', () => {
+    const malformed = mutateHandoffIdentity(noPrCompleteHandoff(), (payload) => {
+      payload.verified_evidence = []
+    })
+
+    expectNoCompleteTerminalization(routeWithNoPrComplete(malformed))
+  })
+
+  it('does not let a noncanonical no-PR COMPLETE body terminalize routing', () => {
+    const handoff = noPrCompleteHandoff()
+    const payload = JSON.parse(handoff.body.match(/```json\n([\s\S]+)\n```\n$/)?.[1] ?? '{}')
+    const noncanonical = {
+      ...handoff,
+      body: `## HANDOFF\n\n\`\`\`json\n${JSON.stringify(payload)}\n\`\`\`\n`,
+    }
+
+    expectNoCompleteTerminalization(routeWithNoPrComplete(noncanonical))
+  })
+
+  it.each([
+    ['spoofed issue URL', (handoff: ReturnType<typeof noPrCompleteHandoff>) => ({
+      ...handoff,
+      url: `https://github.com/${noPrCompleteStory.repository}/issues/518#issuecomment-${noPrCompleteStory.commentId}`,
+    })],
+    ['mismatching native comment ID', (handoff: ReturnType<typeof noPrCompleteHandoff>) => ({
+      ...handoff,
+      id: noPrCompleteStory.commentId + 1,
+    })],
+  ])('does not let a no-PR COMPLETE HANDOFF with %s control routing', (_story, alter) => {
+    const handoff = alter(noPrCompleteHandoff())
+
+    expectNoCompleteTerminalization(routeWithNoPrComplete(handoff))
   })
 
   it('keeps a current-head schema-v3 STOP with an explicit blocker ahead of the no-PR IMPLEMENT fallback', () => {
