@@ -127,6 +127,19 @@ automated tests, but do not prove public CLI usability.
 
 ## Story-First Semantic Testing
 
+Derive each semantic test oracle from canonical authority, never from the
+candidate implementation. Record the authority and the behavior it establishes
+before writing the assertion.
+
+- Assert a specific expected route/state/outcome only when canonical authority
+  uniquely determines it.
+- If authority only forbids an outcome, assert that exclusion; do not invent a
+  fallback outcome.
+- If multiple outcomes remain plausible from canonical authority, classify the
+  case as a protocol/spec gap and stop before encoding one as expected behavior.
+  An authority-backed exclusion remains valid; it does not resolve the gap or
+  authorize choosing a fallback.
+
 Before changing deterministic harness semantics—routing, evidence
 interpretation, authority, mutation safety, fail-closed behavior, or workflow
 transitions—extract the canonical invariant and write the risk-relevant story

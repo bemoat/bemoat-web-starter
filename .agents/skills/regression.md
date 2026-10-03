@@ -10,6 +10,28 @@ command that proves the claim, read the output, and report the actual result.
 
 ## Checklist
 
+### Semantic test oracles
+
+Derive each semantic test oracle from canonical authority, never from the
+candidate implementation. Record the authority and the behavior it establishes
+before writing the assertion.
+
+- Assert a specific expected route/state/outcome only when canonical authority
+  uniquely determines it.
+- If authority only forbids an outcome, assert that exclusion; do not invent a
+  fallback outcome.
+- If multiple outcomes remain plausible from canonical authority, classify the
+  case as a protocol/spec gap and stop before encoding one as expected behavior.
+  An authority-backed exclusion remains valid; it does not resolve the gap or
+  authorize choosing a fallback.
+
+Follow `AGENTS.md#story-first-semantic-testing` and
+`docs/agent-loop/context-story-matrix.md` for baseline characterization and the
+existing implementation defect / missing coverage / protocol/spec gap classes.
+This engineering rule does not change Mission Control authority or routing.
+
+### Change impact
+
 Ask whether the change affects:
 
 - App runtime behavior.
