@@ -19,6 +19,29 @@ the current conversation already decided that.
 
 ## Canonical issue format
 
+Every Issue intended for Mission Control execution must also carry these two
+plain-text declarations in its final body, outside fenced examples:
+
+```text
+Task size: small | medium | core
+Mission Control mode: required | optional | not required | unsure
+```
+
+Use exactly one supported value for each declaration. Both declarations are
+required by this intake contract, even though the production Context parser
+retains conservative STANDARD defaults for partial metadata (for example, a
+supported task size without an explicit mode, or a required mode without a
+task size). Those defaults preserve existing behavior;
+they do not satisfy the creation contract. If the Issue has no usable profile
+metadata, Context stops. `not required` follows the parser's existing
+optional-mode behavior; `unsure` uses STANDARD safeguards. Do not infer or
+invent declarations from task prose.
+
+This requirement applies whether the Issue is created or updated through the
+GitHub form, a ChatGPT/GitHub connector, or the GitHub API. For programmatic
+creation, the agent must write both declaration lines directly into the Issue
+body; GitHub form validation does not run on API-created Issues.
+
 Write the issue using these sections when they are relevant:
 
 ```md
@@ -87,10 +110,17 @@ conversation-to-issue output to follow this contract:
 When the user asks to create or update a GitHub issue from the current conversation:
 
 1. Read `docs/agent-loop/issue-intake-contract.md` from the target repository when available.
-2. Summarize only decisions the user has actually made.
-3. Do not add features, expand scope, or invent missing requirements.
-4. Separate the active slice from future ideas and rejected alternatives.
-5. Write the issue using this structure when relevant:
+2. For every Issue intended for Mission Control execution, put both required workflow declarations as plain text in the final body, outside code fences and examples:
+
+   `Task size: <small | medium | core>`
+
+   `Mission Control mode: <required | optional | not required | unsure>`
+
+   Select values only from explicit conversation/repository evidence. Do not omit these declarations for API/connector-created Issues, and do not guess when the evidence is unclear; mark the mode `unsure` so Context applies STANDARD safeguards.
+3. Summarize only decisions the user has actually made.
+4. Do not add features, expand scope, or invent missing requirements.
+5. Separate the active slice from future ideas and rejected alternatives.
+6. Write the issue using this structure when relevant:
 
 ## Goal
 ## Context
@@ -101,14 +131,14 @@ When the user asks to create or update a GitHub issue from the current conversat
 ## Verification
 ## Stop Condition
 
-6. Omit sections that have no meaningful content. Do not add filler.
-7. Before creating or updating the issue, check that:
+7. Omit sections that have no meaningful content. Do not add filler.
+8. Before creating or updating the issue, check that:
    - the scope is clear,
    - acceptance criteria are observable,
    - future work is not mixed into the active slice,
    - the issue is not more detailed than needed to begin implementation.
-8. Create or update the issue in the repository specified by the user.
-9. After the action, report the issue title, number, and URL.
+9. Create or update the issue in the repository specified by the user.
+10. After the action, report the issue title, number, and URL.
 
 Principle: Normalize structure, not expand scope.
 ```

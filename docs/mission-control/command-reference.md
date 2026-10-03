@@ -72,6 +72,11 @@ current durable and native evidence; the record itself grants no workflow,
 review, merge, deployment, or migration authority. Comment timestamps and
 latest-comment order do not select authority.
 
+Before an authorized Founder publishes one, use the canonical
+[BLOCKER_RESOLUTION template](blocker-resolution-template.md). The example is
+validated against the production parser; replace its sample values only with
+the exact bound live evidence described above.
+
 ## Handoff
 
     pnpm run bemoat:handoff <issue-number> --body-file <strict-handoff.json>
@@ -98,6 +103,11 @@ finding disposition: schema version 1, the same reviewed head, nonempty
 findings with unique IDs, canonical summaries, source threads, and required
 evidence. HANDOFF prose cannot replace this finding contract. Historical
 Issue-comment REVIEW_VERDICT lineage remains readable for migration.
+
+Before a reviewer submits native `## REVIEW_VERDICT` evidence, use the
+[canonical REVIEW_VERDICT template](review-verdict-template.md) and validate
+the completed body with the production parser. Do not hand-author or extend
+identity fields with descriptive prose.
 
 The publication-era native-review compatibility path is limited to
 `bemoat:context:sync-base` evaluating otherwise-valid stale-base evidence. A

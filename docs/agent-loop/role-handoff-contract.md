@@ -60,6 +60,12 @@ focused and full verification, a new durable exact head, and Delta Review.
 Implementation workers do not review their own work. Only the clean final exact
 head may route to `FOUNDER_GATE`.
 
+Before publishing native `## REVIEW_VERDICT` evidence, the reviewer must use
+the [canonical REVIEW_VERDICT template](../mission-control/review-verdict-template.md)
+and validate its exact repository, Issue, PR, approved base, and reviewed head
+with the production parser. Keep the immutable finding disposition and
+supported supersession syntax from that template unchanged.
+
 ## Pre-merge checklist reconciliation gate
 
 Immediately before the final Founder gate, the independent reviewer verifies
