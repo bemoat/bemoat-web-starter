@@ -28,6 +28,16 @@ describe('Global Mission Control progressive-disclosure router', () => {
     ]) expect(normalizedLoader).toMatch(invariant)
   })
 
+  it('keeps a concise operator summary in the always-loaded response contract', () => {
+    expect(normalizedLoader).toMatch(/ordinary Global MC responses.*concise operator-facing summary.*before.*long artifact/i)
+    expect(normalizedLoader).toMatch(/current objective/i)
+    expect(normalizedLoader).toMatch(/current route\/status/i)
+    expect(normalizedLoader).toMatch(/suggested model.*execution routing/i)
+    expect(normalizedLoader).toMatch(/next permitted action.*why/i)
+    expect(normalizedLoader).toMatch(/Founder decision status/i)
+    expect(normalizedLoader).toMatch(/branch.*PR.*head/i)
+  })
+
   it('routes each phase trigger to a real canonical contract and loads it only when triggered', () => {
     const routes = [
       ['Execution handoff', 'docs/mission-control/execution-handoff-contract.md'],
