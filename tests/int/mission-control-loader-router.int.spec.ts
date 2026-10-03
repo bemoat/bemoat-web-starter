@@ -63,6 +63,27 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect((loader.match(/^ {0,3}```/gm) ?? []).length % 2).toBe(0)
   })
 
+  // Oracle: Founder direction 5971335066 and the bounded checkout-recovery
+  // clarification require operational guidance, not new Context routing.
+  it('makes cross-session continuation executable after the human trigger', () => {
+    expect(normalizedLoader).toMatch(/after a human gate or implementation trigger.*Next action.*operator-executable/i)
+    expect(normalizedLoader).toMatch(/existing Execution\/IDE session.*send `continue`.*already-authorized/i)
+    expect(normalizedLoader).toMatch(/only when cross-session operator action is actually needed/i)
+    expect(normalizedLoader).toMatch(/do not use authorization-only wording.*proceed.*begin implementation.*continue.*without saying where and how/i)
+  })
+
+  it('requires no Founder action when the active controller must continue automatically', () => {
+    expect(normalizedLoader).toMatch(/active Execution controller.*`COMMAND`.*Next action.*no additional Founder\/operator action is required.*continue automatically/i)
+  })
+
+  it('keeps STOP recovery narrower than task or workflow mutation', () => {
+    expect(normalizedLoader).toMatch(/`STOP`.*stop fail-closed for task\/source\/workflow mutation/i)
+    expect(normalizedLoader).toMatch(/only deterministic recovery explicitly prescribed by fresh Context.*switching to the correctly owned existing topic branch/i)
+    expect(normalizedLoader).toMatch(/do not infer synchronization or implementation authority.*rerun.*CLI Discovery and Context after recovery/i)
+    expect(normalizedLoader).toMatch(/absent.*conflicting.*unsupported recovery.*stop/i)
+    expect(normalizedLoader).toMatch(/`FOUNDER_GATE` means no mutation and return to Founder once for the required decision/i)
+  })
+
   it('routes each phase trigger to a real canonical contract and loads it only when triggered', () => {
     const routes = [
       ['Execution handoff', 'docs/mission-control/execution-handoff-contract.md'],

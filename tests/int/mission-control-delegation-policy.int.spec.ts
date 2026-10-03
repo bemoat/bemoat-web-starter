@@ -38,7 +38,7 @@ describe('Mission Control delegation and execution model policy', () => {
       expect(loader).toMatch(/Global MC does not run repository-local Bemoat CLI and does not guess Context routes/i)
       expect(loader).toMatch(/Execution\/IDE MC performs registered CLI Discovery and runs fresh.*bemoat:context.*before mutation/i)
       expect(loader).toMatch(/one-time post-preflight implementation trigger.*before the first source-file edit.*fresh `COMMAND` does not satisfy or waive that trigger/i)
-      expect(loader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue automatically in the same Execution controller session.*`FOUNDER_GATE` means no mutation and return to Founder.*`STOP`, unsupported state, or evidence conflict means no mutation and stop fail-closed/i)
+      expect(loader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue automatically in the same Execution controller session.*`FOUNDER_GATE` means no mutation and return to Founder.*`STOP`, unsupported state, or evidence conflict means stop fail-closed for task\/source\/workflow mutation/i)
       expect(loader).not.toMatch(/Run pnpm run bemoat:context <issue-number> --json when the current environment can execute repository-local CLI/i)
     })
 
