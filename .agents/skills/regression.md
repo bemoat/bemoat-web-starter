@@ -30,6 +30,37 @@ Follow `AGENTS.md#story-first-semantic-testing` and
 existing implementation defect / missing coverage / protocol/spec gap classes.
 This engineering rule does not change Mission Control authority or routing.
 
+## Independent intermediate test-authoring pass
+
+For a change that can alter deterministic or safety-relevant semantics, put an
+independent test-authoring pass between implementation and final semantic
+review. This is part of the same bounded objective and does not require a
+Global MC round-trip. Trigger it for changes to routing, evidence
+interpretation, workflow or guard behavior, access control, schema or migration
+safety, or reusable harness behavior where an incorrect assertion could bless
+an incorrect implementation. Skip it for copy-only changes, trivial styling,
+mechanical renames, and routine low-risk work whose behavior is already
+mechanically verified without semantic ambiguity.
+
+The intermediate tester must be a different worker/session from the
+implementation owner. Before writing or changing assertions, read the canonical
+Issue, relevant authority, and current diff/tests. Treat the candidate
+implementation as something to challenge, not as the source of expected
+behavior. Inspect whether existing tests over-specify, under-specify, or merely
+mirror the implementation. Use the authority-bound oracle rules above. If
+canonical authority does not uniquely support an expected outcome, report a
+protocol/spec gap instead of inventing a green assertion.
+
+The tester may change only test/fixture paths explicitly permitted by the
+active objective, and must not edit production implementation files. Add or
+adjust the smallest bounded, authority-backed regression that can expose a real
+gap. If it fails against the implementation, return correction ownership to
+the accountable controller/implementer; the tester does not repair production
+code. Keep the final independent semantic/Delta review as a later boundary,
+performed by a reviewer distinct from both the controller/implementer and the
+intermediate tester. This pass adds no Mission Control route, state, or evidence
+vocabulary and does not cross Founder or STOP gates.
+
 ### Change impact
 
 Ask whether the change affects:
