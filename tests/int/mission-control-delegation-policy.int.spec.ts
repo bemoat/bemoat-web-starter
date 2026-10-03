@@ -8,7 +8,7 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8').replace
 
 describe('Mission Control delegation and execution model policy', () => {
   function readyToPasteArtifactContract() {
-    const loader = readFileSync(resolve(root, 'prompts/mission-control/chatgpt-project-loader.md'), 'utf8')
+    const loader = readFileSync(resolve(root, 'docs/mission-control/execution-handoff-contract.md'), 'utf8')
     const heading = loader.indexOf('## Ready-to-paste execution artifact contract')
     if (heading < 0) return ''
     const fence = loader.indexOf('```ready-to-paste\n', heading)
@@ -155,10 +155,10 @@ describe('Mission Control delegation and execution model policy', () => {
     expect(continuation).toMatch(/FOUNDER_GATE.*return to Founder.*STOP.*terminal/i)
     expect(freshContext).toMatch(/before selecting the next objective/i)
     expect(durableHandoff).toMatch(/Handoff.*readback/i)
-    expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/static repository tests.*do not.*live ChatGPT response.*post-merge #532 dogfood/i)
+    expect(read('docs/mission-control/execution-handoff-contract.md')).toMatch(/static repository tests.*do not prove.*live Global MC session/i)
     const template = readyToPasteArtifactContract()
     expect(template).not.toMatch(/whether callable runtime integration was proven/i)
-    expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/conditional.*starter.*#512/i)
+    expect(read('prompts/mission-control/chatgpt-project-loader.md')).not.toMatch(/#512|#532/)
   })
 
   it('requires reconstruction, scope, validation, and report details beyond section headings', () => {
@@ -192,7 +192,7 @@ describe('Mission Control delegation and execution model policy', () => {
 
   describe('advisory Model Routing Profile v1', () => {
     const profile = () => {
-      const loader = readFileSync(resolve(root, 'prompts/mission-control/chatgpt-project-loader.md'), 'utf8')
+      const loader = readFileSync(resolve(root, 'docs/mission-control/model-routing-profile.md'), 'utf8')
       const block = loader.match(/```json\s*([\s\S]*?)```/)
       expect(block, 'the existing loader exposes the advisory profile').not.toBeNull()
       return JSON.parse(block![1]!)

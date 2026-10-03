@@ -12,6 +12,7 @@ export const managedPaths = [
   'docs/schema-evolution.md', 'docs/dev-boilerplate.md', 'docs/boilerplate-sync-command.md',
   'docs/harness-sync-contract.md', 'docs/guard-pack.md', 'docs/starter-acceptance-tests.md',
   'docs/mission-control/README.md', 'docs/mission-control/command-reference.md', 'docs/mission-control/mission-control-guide.md',
+  'docs/mission-control/execution-handoff-contract.md', 'docs/mission-control/model-routing-profile.md',
   'docs/mission-control/review-verdict-template.md', 'docs/mission-control/blocker-resolution-template.md',
   'docs/mission-control/handoff-template.md', 'prompts/mission-control/chatgpt-project-loader.md',
   // Superpowers planning harness (starter-only except these subpaths)
@@ -52,6 +53,7 @@ export const managedPaths = [
   'tests/int/build-script-contract-guard.int.spec.ts', 'tests/int/build-wrapper.int.spec.ts',
   'tests/int/branch-safety.int.spec.ts',
   'tests/int/context-parser.int.spec.ts', 'tests/int/context-router.int.spec.ts', 'tests/int/context-stale-base.int.spec.ts', 'tests/int/context-evidence.int.spec.ts', 'tests/int/context-acquisition.int.spec.ts', 'tests/int/approved-base.int.spec.ts', 'tests/int/context-cli.int.spec.ts', 'tests/int/context-skill.int.spec.ts', 'tests/int/context-sync.int.spec.ts', 'tests/int/context-corrections.int.spec.ts', 'tests/int/issue-branch-bootstrap.int.spec.ts', 'tests/int/mission-control-publication-templates.int.spec.ts',
+  'tests/int/mission-control-loader-router.int.spec.ts',
   'tests/int/handoff-schema.int.spec.ts', 'tests/int/handoff-transport.int.spec.ts', 'tests/int/handoff-validation-proof.int.spec.ts', 'tests/int/handoff-cli.int.spec.ts', 'tests/int/handoff-skill.int.spec.ts',
   'tests/int/guard-pack.int.spec.ts', 'tests/int/guard-planning-contract.int.spec.ts',
   'tests/int/env-placeholder-guard-boundary.int.spec.ts',
