@@ -56,6 +56,15 @@ describe('Mission Control delegation and execution model policy', () => {
       expect(continuation).toMatch(/do not pre-authorize future objectives/i)
     })
 
+    it('does not end the active controller turn after a fresh COMMAND result', () => {
+      const continuation = artifactSection('Continuation rule')
+      expect(continuation).toMatch(/COMMAND.*do not end.*active controller turn/i)
+      expect(continuation).toMatch(/status-only response.*Founder/i)
+      expect(continuation).toMatch(/start.*next separately bounded objective.*immediately/i)
+      expect(continuation).toMatch(/two successive fresh Context results.*COMMAND.*start each newly authorized objective.*same session/i)
+      expect(continuation).toMatch(/objective completion.*alone.*not.*Founder gate/i)
+    })
+
     it('returns FOUNDER_GATE without mutation and identifies the required decision', () => {
       expect(artifactSection('Continuation rule')).toMatch(/FOUNDER_GATE.*do not mutate.*return to Founder.*required decision/i)
       expect(artifactSection('Founder decision status')).toMatch(/FOUNDER_GATE.*human decision from the Founder.*no worker/i)

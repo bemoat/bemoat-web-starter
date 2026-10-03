@@ -39,8 +39,11 @@ Project files, and copied handoffs are context only.
   Execution/IDE MC performs registered CLI Discovery and runs fresh
   `bemoat:context` before mutation, then follows its returned `next_action.type`.
 - Execute one bounded objective at a time. `COMMAND` means continue in the same
-  Execution controller session automatically; `FOUNDER_GATE` means
-  no mutation and return to Founder; `STOP`, unsupported state, or evidence
+  Execution controller session automatically. Do not end the turn with a
+  status-only response, return to Founder/Global MC to relay the route, or ask for
+  confirmation after `COMMAND`. Start only the objective authorized by that
+  fresh Context result. `FOUNDER_GATE` means no mutation and return to Founder
+  once for the required decision; `STOP`, unsupported state, or evidence
   conflict means no mutation and stop fail-closed.
 - After a durable result, publish and read back required HANDOFF evidence,
   then reconstruct fresh Context before choosing another objective. Do not

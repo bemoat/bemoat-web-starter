@@ -28,6 +28,12 @@ describe('Global Mission Control progressive-disclosure router', () => {
     ]) expect(normalizedLoader).toMatch(invariant)
   })
 
+  it('keeps a fresh COMMAND result inside the active controller session', () => {
+    expect(normalizedLoader).toMatch(/`COMMAND` means continue in the same Execution controller session automatically/i)
+    expect(normalizedLoader).toMatch(/do not end the turn.*status.only response/i)
+    expect(normalizedLoader).toMatch(/return to Founder\/Global MC to relay the route.*ask for confirmation/i)
+  })
+
   it('requires the fixed operator block before long artifacts', () => {
     const labels = [
       'Current objective',
