@@ -15,6 +15,7 @@ recreate long-form framework manuals here.
 | Issue branch workflow | `docs/agent-loop/issue-driven-branch-workflow.md`, `docs/workflow/git-flow.md` |
 | Agent loop and checklist | `docs/agent-loop/README.md`, `docs/agent-loop/checklist.md` |
 | Story-first semantic testing | `AGENTS.md`, `docs/agent-loop/context-story-matrix.md` |
+| Independent intermediate test authoring | `.agents/skills/regression.md#independent-intermediate-test-authoring-pass` |
 | Self red-team scope gate | `docs/agent-loop/self-red-team-scope-gate.md`, `docs/agent-loop/self-red-team-scope-gate-prompt.md` |
 | Security and migrations | `docs/agent-loop/security-and-migrations.md`, `docs/schema-evolution.md` |
 | Payload CMS rules | `.cursor/rules/payload-overview.md` and related `.cursor/rules/payload-*.md` / topic files; fallback `.agents/skills/payload-cms.md` |
@@ -276,6 +277,12 @@ commit" or "docs only, no PR."
 5. For issue-based work, summarize implementation intent after preflight passes
    and wait for an explicit user trigger before editing files.
 6. Execute exactly one bounded objective. Make the smallest complete change.
+   When a change can alter deterministic or safety-relevant semantics, use the
+   independent intermediate test-authoring pass in
+   `.agents/skills/regression.md` between implementation and final semantic
+   review. Keep it in the same objective; it does not require a Global MC
+   round-trip. Copy-only, trivial styling, mechanical renames, and routine
+   low-risk work do not require this pass.
 7. Run the required validation tier.
 8. Show `git status` and a diff summary.
 9. Commit exactly one focused change only if checks pass and only allowed files

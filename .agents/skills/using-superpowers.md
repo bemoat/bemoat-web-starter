@@ -33,6 +33,7 @@ skill runtime.
 | GitHub issue or PR skill | `.agents/skills/issue-workflow.md` |
 | Development workflow skill | `.agents/skills/development-agent.md` |
 | Verification or regression skill | `.agents/skills/regression.md` |
+| Independent intermediate test authoring | `.agents/skills/regression.md#independent-intermediate-test-authoring-pass` |
 | Payload CMS safety guidance | `.agents/skills/payload-cms.md` plus `.cursor/rules/payload-overview.md` and related Payload rules |
 
 ## Stop Conditions

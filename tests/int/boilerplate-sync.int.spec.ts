@@ -124,6 +124,24 @@ function assertChildSafeHarnessScripts(filePath: string, content: string) {
   ).toEqual([])
 }
 
+function githubHeadingSlug(heading: string): string {
+  return heading
+    .replace(/<[^>]*>/g, '')
+    .replace(/[`*_~]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, '')
+    .trim()
+    .replace(/\s+/g, '-')
+}
+
+function markdownHeadingSlugs(content: string): Set<string> {
+  return new Set(
+    [...content.matchAll(/^#{1,6}\s+(.+?)\s*#?\s*$/gm)].map((match) =>
+      githubHeadingSlug(match[1]),
+    ),
+  )
+}
+
 describe('synced harness CI and hooks', () => {
   it('uses only child-safe bemoat:* scripts in synced CI workflow', () => {
     const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8')
@@ -161,6 +179,136 @@ describe('synced harness CI and hooks', () => {
 })
 
 describe('boilerplate sync managed paths', () => {
+  it('delivers the Issue #546 intermediate test-author boundaries to child guidance', async () => {
+    // Issue #546 defines the intermediate author contract. This protects its
+    // managed delivery and fallback pointer, not runtime enforcement or worker
+    // orchestration.
+    const mod = await import('../../scripts/sync-boilerplate.ts')
+    const sourceRoot = process.cwd()
+    const childRoot = mkdtempSync(join(tmpdir(), 'bemoat-546-intermediate-test-'))
+    const guidancePaths = [
+      'AGENTS.md',
+      '.agents/skills/regression.md',
+      '.agents/skills/using-superpowers.md',
+    ]
+
+    try {
+      for (const path of guidancePaths) {
+        expect(isManagedFilePath(path, mod.managedPaths), `${path} must be managed`).toBe(true)
+        expect(isManagedFilePath(path, mod.getSourceSyncConfig(sourceRoot).managedPaths), `${path} must be in source sync config`).toBe(true)
+        mod.copyManagedPath(sourceRoot, childRoot, path)
+      }
+
+      const agents = readFileSync(join(childRoot, 'AGENTS.md'), 'utf8').replace(/\s+/g, ' ')
+      for (const obligation of [
+        'When a change can alter deterministic or safety-relevant semantics, use the independent intermediate test-authoring pass',
+        'between implementation and final semantic review',
+        'it does not require a Global MC round-trip',
+        'Copy-only, trivial styling, mechanical renames, and routine low-risk work do not require this pass',
+      ]) {
+        expect(agents, `AGENTS.md must retain the Issue #546 obligation: ${obligation}`).toContain(obligation)
+      }
+
+      const regression = readFileSync(join(childRoot, '.agents/skills/regression.md'), 'utf8').replace(/\s+/g, ' ')
+      for (const obligation of [
+        'Before writing or changing assertions, read the canonical Issue, relevant authority, and current diff/tests',
+        'Treat the candidate implementation as something to challenge, not as the source of expected behavior',
+        'Inspect whether existing tests over-specify, under-specify, or merely mirror the implementation',
+        'report a protocol/spec gap instead of inventing a green assertion',
+        'The intermediate tester must be a different worker/session from the implementation owner',
+        'must not edit production implementation files',
+        'return correction ownership to the accountable controller/implementer',
+        'performed by a reviewer distinct from both the controller/implementer and the intermediate tester',
+        'does not require a Global MC round-trip',
+      ]) {
+        expect(regression, `.agents/skills/regression.md must retain the Issue #546 obligation: ${obligation}`).toContain(obligation)
+      }
+
+      const fallback = readFileSync(join(childRoot, '.agents/skills/using-superpowers.md'), 'utf8')
+      expect(fallback).toContain('.agents/skills/regression.md#independent-intermediate-test-authoring')
+    } finally {
+      rmSync(childRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps Issue #546 root and fallback guidance pointers resolvable after child sync', async () => {
+    const mod = await import('../../scripts/sync-boilerplate.ts')
+    const sourceRoot = process.cwd()
+    const childRoot = mkdtempSync(join(tmpdir(), 'bemoat-546-guidance-links-'))
+    const guidancePaths = [
+      'AGENTS.md',
+      '.agents/skills/regression.md',
+      '.agents/skills/using-superpowers.md',
+    ]
+
+    try {
+      for (const path of guidancePaths) {
+        mod.copyManagedPath(sourceRoot, childRoot, path)
+      }
+
+      const pointerSources = ['AGENTS.md', '.agents/skills/using-superpowers.md']
+      const unresolved: string[] = []
+      for (const sourcePath of pointerSources) {
+        const source = readFileSync(join(childRoot, sourcePath), 'utf8')
+        const pointers = [...source.matchAll(/\.agents\/skills\/regression\.md#([A-Za-z0-9-]+)/g)]
+        expect(pointers.length, `${sourcePath} must expose a regression guidance fragment pointer`).toBeGreaterThan(0)
+        for (const pointer of pointers) {
+          const targetPath = join(childRoot, '.agents/skills/regression.md')
+          const targetSlugs = markdownHeadingSlugs(readFileSync(targetPath, 'utf8'))
+          if (!targetSlugs.has(pointer[1])) {
+            unresolved.push(`${sourcePath} -> ${pointer[1]}`)
+          }
+        }
+      }
+
+      expect(unresolved, 'all synced regression guidance fragments must resolve to a real heading').toEqual([])
+    } finally {
+      rmSync(childRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves the Issue #546 workflow sequence, negative boundaries, and trigger exemptions in child guidance', async () => {
+    const mod = await import('../../scripts/sync-boilerplate.ts')
+    const sourceRoot = process.cwd()
+    const childRoot = mkdtempSync(join(tmpdir(), 'bemoat-546-workflow-guidance-'))
+
+    try {
+      for (const path of ['AGENTS.md', '.agents/skills/regression.md']) {
+        mod.copyManagedPath(sourceRoot, childRoot, path)
+      }
+
+      const guidance = readFileSync(join(childRoot, '.agents/skills/regression.md'), 'utf8').replace(/\s+/g, ' ')
+      const requiredConcepts = [
+        /different worker\/session from the implementation owner/i,
+        /canonical Issue, relevant authority, and current diff\/tests/i,
+        /candidate implementation as something to challenge/i,
+        /test\/fixture paths explicitly permitted/i,
+        /must not edit production implementation files/i,
+        /report a protocol\/spec gap instead of inventing/i,
+        /return correction ownership to the accountable controller\/implementer/i,
+        /final independent semantic\/Delta review as a later boundary/i,
+        /reviewer distinct from both the controller\/implementer and the intermediate tester/i,
+        /adds no Mission Control route, state, or evidence vocabulary/i,
+      ]
+
+      for (const concept of requiredConcepts) {
+        expect(guidance, `synced guidance must retain Issue #546 contract: ${concept}`).toMatch(concept)
+      }
+
+      const rootGuidance = readFileSync(join(childRoot, 'AGENTS.md'), 'utf8').replace(/\s+/g, ' ')
+      for (const exemption of [
+        /copy-only/i,
+        /trivial styling/i,
+        /mechanical renames/i,
+        /routine low-risk work/i,
+      ]) {
+        expect(rootGuidance, `synced root guidance must retain the Issue #546 trigger exemption: ${exemption}`).toMatch(exemption)
+      }
+    } finally {
+      rmSync(childRoot, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     'AGENTS.md',
     'docs/agent-loop/context-story-matrix.md',
