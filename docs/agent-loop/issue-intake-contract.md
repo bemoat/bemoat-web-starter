@@ -27,9 +27,13 @@ Task size: small | medium | core
 Mission Control mode: required | optional | not required | unsure
 ```
 
-Use exactly one supported value for each declaration. The production Context
-parser remains authoritative: missing or unrecognized values do not create an
-executable workflow profile. `not required` follows the parser's existing
+Use exactly one supported value for each declaration. Both declarations are
+required by this intake contract, even though the production Context parser
+retains conservative STANDARD defaults for partial metadata (for example, a
+supported task size without an explicit mode, or a required mode without a
+task size). Those defaults preserve existing behavior;
+they do not satisfy the creation contract. If the Issue has no usable profile
+metadata, Context stops. `not required` follows the parser's existing
 optional-mode behavior; `unsure` uses STANDARD safeguards. Do not infer or
 invent declarations from task prose.
 

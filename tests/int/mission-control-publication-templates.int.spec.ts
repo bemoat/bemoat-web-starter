@@ -19,11 +19,17 @@ async function markedExample(path: string, start: string, end: string): Promise<
   const startIndex = document.indexOf(start)
   const endIndex = document.indexOf(end)
   if (startIndex < 0 || endIndex <= startIndex) throw new Error(`Missing marked example: ${start}`)
-  return document.slice(startIndex + start.length, endIndex).trimStart().trimEnd()
+  const marked = document.slice(startIndex + start.length, endIndex)
+  const fencedBody = marked.match(/````markdown\n([\s\S]*?)\n````/)?.[1]
+  return (fencedBody ?? marked).trimStart().trimEnd()
 }
 
 describe('Mission Control publication templates', () => {
   it('feeds the canonical ELIGIBLE example through the production REVIEW_VERDICT parser', async () => {
+    const document = await readFile(reviewTemplatePath, 'utf8')
+    const copiedExample = document.match(/````markdown\n([\s\S]*?)\n````/)?.[1]
+    expect(copiedExample?.startsWith('## REVIEW_VERDICT')).toBe(true)
+
     const body = await markedExample(
       reviewTemplatePath,
       '<!-- review-verdict:eligible:start -->',
@@ -158,62 +164,91 @@ describe('Mission Control publication templates', () => {
       missionControlMode: null,
       workflowProfile: null,
     })
-
-    const missingMetadata = parseIssueBody('## Goal\n\nNo workflow declarations.\n')
-    const decision = routeContext({
-      repository: {
-        owner: 'boat1994',
-        name: 'bemoat-web-starter',
-        nameWithOwner: 'boat1994/bemoat-web-starter',
-        url: 'https://github.com/boat1994/bemoat-web-starter',
-      },
-      protectedBase: {
-        branch: 'main',
-        sha: 'c'.repeat(40),
-        source: 'live GitHub ref',
-        url: 'https://github.com/boat1994/bemoat-web-starter/tree/main',
-      },
-      policy: {
-        path: 'docs/mission-control/mission-control-guide.md',
-        policyId: 'bemoat-mission-control',
-        version: '1.3.0',
-        sourceSha: 'd'.repeat(40),
-        trustedFounderLogin: 'boat1994',
-        url: 'https://github.com/boat1994/bemoat-web-starter/blob/main/docs/mission-control/mission-control-guide.md',
-      },
-      issue: {
-        number: '535',
-        title: 'Missing workflow metadata',
-        state: 'OPEN',
-        url: 'https://github.com/boat1994/bemoat-web-starter/issues/535',
-        objective: missingMetadata.objective,
-        scope: missingMetadata.scope,
-        acceptanceCriteria: missingMetadata.acceptanceCriteria,
-        dependencies: missingMetadata.dependencies,
-        taskSize: missingMetadata.taskSize,
-        missionControlMode: missingMetadata.missionControlMode,
-        workflowProfile: missingMetadata.workflowProfile,
-      },
-      localGit: {
-        branch: 'fix/535-metadata-transport-templates',
-        head: 'e'.repeat(40),
-        upstream: 'origin/fix/535-metadata-transport-templates',
-        originRepository: 'boat1994/bemoat-web-starter',
-        clean: true,
-        detached: false,
-        pushed: true,
-        durable: true,
-        reasons: [],
-      },
-      activePr: null,
-      currentHeadVerification: null,
-      durableContext: { latestHandoff: null, historicalResults: [] },
-      evidenceErrors: [],
+    expect(parseIssueBody('Task size: core\n')).toMatchObject({
+      taskSize: 'core',
+      missionControlMode: null,
+      workflowProfile: 'STANDARD',
     })
-    expect(decision.route).toBe('STOP')
-    expect(decision.reasons).toContain(
-      'EVIDENCE_CONFLICT: Issue workflow profile cannot be derived from task size and Mission Control mode',
-    )
+    expect(parseIssueBody('Mission Control mode: required\n')).toMatchObject({
+      taskSize: null,
+      missionControlMode: 'required',
+      workflowProfile: 'STANDARD',
+    })
+    expect(parseIssueBody(
+      'Task size: core\nMain Issue: #12\nImplementation Plan: docs/plans/legacy.md\n',
+    )).toMatchObject({
+      taskSize: 'core',
+      missionControlMode: null,
+      workflowProfile: 'STANDARD',
+    })
+
+    const metadataCases = [
+      { parsed: parseIssueBody('## Goal\n\nNo workflow declarations.\n'), expectMissingProfile: true },
+      { parsed: parseIssueBody('Task size: core\n'), expectMissingProfile: false },
+      { parsed: parseIssueBody('Mission Control mode: required\n'), expectMissingProfile: false },
+    ]
+    for (const { parsed, expectMissingProfile } of metadataCases) {
+      const decision = routeContext({
+        repository: {
+          owner: 'boat1994',
+          name: 'bemoat-web-starter',
+          nameWithOwner: 'boat1994/bemoat-web-starter',
+          url: 'https://github.com/boat1994/bemoat-web-starter',
+        },
+        protectedBase: {
+          branch: 'main',
+          sha: 'c'.repeat(40),
+          source: 'live GitHub ref',
+          url: 'https://github.com/boat1994/bemoat-web-starter/tree/main',
+        },
+        policy: {
+          path: 'docs/mission-control/mission-control-guide.md',
+          policyId: 'bemoat-mission-control',
+          version: '1.3.0',
+          sourceSha: 'd'.repeat(40),
+          trustedFounderLogin: 'boat1994',
+          url: 'https://github.com/boat1994/bemoat-web-starter/blob/main/docs/mission-control/mission-control-guide.md',
+        },
+        issue: {
+          number: '535',
+          title: 'Missing workflow metadata',
+          state: 'OPEN',
+          url: 'https://github.com/boat1994/bemoat-web-starter/issues/535',
+          objective: parsed.objective,
+          scope: parsed.scope,
+          acceptanceCriteria: parsed.acceptanceCriteria,
+          dependencies: parsed.dependencies,
+          taskSize: parsed.taskSize,
+          missionControlMode: parsed.missionControlMode,
+          workflowProfile: parsed.workflowProfile,
+        },
+        localGit: {
+          branch: 'fix/535-metadata-transport-templates',
+          head: 'e'.repeat(40),
+          upstream: 'origin/fix/535-metadata-transport-templates',
+          originRepository: 'boat1994/bemoat-web-starter',
+          clean: true,
+          detached: false,
+          pushed: true,
+          durable: true,
+          reasons: [],
+        },
+        activePr: null,
+        currentHeadVerification: null,
+        durableContext: { latestHandoff: null, historicalResults: [] },
+        evidenceErrors: [],
+      })
+      if (expectMissingProfile) {
+        expect(decision.route).toBe('STOP')
+        expect(decision.reasons).toContain(
+          'EVIDENCE_CONFLICT: Issue workflow profile cannot be derived from task size and Mission Control mode',
+        )
+      } else {
+        expect(decision.reasons).not.toContain(
+          'EVIDENCE_CONFLICT: Issue workflow profile cannot be derived from task size and Mission Control mode',
+        )
+      }
+    }
   })
 
   it('wires canonical templates into consumed review and blocker instructions and API issue intake', async () => {

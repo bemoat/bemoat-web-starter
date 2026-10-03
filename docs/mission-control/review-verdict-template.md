@@ -28,8 +28,8 @@ replace all values from fresh evidence before publication.
 
 ## ELIGIBLE FOR FOUNDER REVIEW
 
-````markdown
 <!-- review-verdict:eligible:start -->
+````markdown
 ## REVIEW_VERDICT
 
 Repository: `boat1994/bemoat-web-starter`
@@ -37,8 +37,8 @@ Task: Issue #535
 **Verdict:** ELIGIBLE FOR FOUNDER REVIEW
 **PR / base / head:** PR #9002 · `main` · `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
 **Approved base:** `main@cccccccccccccccccccccccccccccccccccccccc`
-<!-- review-verdict:eligible:end -->
 ````
+<!-- review-verdict:eligible:end -->
 
 ## CORRECTION REQUIRED
 
@@ -48,8 +48,8 @@ reviewed head, at least one finding, unique finding IDs, a nonempty canonical
 summary, a source thread, and nonempty required evidence. Do not invent a
 second finding schema or replace this record with prose.
 
-````markdown
 <!-- review-verdict:correction:start -->
+````markdown
 ## REVIEW_VERDICT
 
 Repository: `boat1994/bemoat-web-starter`
@@ -74,16 +74,16 @@ Task: Issue #535
   ]
 }
 ```
-<!-- review-verdict:correction:end -->
 ````
+<!-- review-verdict:correction:end -->
 
 ## Superseding an earlier verdict
 
 When a new immutable review supersedes one predecessor, include one numeric
 native review/comment database ID using this exact parser-supported field:
 
-````markdown
 <!-- review-verdict:supersession:start -->
+````markdown
 ## REVIEW_VERDICT
 
 **Supersedes:** 9003
@@ -92,8 +92,8 @@ Task: Issue #535
 **Verdict:** ELIGIBLE FOR FOUNDER REVIEW
 **PR / base / head:** PR #9002 · `main` · `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
 **Approved base:** `main@cccccccccccccccccccccccccccccccccccccccc`
-<!-- review-verdict:supersession:end -->
 ````
+<!-- review-verdict:supersession:end -->
 
 The predecessor ID must identify the actual prior record in the applicable
 lineage. Do not include multiple `Supersedes` fields or use timestamps or
