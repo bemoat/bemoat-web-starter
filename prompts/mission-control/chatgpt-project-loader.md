@@ -38,10 +38,16 @@ Project files, and copied handoffs are context only.
   routing authority. Global MC delegates CLI Discovery to Execution/IDE MC.
   Execution/IDE MC performs registered CLI Discovery and runs fresh
   `bemoat:context` before mutation, then follows its returned `next_action.type`.
-- Execute one bounded objective at a time. `COMMAND` means continue in the same
-  Execution controller session automatically; `FOUNDER_GATE` means
-  no mutation and return to Founder; `STOP`, unsupported state, or evidence
-  conflict means no mutation and stop fail-closed.
+- Execute one bounded objective at a time. The one-time post-preflight
+  implementation trigger remains required before the first source-file edit; a
+  fresh `COMMAND` does not satisfy or waive that trigger. After that trigger
+  has been satisfied, `COMMAND` means continue automatically in the same
+  Execution controller session. Do not end the turn with a status-only response, return to
+  Founder/Global MC to relay the route, or ask for confirmation again after
+  `COMMAND`. Start only the objective authorized by that fresh Context result.
+  `FOUNDER_GATE` means no mutation and return to Founder once for the required
+  decision; `STOP`, unsupported state, or evidence conflict means no mutation
+  and stop fail-closed.
 - After a durable result, publish and read back required HANDOFF evidence,
   then reconstruct fresh Context before choosing another objective. Do not
   pre-authorize future objectives or require a Founder return for internal

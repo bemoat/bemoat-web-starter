@@ -28,6 +28,21 @@ describe('Global Mission Control progressive-disclosure router', () => {
     ]) expect(normalizedLoader).toMatch(invariant)
   })
 
+  it('keeps a fresh COMMAND result inside the active controller session', () => {
+    expect(normalizedLoader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue automatically in the same Execution controller session/i)
+    expect(normalizedLoader).toMatch(/do not end the turn.*status.only response/i)
+    expect(normalizedLoader).toMatch(/return to Founder\/Global MC to relay the route.*ask for confirmation/i)
+  })
+
+  it('preserves the first-edit trigger without asking again after later COMMAND results', () => {
+    expect(normalizedLoader).toMatch(/one-time post-preflight implementation trigger.*before the first source-file edit/i)
+    expect(normalizedLoader).toMatch(/fresh `COMMAND` does not satisfy or waive that trigger/i)
+    expect(normalizedLoader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue.*automatically/i)
+    expect(normalizedLoader).toMatch(/do not.*ask for confirmation again/i)
+    expect(normalizedLoader).toMatch(/`FOUNDER_GATE`.*return to Founder once.*required decision/i)
+    expect(normalizedLoader).toMatch(/`STOP`.*stop fail-closed/i)
+  })
+
   it('requires the fixed operator block before long artifacts', () => {
     const labels = [
       'Current objective',
