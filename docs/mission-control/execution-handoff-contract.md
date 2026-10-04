@@ -1,11 +1,11 @@
 # Execution handoff contract
 
-Load this contract only when Global MC is asked to prepare a Ready-to-paste
-Execution/IDE artifact. The always-loaded router points here when that trigger
-occurs. Copy the complete ordered 15-section contract below into the artifact;
-keep the applicable instructions and resolve every field from fresh evidence.
-Load `model-routing-profile.md` at the same time and include complete resolved
-recommendations for each applicable role inside the artifact.
+Use this contract to prepare a Ready-to-paste Execution/IDE artifact and to
+apply its session/recovery rules during authorized continuation. The always-
+loaded router points here for both. Copy the complete ordered 15-section
+contract into the artifact only when preparing it; resolve every field from
+fresh evidence. For an artifact, also load `model-routing-profile.md` and include
+complete resolved recommendations for each applicable role.
 
 ## Ready-to-paste execution artifact contract
 
@@ -41,7 +41,7 @@ State repository, Issue, applicable PR, branch and exact head, approved protecte
 State the one objective authorized by fresh Context, its acceptance criteria, and its in-scope boundary. If Global MC cannot run repository-local CLI, identify the objective candidate from the verified Issue as pending fresh Execution/IDE Context authorization; only a fresh Context result with `next_action.type: COMMAND` authorizes mutation for that objective.
 
 ## 3. Verified live authority / route
-State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits mutation before Context returns `COMMAND`, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
+State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context may precede a later `COMMAND`, and then only within that recovery's scope. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND`, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
 
 ## 4. Startup / reconstruction instructions
 Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, perform registered CLI Discovery with its declared safe help, and run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
@@ -57,7 +57,7 @@ For every applicable role—`controller`, `read_only_characterization`, `impleme
 If Global MC cannot run repository-local CLI, any implementation recommendation remains conditional on fresh Context returning `next_action.type: COMMAND`; model routing grants no authority.
 
 ## 8. Execution / delegation rules
-Identify one accountable controller and the mutation owner. State permitted bounded delegation, its read-only or mutation effect, and how delegated work stays within this objective. No controller or worker may mutate before fresh Context independently returns `next_action.type: COMMAND`. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
+Identify one accountable controller and the mutation owner. State permitted bounded delegation, its read-only or mutation effect, and how delegated work stays within this objective. No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
 
 ## 9. Validation requirements
 Discover public commands before use. Run focused regressions and the repository-required validation tier for the changed files; report exact commands and results. Require exact-head CI and independent review when current policy requires them. Do not invent a validation tier or claim checks that were not run.
@@ -85,19 +85,43 @@ every durable objective.
 After each durable objective and applicable HANDOFF/readback: fresh GitHub →
 merged policy → applicable CLI Discovery → fresh Context → recompute route.
 Under `COMMAND`, continue automatically with the next separately bounded
-objective in the same controller session. If two successive fresh Context
-results are `COMMAND`, start each newly authorized objective in the same
-session after its own result. Objective completion alone is not a Founder gate.
+objective in this Issue's same controller session. If two successive fresh
+Context results are `COMMAND`, start each newly authorized objective in the
+same session after its own result. Objective completion alone is not a Founder
+gate. Terminal `COMPLETE` ends this Issue's active Execution session; return.
+A different Issue requires fresh Global MC reconstruction and a newly
+appropriate Execution handoff.
 For `FOUNDER_GATE`, do not mutate and return to Founder once for the required
 decision, then stop at the gate. For `STOP`, unsupported state, or evidence
-conflict, do not mutate; stop fail-closed and report the exact blocker. If
-evidence changes before execution, reconstruct again. Do not pre-authorize
+conflict, do not mutate the authorized objective; stop fail-closed and report
+the exact blocker. Only an exact bounded recovery prescribed by fresh Context
+under section 12 may proceed. Missing, ambiguous, conflicting, or unsupported
+recovery remains STOP. If evidence
+changes before execution, reconstruct again. Do not pre-authorize
 future objectives; a separate real gate still controls when required. On
 terminal completion, return.
 CLI Discovery, zero-delta branch bootstrap, Context rerun, HANDOFF readback, and deterministic inventory are internal substeps when applicable, not a mandatory extra sequence. None of these internal steps alone requires a Founder return.
 
+### Exact bounded recovery
+
+When an explicit bounded recovery decision has been satisfied, perform only its
+named recovery. Do not invent a new comment, HANDOFF, or persistence requirement
+unless an applicable canonical contract requires it. Preserve
+`BLOCKER_RESOLUTION`, `HANDOFF`, review, merge, destructive, production,
+migration, secret, `STOP`, and `FOUNDER_GATE` boundaries.
+
+A generic handoff caution cannot override an exact deterministic recovery
+prescribed by fresh Context. If Context prescribes switching to the correctly
+owned existing Issue branch and live repository evidence identifies exactly one
+candidate, perform only that switch, then immediately rerun registered CLI
+Discovery and fresh Context without a Founder/Global MC relay. Missing, multiple,
+ambiguous, or conflicting candidates remain `STOP`; do not guess. The switch
+grants no synchronization, rebase, reset, merge, implementation, edit, or
+future-objective authority. No general recovery authority or gate waiver is
+implied.
+
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `STOP` or `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation; mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12; otherwise report the blocker and stop. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.
