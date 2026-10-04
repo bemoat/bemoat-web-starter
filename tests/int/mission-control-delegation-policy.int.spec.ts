@@ -83,15 +83,16 @@ describe('Mission Control delegation and execution model policy', () => {
     })
 
     it('stops fail-closed without mutation for STOP and unsupported evidence', () => {
-      expect(artifactSection('Continuation rule')).toMatch(/STOP.*unsupported state.*evidence conflict.*do not mutate.*stop fail.closed/i)
-      expect(artifactSection('Stop conditions')).toMatch(/STOP.*FOUNDER_GATE.*no mutation/i)
+      expect(artifactSection('Continuation rule')).toMatch(/STOP.*unsupported state.*evidence conflict.*do not mutate the authorized objective.*stop fail.closed/i)
+      expect(artifactSection('Stop conditions')).toMatch(/At `STOP`, no objective mutation or delegation.*except the exact bounded recovery fresh Context prescribes.*missing.*unsupported recovery stays fail.closed/i)
+      expect(artifactSection('Stop conditions')).toMatch(/At `FOUNDER_GATE`, include no mutation.capable instructions or delegated mutation/i)
     })
 
     it('treats missing authority, guessed routes, omitted pre-mutation Context, and early mutation as violations', () => {
       const authority = artifactSection('Verified live authority / route')
       expect(authority).toMatch(/lacks required live authority.*CONTRACT VIOLATION/i)
       expect(authority).toMatch(/guesses or omits this pre-mutation Context step.*CONTRACT VIOLATION/i)
-      expect(authority).toMatch(/permits mutation before Context returns `COMMAND`.*CONTRACT VIOLATION/i)
+      expect(authority).toMatch(/permits objective mutation before Context returns `COMMAND`.*CONTRACT VIOLATION/i)
     })
 
     it('reconstructs fresh evidence when it changes before mutation', () => {

@@ -7,6 +7,10 @@ const root = process.cwd()
 const loaderPath = 'prompts/mission-control/chatgpt-project-loader.md'
 const loader = readFileSync(resolve(root, loaderPath), 'utf8')
 const normalizedLoader = loader.replace(/\s+/g, ' ')
+const executionHandoff = readFileSync(resolve(root, 'docs/mission-control/execution-handoff-contract.md'), 'utf8')
+const commandReference = readFileSync(resolve(root, 'docs/mission-control/command-reference.md'), 'utf8')
+const normalizedExecutionHandoff = executionHandoff.replace(/\s+/g, ' ')
+const normalizedCommandReference = commandReference.replace(/\s+/g, ' ')
 
 describe('Global Mission Control progressive-disclosure router', () => {
   it('keeps only the always-required authority and routing in the loader', () => {
@@ -15,7 +19,7 @@ describe('Global Mission Control progressive-disclosure router', () => {
     for (const invariant of [
       /authoritative protected-base policy/i,
       /live GitHub/i,
-      /report the repository.*protected base.*policy ref.*policy source commit SHA.*guide version/i,
+      /report repository.*protected base.*policy ref.*policy source commit SHA.*guide version/i,
       /Global MC does not run repository-local Bemoat CLI/i,
       /Context.*canonical routing authority/i,
       /one bounded objective/i,
@@ -24,7 +28,7 @@ describe('Global Mission Control progressive-disclosure router', () => {
       /`STOP`.*fail.closed/i,
       /do not pre.authorize future objectives/i,
       /independent review/i,
-      /never merge autonomously/i,
+      /no autonomous merge/i,
     ]) expect(normalizedLoader).toMatch(invariant)
   })
 
@@ -78,10 +82,58 @@ describe('Global Mission Control progressive-disclosure router', () => {
 
   it('keeps STOP recovery narrower than task or workflow mutation', () => {
     expect(normalizedLoader).toMatch(/`STOP`.*stop fail-closed for task\/source\/workflow mutation/i)
-    expect(normalizedLoader).toMatch(/only deterministic recovery explicitly prescribed by fresh Context.*switching to the correctly owned existing topic branch/i)
-    expect(normalizedLoader).toMatch(/do not infer synchronization or implementation authority.*rerun.*CLI Discovery and Context after recovery/i)
+    expect(normalizedLoader).toMatch(/exact-recovery and session rules in `docs\/mission.control\/execution.handoff.contract\.md`/i)
+    expect(normalizedExecutionHandoff).toMatch(/switch grants no synchronization.*implementation.*future.objective authority/i)
     expect(normalizedLoader).toMatch(/absent.*conflicting.*unsupported recovery.*stop/i)
     expect(normalizedLoader).toMatch(/`FOUNDER_GATE` means no mutation and return to Founder once for the required decision/i)
+  })
+
+  // Oracle: Founder comment 5972597691 says an explicit bounded recovery
+  // decision authorizes only that recovery, without invented comment/HANDOFF/
+  // persistence gates; the loader still requires evidence named by applicable
+  // canonical contracts and keeps real safety gates intact.
+  it('continues the exact approved recovery without inventing persistence evidence', () => {
+    expect(normalizedExecutionHandoff).toMatch(/when an explicit bounded recovery decision has been satisfied, perform only its named recovery/i)
+    expect(normalizedExecutionHandoff).toMatch(/do not invent a new comment, HANDOFF, or persistence requirement unless an applicable canonical contract requires it/i)
+    expect(normalizedCommandReference).toMatch(/authorized Founder may append one `## BLOCKER_RESOLUTION` Issue comment for one named blocker in an applicable exact.head STOP HANDOFF/i)
+    expect(normalizedLoader).toMatch(/load `docs\/mission.control\/command.reference\.md`.*when resolving a STOP blocker with BLOCKER_RESOLUTION/i)
+    expect(normalizedExecutionHandoff).toMatch(/BLOCKER_RESOLUTION.*HANDOFF.*review.*merge.*destructive.*production.*migration.*secret.*STOP.*FOUNDER_GATE.*boundaries/i)
+  })
+
+  // Oracle: Founder comment 5972597691 distinguishes active non-terminal
+  // COMMAND continuation from terminal Issue completion; execution-handoff-
+  // contract.md requires return at terminal completion and fresh reconstruction
+  // plus a newly appropriate handoff before starting a different Issue.
+  it('ends the Execution session at terminal completion before another Issue', () => {
+    expect(normalizedLoader).toMatch(/after that trigger has been satisfied.*`COMMAND` means continue automatically in the same Execution controller session only while this Issue is nonterminal and fresh Context authorizes it/i)
+    expect(normalizedLoader).toMatch(/do not pre.authorize future objectives/i)
+    expect(normalizedExecutionHandoff).toMatch(/On terminal completion, return/i)
+    expect(normalizedExecutionHandoff).toMatch(/terminal `COMPLETE` ends this Issue's active Execution session/i)
+    expect(normalizedExecutionHandoff).toMatch(/a different Issue requires fresh Global MC reconstruction and a newly appropriate Execution handoff/i)
+    expect(normalizedLoader).toMatch(/one.time post.preflight implementation trigger.*before the first source.file edit/i)
+  })
+
+  // Oracle: Founder comment 5976454479 says generic handoff caution cannot
+  // neutralize fresh Context's exact recovery; when exactly one correctly
+  // owned branch exists, only switching is allowed, followed immediately by
+  // Discovery + Context without a Founder/Global MC relay.
+  it('routes exact fresh-Context recovery without adding a Founder relay', () => {
+    expect(normalizedExecutionHandoff).toMatch(/only an exact deterministic recovery prescribed by that Context may precede a later `COMMAND`, and then only within that recovery's scope/i)
+    expect(normalizedExecutionHandoff).toMatch(/no controller or worker may mutate the authorized objective before fresh Context.*next_action.type: COMMAND.*a pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes/i)
+    expect(normalizedExecutionHandoff).toMatch(/generic handoff caution cannot override an exact deterministic recovery prescribed by fresh Context/i)
+    expect(normalizedExecutionHandoff).toMatch(/if Context prescribes switching to the correctly owned existing Issue branch and live repository evidence identifies exactly one candidate, perform only that switch/i)
+    expect(normalizedExecutionHandoff).toMatch(/immediately rerun registered CLI Discovery and fresh Context without a Founder\/Global MC relay/i)
+    expect(normalizedExecutionHandoff).toMatch(/switch grants no synchronization, rebase, reset, merge, implementation, edit, or future.objective authority/i)
+  })
+
+  // Oracle: Founder comment 5976454479 explicitly requires fail-closed STOP
+  // when the Issue-owned branch candidate is missing, multiple, ambiguous, or
+  // conflicting; no branch may be guessed or switched in those cases.
+  it('keeps missing or ambiguous Issue-owned branch candidates at STOP', () => {
+    expect(normalizedExecutionHandoff).toMatch(/missing, multiple, ambiguous, or conflicting candidates remain `STOP`; do not guess/i)
+    expect(normalizedLoader).toMatch(/absent, conflicting, or unsupported recovery.*stop/i)
+    expect(normalizedExecutionHandoff).toMatch(/at `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12/i)
+    expect(normalizedExecutionHandoff).toMatch(/at `FOUNDER_GATE`, include no mutation.capable instructions or delegated mutation/i)
   })
 
   it('routes each phase trigger to a real canonical contract and loads it only when triggered', () => {
