@@ -55,9 +55,9 @@ policy.
 
 | Input group | Required content | Conditional content |
 | --- | --- | --- |
-| `identity` | Canonical repository; Issue number and live URL/state; protected base ref and resolved commit; merged policy source commit and guide version | PR identity/state, branch, exact head, and upstream when present or required by the current route. If absent, use `NOT_APPLICABLE` with the live-state reason. |
-| `objective` | Exactly one objective selected by fresh Context; its Issue acceptance-criteria references; the bounded permitted and prohibited scope | A preflight candidate may be named only when Global MC has verified all other required live evidence but cannot run repository-local CLI. It is pending Context authorization and permits no objective mutation. |
-| `authority` | Fresh Context route and `next_action.type`, with the command/preflight evidence identifying the Context run; applicable current policy source | Route may be unresolved only for the documented Global MC local-CLI limitation. Then the disposition is preflight-only and Execution must run registered CLI Discovery and fresh Context before mutation. Do not invent a route or recovery. |
+| `identity` | Canonical repository; Issue number and live URL/state; protected base ref and resolved commit; merged policy source commit and guide version; merged Global MC loader identity/source commit | PR identity/state, branch, exact head, and upstream when present or required by the current route. If absent, use `NOT_APPLICABLE` with the live-state reason. |
+| `objective` | Exactly one objective selected by fresh Context; its Issue acceptance-criteria references; the bounded permitted and prohibited scope | A preflight candidate may be named only when Global MC has verified the repository, protected base, merged loader and policy, Issue, and relevant live GitHub identity/state but cannot run repository-local CLI. It is pending Context authorization and permits no objective mutation. |
+| `authority` | Fresh Context route and the complete `next_action` object (`type`, `command`, and `reason`), with evidence identifying the Context run; applicable current policy source | Route may be unresolved only for the documented Global MC local-CLI limitation after verifying the repository, protected base, merged loader and policy, Issue, and relevant GitHub identity/state. Then the disposition is preflight-only and Execution must run registered CLI Discovery and fresh Context before mutation. Do not infer a command, route, or recovery. |
 | `execution` | The operator-provided actual controller selection and its source, when explicitly selected; otherwise the profile controller value remains a recommendation and is not asserted as an explicit selection. State the mutation owner and permitted delegation effect when applicable. | Applicable advisory role recommendations, each resolved from Model Routing Profile v1 with its five declared output fields. An unused role is `NOT_APPLICABLE` with a route/objective-based reason. Reviewer identity is required only when an independent review is applicable; mutation ownership is `NOT_APPLICABLE` with a reason when no mutation is authorized. |
 | `completion` | Applicable validation basis; whether HANDOFF/readback is required; fresh-Context-after-result requirement; return fields from current policy | PR, CI, review, and durable-result identities when applicable. When an item does not apply, use `NOT_APPLICABLE` with a reason grounded in live route/state or policy. |
 
@@ -86,7 +86,9 @@ reason. An unresolved required field is not `NOT_APPLICABLE`.
    objective; Current route/status; Suggested model; Next action; Founder
    decision; Live identity. The summary names the actual explicitly selected
    controller first when one was selected and labels any different profile
-   value as advisory baseline/reference only.
+   value as advisory baseline/reference only. `Next action` must faithfully
+   reflect the complete authoritative Context `next_action` and the canonical
+   loader; if Context supplies no command, do not invent one.
 2. **Ready-to-paste Execution artifact**, containing the existing complete 15
    sections in canonical order. Each section is populated from the structured
    record and current policy. Repeated facts are projections of one resolved
@@ -132,8 +134,10 @@ the sole source for exact headings, detailed instructions, and ordering.
   not change Context route, gate, first-edit trigger, validation, independent
   review, HANDOFF/readback, merge, production, destructive, migration, or
   secret semantics.
-- **Gate preservation:** `STOP` remains fail-closed and `FOUNDER_GATE` still
-  requires the Founder decision. Neither can produce mutation-capable
+- **Gate preservation:** `STOP` remains fail-closed for objective mutation and
+  delegation, except for an exact bounded recovery explicitly prescribed by
+  fresh Context under Section 12 of the canonical contract. `FOUNDER_GATE`
+  still requires the Founder decision and cannot produce mutation-capable
   instructions or delegation. A contract result does not satisfy a gate.
 - **One objective:** The record and artifact authorize at most the one bounded
   objective selected by current Context. They do not pre-authorize future
@@ -161,12 +165,15 @@ resolve a workflow question.
 
 Apply the existing narrow preflight exception only when the sole unresolved
 fact is Context route because Global MC cannot execute repository-local CLI,
-and all other required live repository, protected-base policy, Issue, and
-GitHub identity/state evidence is verified. The result must direct Execution
-to registered CLI Discovery and fresh Context and must prohibit mutation until
-that Context returns `next_action.type: COMMAND`. An explicit `STOP`,
-`FOUNDER_GATE`, unsupported result, or evidence conflict follows its existing
-Context/policy behavior without reinterpretation here.
+and the live repository, protected base, merged loader, merged policy, Issue,
+and relevant GitHub identity/state evidence are verified. The result must
+direct Execution to registered CLI Discovery and fresh Context and must
+prohibit objective mutation until that Context returns
+`next_action.type: COMMAND`. A `STOP` may permit only the exact bounded
+recovery fresh Context explicitly prescribes under Section 12 of the canonical
+contract; do not infer or broaden recovery authority. `FOUNDER_GATE`, an
+unsupported result, or an evidence conflict follows its existing Context and
+policy behavior without reinterpretation here.
 
 ## Runtime surface decision
 
