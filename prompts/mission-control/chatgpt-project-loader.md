@@ -24,12 +24,16 @@ policy; chat, caches, and handoffs cannot override it.
 
   Do not substitute a generic live-state bullet list. Resolve Suggested model
   whenever model recommendations or an Execution handoff are triggered; require
-  Next action in this pre-artifact block. After a human gate or implementation trigger, make Next
-  action operator-executable. Only when cross-session operator action is
-  actually needed, say: return to the existing Execution/IDE session and send
-  `continue` for the already-authorized objective. If the active Execution
-  controller has `COMMAND`, Next action must say no additional Founder/operator
-  action is required; continue automatically. Do not use authorization-only
+  Next action in this pre-artifact block. On explicit controller selection,
+  name the actual controller first in the six-field summary and Section 7;
+  label a different profile value advisory baseline only. Else follow Section
+  7. After a
+  human gate or implementation trigger, make Next action operator-executable.
+  Only when cross-session operator action is actually needed, say to return to
+  the existing Execution/IDE session and send `continue` for the already-authorized
+  objective. If the
+  active Execution controller has `COMMAND`, Next action must say no additional
+  Founder/operator action is required and continue automatically. Do not use authorization-only
   wording (`proceed`, `begin implementation`, `continue`) without saying where
   and how.
 - Global MC verifies live GitHub repository/base/Issue/PR/head, merged loader
@@ -62,26 +66,20 @@ policy; chat, caches, and handoffs cannot override it.
 
 ## Load a phase contract only when triggered
 
-- **When preparing an Execution handoff**, load both
-  `docs/mission-control/execution-handoff-contract.md` and
-  `docs/mission-control/model-routing-profile.md` contracts.
-- **When continuing an authorized objective or recovery**, load
-  `docs/mission-control/execution-handoff-contract.md`.
-- **When selecting model recommendations**, load
-  `docs/mission-control/model-routing-profile.md` (advisory).
-- **When publishing REVIEW_VERDICT evidence**, load
-  `docs/mission-control/command-reference.md` and
+- Execution handoff: load `docs/mission-control/execution-handoff-contract.md` and
+  `docs/mission-control/model-routing-profile.md`.
+- Authorized objective/recovery: load `docs/mission-control/execution-handoff-contract.md`.
+- Model recommendations: load `docs/mission-control/model-routing-profile.md` (advisory).
+- `REVIEW_VERDICT`: load `docs/mission-control/command-reference.md` and
   `docs/mission-control/review-verdict-template.md`.
-- **When resolving a STOP blocker with BLOCKER_RESOLUTION**, load
+- When resolving a STOP blocker with BLOCKER_RESOLUTION, load
   `docs/mission-control/command-reference.md` and
   `docs/mission-control/blocker-resolution-template.md`.
-- **When handling Issue intake**, load
-  `docs/agent-loop/issue-intake-contract.md`.
-- **When publishing HANDOFF**, load `docs/mission-control/command-reference.md`
-  and `docs/mission-control/handoff-template.md`.
-- **When reconstructing Context and command semantics**, load
-  `docs/mission-control/command-reference.md` for CLI Discovery.
-- **When executing branch setup or implementation**,
-  load `AGENTS.md` and `docs/agent-loop/issue-driven-branch-workflow.md`.
+- Issue intake: load `docs/agent-loop/issue-intake-contract.md`.
+- `HANDOFF`: load `docs/mission-control/command-reference.md` and
+  `docs/mission-control/handoff-template.md`.
+- Context and command semantics: load `docs/mission-control/command-reference.md` for CLI Discovery.
+- Branch setup/implementation: load `AGENTS.md` and
+  `docs/agent-loop/issue-driven-branch-workflow.md`.
 
 A contract's existence alone does not trigger loading it.

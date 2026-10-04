@@ -211,6 +211,38 @@ describe('Mission Control delegation and execution model policy', () => {
     expect(guide).toMatch(/when useful.*same capable worker through a coherent inspect\/implement\/focused-check\/correction chain.*authorized delivery steps/i)
   })
 
+  describe('explicit execution controller and advisory baseline', () => {
+    it('reports an explicit current controller in the operator summary and Section 7', () => {
+      const loader = read('prompts/mission-control/chatgpt-project-loader.md')
+      const routing = artifactSection('Model routing')
+
+      expect(loader.replace(/\s+/g, ' ')).toMatch(/on explicit controller selection, name the actual controller first in the six.field summary and Section 7; label a different profile value advisory baseline only/i)
+      expect(routing).toMatch(/Sol Medium advisory baseline.*Luna XHigh.*actual controller.*Sol Medium.*advisory baseline/i)
+      expect(routing).toMatch(/must not downgrade or replace the explicit selection because the advisory baseline differs/i)
+    })
+
+    it('never presents the advisory profile as binding execution or workflow authority', () => {
+      const routing = artifactSection('Model routing')
+
+      expect(routing).toMatch(/never describe.*advisory profile recommendation as workflow or model.execution authority/i)
+      expect(routing).toMatch(/do not say or imply.*governs.*binds.*prevents/i)
+    })
+
+    it('keeps the advisory controller recommendation usable when no controller is explicitly selected', () => {
+      const routing = artifactSection('Model routing')
+      expect(routing).toMatch(/without an explicit current.execution controller selection.*advisory profile.*controller default may be presented as the recommendation/i)
+      expect(routing).toMatch(/future target policy.*only when the active Issue changes the advisory defaults.*otherwise.*NOT_APPLICABLE/i)
+    })
+
+    it('does not let controller selection change Context authority, routes, or gates', () => {
+      expect(artifactSection('Model routing')).toMatch(/explicit controller selection.*does not change Context authority, routes, gates, repository policy, or acceptance criteria/i)
+    })
+
+    it('keeps the independent semantic reviewer separate from the controller and implementer', () => {
+      expect(artifactSection('Model routing')).toMatch(/independent semantic.*reviewer.*remain separate from.*actual controller and implementer/i)
+    })
+  })
+
   describe('advisory Model Routing Profile v1', () => {
     const profile = () => {
       const loader = readFileSync(resolve(root, 'docs/mission-control/model-routing-profile.md'), 'utf8')
