@@ -73,6 +73,39 @@ State the required durable result. Publish one strict HANDOFF and verify its exa
 After the durable objective result and applicable HANDOFF/readback, resolve fresh GitHub evidence, read the merged policy, perform applicable CLI Discovery, and run fresh Context before selecting the next objective.
 
 ## 12. Continuation rule
+
+Classify the destination session before choosing a cross-session action:
+
+- **New Execution/IDE session:** MUST emit the complete canonical Ready-to-paste
+  Execution artifact with all 15 ordered sections inside the artifact itself.
+  MUST NOT substitute a short bootstrap, `continue`, summary, or surrounding
+  prose for that artifact.
+- **Existing active Execution/IDE session for the same Issue:** MAY use a
+  compact operator action such as `continue` only when live authority says a
+  cross-session operator action is actually required and the already-authorized
+  objective/session remains the valid continuation target. MUST NOT use this
+  compact continuation form to start a new Issue or a new Execution session.
+- **New Global MC reconstruction:** a bare Issue number remains sufficient
+  because Global MC reconstructs live GitHub, loader, and policy state itself.
+  This bare-Issue shortcut does not apply to a new Execution/IDE handoff.
+- **Ambiguous destination:** if Global MC cannot prove whether the destination
+  is a new Execution session or an existing valid same-Issue session, it MUST
+  NOT choose the shortened form. Fail closed toward the full canonical
+  Execution artifact or resolve the session identity first.
+
+Progressive disclosure means load the full Execution contract when the
+Execution-handoff phase is triggered; it does not mean omitting the triggered
+contract.
+
+For any complete copy-ready operator artifact intended for transfer, keep the
+entire artifact in one dedicated copyable container supported by the active
+client. In ChatGPT, use a writing block with the native Copy affordance. Keep
+analysis and explanation outside the artifact. Do not place substantive parts
+of one artifact partly in prose and partly inside the copyable container.
+Rendering in a copyable container
+grants no workflow authority and must not alter Context, STOP, FOUNDER_GATE,
+first-edit, CI, review, HANDOFF, or merge semantics.
+
 The one-time post-preflight implementation trigger remains required before the
 first source-file edit after issue preflight, as described in `AGENTS.md` and
 `docs/agent-loop/issue-driven-branch-workflow.md`. A fresh `COMMAND` does not

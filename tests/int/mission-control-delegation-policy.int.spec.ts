@@ -127,6 +127,63 @@ describe('Mission Control delegation and execution model policy', () => {
     expect(artifact).toMatch(/do not return to Founder for this deterministic correction/i)
   })
 
+  describe('Execution handoffs by destination session', () => {
+    const contract = read('docs/mission-control/execution-handoff-contract.md')
+    const loader = read('prompts/mission-control/chatgpt-project-loader.md')
+    const continuation = artifactSection('Continuation rule')
+
+    // Authority: execution-handoff-contract.md requires every Ready-to-paste
+    // Execution/IDE prompt to contain all 15 sections inside the artifact.
+    // Issue #512 comment 5998215788 records that a new session cannot use a
+    // bootstrap-only message or `continue` as a substitute.
+    it('requires a complete artifact when the destination is a new Execution/IDE session', () => {
+      expect(continuation).toMatch(/new Execution\/IDE session.*MUST emit.*complete canonical.*all 15 ordered sections inside the artifact/i)
+      expect(continuation).toMatch(/MUST NOT substitute.*bootstrap.*`continue`.*summary.*surrounding prose/i)
+    })
+
+    // Authority: the existing-session exception applies only to the same
+    // Issue's still-valid active Execution session when operator action is
+    // canonically required.
+    it('limits compact continue to a valid existing same-Issue Execution session', () => {
+      expect(continuation).toMatch(/existing active Execution\/IDE session for the same Issue.*compact operator action.*`continue`/i)
+      expect(continuation).toMatch(/cross.session operator action is actually required.*session remains the valid continuation target/i)
+      expect(continuation).toMatch(/must not use this compact continuation form to start a new Issue or a new Execution session/i)
+    })
+
+    // Authority: Global MC reconstructs GitHub state itself, so a bare Issue
+    // number remains sufficient for a new Global MC chat.
+    it('keeps bare-Issue reconstruction valid for a new Global MC chat', () => {
+      expect(continuation).toMatch(/new Global MC reconstruction.*bare Issue number.*remains sufficient/i)
+      expect(continuation).toMatch(/bare.Issue shortcut does not apply to a new Execution\/IDE handoff/i)
+    })
+
+    // Authority: the Founder direction in Issue #512 comment 5998215788
+    // requires resolving unknown destination identity or failing toward the
+    // complete artifact, never silently selecting the short form.
+    it('fails closed when the Execution destination session is ambiguous', () => {
+      expect(continuation).toMatch(/cannot prove whether the destination is a new Execution session or an existing valid same.Issue session/i)
+      expect(continuation).toMatch(/must not choose the shortened form.*full canonical Execution artifact or resolve the session identity first/i)
+    })
+
+    // Authority: sections 1-2 of the Founder direction in Issue #512 comment
+    // 5993511230 require one wholly copyable artifact; presentation adds no
+    // authority or semantic changes.
+    it('keeps a complete operator artifact in one copy-ready container', () => {
+      expect(contract).toMatch(/complete copy.ready operator artifact.*one dedicated copyable container supported by the active client/i)
+      expect(contract).toMatch(/in ChatGPT.*writing block.*native Copy affordance/i)
+      expect(contract).toMatch(/do not place substantive parts of one artifact partly in prose and partly inside the copyable container/i)
+      expect(contract).toMatch(/rendering in a copyable container grants no workflow authority.*must not alter Context/i)
+    })
+
+    // Authority: loader progressive disclosure loads the Execution contract
+    // when that phase triggers; it does not permit omitting the loaded rules.
+    it('loads the full Execution contract when the handoff phase is triggered', () => {
+      expect(loader).toMatch(/Execution handoff: load `docs\/mission-control\/execution-handoff-contract\.md`/i)
+      expect(contract).toMatch(/progressive disclosure means load the full Execution contract when the Execution.handoff phase is triggered/i)
+      expect(contract).toMatch(/does not mean omitting the triggered contract/i)
+    })
+  })
+
   it('keeps all applicable model roles and escalation inside the artifact', () => {
     const artifact = artifactSection('Model routing')
     for (const role of [
