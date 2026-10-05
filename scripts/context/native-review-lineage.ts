@@ -120,12 +120,29 @@ export function readNativeReviewAncestryProofs({
       base_commit?: { sha?: unknown }
       head_commit?: { sha?: unknown }
       merge_base_commit?: { sha?: unknown }
+      commits?: unknown
     }>(run('gh', ['api', `repos/${repository}/compare/${predecessor.commitId}...${currentHead}`], { cwd, env }))
     if (!result || typeof result.status !== 'string' || !Number.isSafeInteger(result.ahead_by) ||
       !Number.isSafeInteger(result.behind_by) || !isFullSha(result.base_commit?.sha) ||
-      !isFullSha(result.head_commit?.sha) || !isFullSha(result.merge_base_commit?.sha)) continue
-    if (result.base_commit!.sha!.toLowerCase() !== predecessor.commitId.toLowerCase() ||
-      result.head_commit!.sha!.toLowerCase() !== currentHead.toLowerCase()) continue
+      !isFullSha(result.merge_base_commit?.sha)) continue
+    if (result.base_commit!.sha!.toLowerCase() !== predecessor.commitId.toLowerCase()) continue
+
+    let currentHeadBinds = isFullSha(result.head_commit?.sha) &&
+      result.head_commit!.sha!.toLowerCase() === currentHead.toLowerCase()
+    if (result.head_commit === null || result.head_commit === undefined) {
+      const commits = Array.isArray(result.commits) ? result.commits : []
+      const commitShas = commits.map((commit) =>
+        commit && typeof commit === 'object' && !Array.isArray(commit)
+          ? (commit as { sha?: unknown }).sha
+          : null,
+      )
+      const uniqueCommitShas = new Set(commitShas)
+      currentHeadBinds = Number.isSafeInteger(result.ahead_by) && (result.ahead_by as number) > 0 &&
+        commits.length === result.ahead_by && commitShas.every(isFullSha) &&
+        uniqueCommitShas.size === commits.length &&
+        commitShas.at(-1)?.toLowerCase() === currentHead.toLowerCase()
+    }
+    if (!currentHeadBinds) continue
 
     proofs.push({
       predecessorReviewId: predecessorId,

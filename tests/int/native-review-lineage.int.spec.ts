@@ -84,6 +84,43 @@ describe('native review ancestry evidence', () => {
     }])
   })
 
+  it('binds the requested current head from the complete compare commits when head_commit is null', () => {
+    const run: ContextCommandRunner = () => ({
+      status: 0,
+      stdout: JSON.stringify({
+        status: 'ahead',
+        ahead_by: 1,
+        behind_by: 0,
+        base_commit: { sha: predecessorHead },
+        head_commit: null,
+        merge_base_commit: { sha: predecessorHead },
+        commits: [{ sha: currentHead }],
+      }),
+      stderr: '',
+      error: null,
+    })
+
+    expect(readNativeReviewAncestryProofs({
+      reviews: reviews(),
+      repository: 'boat1994/bemoat-web-starter',
+      issue: '554',
+      pr: '555',
+      base: 'main',
+      currentHead,
+      run,
+      cwd: '/repo',
+      env: process.env,
+    })).toEqual([{
+      predecessorReviewId: 5409743181,
+      predecessorHeadSha: predecessorHead,
+      currentHeadSha: currentHead,
+      status: 'ahead',
+      mergeBaseSha: predecessorHead,
+      aheadBy: 1,
+      behindBy: 0,
+    }])
+  })
+
   const unavailableCompareCases: Array<[string, ContextCommandRunner]> = [
     ['unavailable response', () => ({ status: 1, stdout: '', stderr: 'unavailable', error: null })],
     ['ambiguous compare endpoints', () => ({
@@ -107,6 +144,24 @@ describe('native review ancestry evidence', () => {
     ['missing compare result fields', () => ({
       status: 0,
       stdout: JSON.stringify({ status: 'ahead', ahead_by: 1, behind_by: 0, base_commit: { sha: predecessorHead } }),
+      stderr: '',
+      error: null,
+    })],
+    ['incomplete compare commits', () => ({
+      status: 0,
+      stdout: JSON.stringify({ status: 'ahead', ahead_by: 2, behind_by: 0, base_commit: { sha: predecessorHead }, head_commit: null, merge_base_commit: { sha: predecessorHead }, commits: [{ sha: currentHead }] }),
+      stderr: '',
+      error: null,
+    })],
+    ['compare commits ending at another head', () => ({
+      status: 0,
+      stdout: JSON.stringify({ status: 'ahead', ahead_by: 1, behind_by: 0, base_commit: { sha: predecessorHead }, head_commit: null, merge_base_commit: { sha: predecessorHead }, commits: [{ sha: 'd'.repeat(40) }] }),
+      stderr: '',
+      error: null,
+    })],
+    ['ambiguous duplicate compare commits', () => ({
+      status: 0,
+      stdout: JSON.stringify({ status: 'ahead', ahead_by: 2, behind_by: 0, base_commit: { sha: predecessorHead }, head_commit: null, merge_base_commit: { sha: predecessorHead }, commits: [{ sha: currentHead }, { sha: currentHead }] }),
       stderr: '',
       error: null,
     })],
