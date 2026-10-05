@@ -80,7 +80,16 @@ Task: Issue #535
 ## Superseding an earlier verdict
 
 When a new immutable review supersedes one predecessor, include one numeric
-native review/comment database ID using this exact parser-supported field:
+native review database ID using this exact parser-supported field. For a
+cross-head predecessor, Context accepts the link only when that ID resolves to
+exactly one submitted review in the same PR's native review collection, the
+predecessor binds the same repository, Issue, PR, and base, and GitHub compare
+evidence proves that its reviewed commit is a strict ancestor of the current
+reviewed head. Missing or ambiguous ancestry evidence stops Context. The
+current review must still independently bind the exact current head and meet
+the ordinary reviewer-independence requirements; the predecessor never
+satisfies the current-head review requirement. Same-head reconciliation keeps
+its existing semantics.
 
 <!-- review-verdict:supersession:start -->
 ````markdown
@@ -96,7 +105,7 @@ Task: Issue #535
 <!-- review-verdict:supersession:end -->
 
 The predecessor ID must identify the actual prior record in the applicable
-lineage. Do not include multiple `Supersedes` fields or use timestamps or
-comment order to establish precedence. See
+lineage. Do not include multiple `Supersedes` fields or use timestamps, review
+ordering, or "latest" selection to establish lineage. See
 [command-reference.md](command-reference.md#semantic-review-evidence) for the
 reader and lineage contract.

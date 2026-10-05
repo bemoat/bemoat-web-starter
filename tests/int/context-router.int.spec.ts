@@ -1507,6 +1507,247 @@ describe('bemoat:context pure routing', () => {
       expect(decision.route).toBe('FOUNDER_GATE')
     })
 
+    it('accepts the exact #554 native Delta Review with its strictly ancestral predecessor', () => {
+      const predecessorHead = '3ae88e8dd78568de963edca6f68f189066d42ab2'
+      const currentHead = 'c1dfd217f85df66c504464a2f08ded7e372bc94e'
+      const reproducedBase = 'fc543f3f92b74cb492498c2ffdebfc845bbd3d6a'
+      const predecessorId = 5409743181
+      const currentId = 5409895399
+      const predecessor = {
+        id: predecessorId,
+        url: `https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-${predecessorId}`,
+        state: 'CHANGES_REQUESTED',
+        commitId: predecessorHead,
+        body: `## REVIEW_VERDICT
+Repository: \`boat1994/bemoat-web-starter\`
+Task: Issue #554
+**PR / base / head:** PR #555 · \`main\` · \`${predecessorHead}\`
+**Approved base:** \`main@${reproducedBase}\`
+**Verdict:** CORRECTION REQUIRED
+
+### Immutable finding disposition
+\`\`\`json
+{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${predecessorHead}", "findings": [{ "id": "REVIEW-554-001", "canonical_summary": "Apply the requested correction.", "source_thread": "https://github.com/boat1994/bemoat-web-starter/pull/555", "required_evidence": ["The correction is present."] }] }
+\`\`\``
+      }
+      const current = {
+        id: currentId,
+        url: `https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-${currentId}`,
+        state: 'COMMENTED',
+        commitId: currentHead,
+        body: `## REVIEW_VERDICT
+**Supersedes:** ${predecessorId}
+Repository: \`boat1994/bemoat-web-starter\`
+Task: Issue #554
+**PR / base / head:** PR #555 · \`main\` · \`${currentHead}\`
+**Approved base:** \`main@${reproducedBase}\`
+**Verdict:** ELIGIBLE FOR FOUNDER REVIEW`
+      }
+      const evidence = baseEvidence({
+        issue: { ...baseEvidence().issue, number: '554', url: 'https://github.com/boat1994/bemoat-web-starter/issues/554', workflowProfile: 'STANDARD' },
+        localGit: { ...baseEvidence().localGit, branch: 'fix/554-example', head: currentHead },
+        protectedBase: { ...baseEvidence().protectedBase, sha: reproducedBase },
+        activePr: prEvidence({ number: '555', url: 'https://github.com/boat1994/bemoat-web-starter/pull/555', headBranch: 'fix/554-example', headSha: currentHead, baseSha: reproducedBase }),
+        currentHeadVerification: verification({
+          exactHead: currentHead,
+          reviews: { required: false, approved: true, exactHead: true, approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews: [predecessor, current] },
+        }),
+      })
+      Object.assign(evidence.currentHeadVerification!.reviews, {
+        nativeReviewAncestryProofs: [{
+          predecessorReviewId: predecessorId,
+          predecessorHeadSha: predecessorHead,
+          currentHeadSha: currentHead,
+          mergeBaseSha: predecessorHead,
+          status: 'ahead',
+          aheadBy: 1,
+          behindBy: 0,
+        }],
+      })
+
+      expect(routeContext(evidence).route).toBe('FOUNDER_GATE')
+
+      const expectStopWith = (mutate: (candidate: typeof evidence) => void) => {
+        const candidate = structuredClone(evidence)
+        mutate(candidate)
+        expect(routeContext(candidate).route).toBe('STOP')
+      }
+      const predecessorReview = (candidate: typeof evidence) => candidate.currentHeadVerification!.reviews.nativeReviews![0]!
+      const currentReview = (candidate: typeof evidence) => candidate.currentHeadVerification!.reviews.nativeReviews![1]!
+
+      expectStopWith((candidate) => {
+        predecessorReview(candidate).body = predecessor.body.replace('Task: Issue #554', 'Task: Issue #553')
+      })
+      expectStopWith((candidate) => {
+        predecessorReview(candidate).body = predecessor.body.replace('PR #555', 'PR #556')
+      })
+      expectStopWith((candidate) => {
+        predecessorReview(candidate).body = predecessor.body.replace('· `main` ·', '· `staging` ·')
+      })
+      expectStopWith((candidate) => {
+        predecessorReview(candidate).url = 'https://github.com/boat1994/bemoat-web-starter/pull/556#pullrequestreview-5409743181'
+      })
+      expectStopWith((candidate) => {
+        currentReview(candidate).body = current.body.replace('**Supersedes:** 5409743181', '**Supersedes:** 5409743181\n**Supersedes:** 5409743181')
+      })
+      expectStopWith((candidate) => {
+        currentReview(candidate).body = current.body.replace('5409743181', '5409743182')
+      })
+      expectStopWith((candidate) => {
+        candidate.currentHeadVerification!.reviews.nativeReviews!.push({
+          ...predecessorReview(candidate),
+          url: 'https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-5409743182',
+        })
+      })
+      for (const state of ['PENDING', 'DISMISSED', 'UNKNOWN']) {
+        expectStopWith((candidate) => { predecessorReview(candidate).state = state })
+      }
+      expectStopWith((candidate) => { predecessorReview(candidate).body = '## REVIEW_VERDICT\nmalformed' })
+      expectStopWith((candidate) => { predecessorReview(candidate).commitId = 'not-a-full-sha' })
+      expectStopWith((candidate) => { currentReview(candidate).body = '## REVIEW_VERDICT\n**Verdict:** ELIGIBLE FOR FOUNDER REVIEW' })
+
+      const competingCorrection = {
+        id: 5409895400,
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-5409895400',
+        state: 'CHANGES_REQUESTED',
+        commitId: currentHead,
+        body: `## REVIEW_VERDICT
+Repository: \`boat1994/bemoat-web-starter\`
+Task: Issue #554
+**PR / base / head:** PR #555 · \`main\` · \`${currentHead}\`
+**Approved base:** \`main@${reproducedBase}\`
+**Verdict:** CORRECTION REQUIRED
+
+### Immutable finding disposition
+\`\`\`json
+{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${currentHead}", "findings": [{ "id": "REVIEW-554-002", "canonical_summary": "The correction is incomplete.", "source_thread": "https://github.com/boat1994/bemoat-web-starter/pull/555", "required_evidence": ["Complete the remaining correction."] }] }
+\`\`\``
+      }
+      expectStopWith((candidate) => { candidate.currentHeadVerification!.reviews.nativeReviews!.push(competingCorrection) })
+
+      const permuted = structuredClone(evidence)
+      permuted.currentHeadVerification!.reviews.nativeReviews!.reverse()
+      Object.assign(permuted.currentHeadVerification!.reviews.nativeReviews![0]!, { submittedAt: '2099-01-01T00:00:00Z' })
+      Object.assign(permuted.currentHeadVerification!.reviews.nativeReviews![1]!, { submittedAt: '2000-01-01T00:00:00Z' })
+      expect(routeContext(permuted).route).toBe('FOUNDER_GATE')
+
+      const invalidProofs = [
+        [],
+        [{ ...evidence.currentHeadVerification!.reviews.nativeReviewAncestryProofs![0]!, status: 'diverged' }],
+        [{ ...evidence.currentHeadVerification!.reviews.nativeReviewAncestryProofs![0]!, mergeBaseSha: 'd'.repeat(40) }],
+        [{ ...evidence.currentHeadVerification!.reviews.nativeReviewAncestryProofs![0]!, predecessorHeadSha: 'invalid' }],
+        [{ ...evidence.currentHeadVerification!.reviews.nativeReviewAncestryProofs![0]!, aheadBy: 0 }],
+        [{ ...evidence.currentHeadVerification!.reviews.nativeReviewAncestryProofs![0]!, behindBy: 1 }],
+      ]
+      for (const nativeReviewAncestryProofs of invalidProofs) {
+        const candidate = structuredClone(evidence)
+        candidate.currentHeadVerification!.reviews.nativeReviewAncestryProofs = nativeReviewAncestryProofs
+        expect(routeContext(candidate).route).toBe('STOP')
+      }
+
+      const wrongRepository = structuredClone(evidence)
+      wrongRepository.currentHeadVerification!.reviews.nativeReviews![0]!.body = predecessor.body.replace(
+        'boat1994/bemoat-web-starter', 'other/repository',
+      )
+      expect(routeContext(wrongRepository).route).toBe('STOP')
+
+    })
+
+    it('does not let a valid old-head native review satisfy the current-head semantic review requirement', () => {
+      const oldHead = '3ae88e8dd78568de963edca6f68f189066d42ab2'
+      const currentHead = 'c1dfd217f85df66c504464a2f08ded7e372bc94e'
+      const reproducedBase = 'fc543f3f92b74cb492498c2ffdebfc845bbd3d6a'
+      const oldReview = {
+        id: 5409743181,
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-5409743181',
+        state: 'CHANGES_REQUESTED',
+        commitId: oldHead,
+        body: `## REVIEW_VERDICT
+Repository: \`boat1994/bemoat-web-starter\`
+Task: Issue #554
+**PR / base / head:** PR #555 · \`main\` · \`${oldHead}\`
+**Approved base:** \`main@${reproducedBase}\`
+**Verdict:** CORRECTION REQUIRED
+
+### Immutable finding disposition
+\`\`\`json
+{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${oldHead}", "findings": [{ "id": "REVIEW-554-001", "canonical_summary": "Apply the requested correction.", "source_thread": "https://github.com/boat1994/bemoat-web-starter/pull/555", "required_evidence": ["The correction is present."] }] }
+\`\`\``
+      }
+      const decision = routeContext(baseEvidence({
+        issue: { ...baseEvidence().issue, number: '554', url: 'https://github.com/boat1994/bemoat-web-starter/issues/554', workflowProfile: 'STANDARD' },
+        localGit: { ...baseEvidence().localGit, branch: 'fix/554-example', head: currentHead },
+        protectedBase: { ...baseEvidence().protectedBase, sha: reproducedBase },
+        activePr: prEvidence({ number: '555', url: 'https://github.com/boat1994/bemoat-web-starter/pull/555', headBranch: 'fix/554-example', headSha: currentHead, baseSha: reproducedBase }),
+        currentHeadVerification: verification({
+          exactHead: currentHead,
+          reviews: { required: false, approved: true, exactHead: true, approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews: [oldReview] },
+        }),
+      }))
+
+      expect(decision.route).toBe('REVIEW')
+    })
+
+    it('fails closed when a named predecessor has the same identity-bound reviewed head as the current review', () => {
+      const head = 'c1dfd217f85df66c504464a2f08ded7e372bc94e'
+      const base = 'fc543f3f92b74cb492498c2ffdebfc845bbd3d6a'
+      const priorId = 5409743181
+      const currentId = 5409895399
+      const prior = {
+        id: priorId,
+        url: `https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-${priorId}`,
+        state: 'CHANGES_REQUESTED',
+        commitId: head,
+        body: `## REVIEW_VERDICT
+Repository: \`boat1994/bemoat-web-starter\`
+Task: Issue #554
+**PR / base / head:** PR #555 · \`main\` · \`${head}\`
+**Approved base:** \`main@${base}\`
+**Verdict:** CORRECTION REQUIRED
+
+### Immutable finding disposition
+\`\`\`json
+{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${head}", "findings": [{ "id": "REVIEW-554-001", "canonical_summary": "Apply the requested correction.", "source_thread": "https://github.com/boat1994/bemoat-web-starter/pull/555", "required_evidence": ["The correction is present."] }] }
+\`\`\``
+      }
+      const current = {
+        id: currentId,
+        url: `https://github.com/boat1994/bemoat-web-starter/pull/555#pullrequestreview-${currentId}`,
+        state: 'COMMENTED',
+        commitId: head,
+        body: `## REVIEW_VERDICT
+**Supersedes:** ${priorId}
+Repository: \`boat1994/bemoat-web-starter\`
+Task: Issue #554
+**PR / base / head:** PR #555 · \`main\` · \`${head}\`
+**Approved base:** \`main@${base}\`
+**Verdict:** ELIGIBLE FOR FOUNDER REVIEW`
+      }
+      const evidence = baseEvidence({
+        protectedBase: { ...baseEvidence().protectedBase, sha: base },
+        issue: { ...baseEvidence().issue, number: '554', url: 'https://github.com/boat1994/bemoat-web-starter/issues/554', workflowProfile: 'STANDARD' },
+        localGit: { ...baseEvidence().localGit, branch: 'fix/554-example', head },
+        activePr: prEvidence({ number: '555', url: 'https://github.com/boat1994/bemoat-web-starter/pull/555', headBranch: 'fix/554-example', headSha: head, baseSha: base }),
+        currentHeadVerification: verification({
+          exactHead: head,
+          reviews: { required: false, approved: true, exactHead: true, approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews: [prior, current] },
+        }),
+      })
+      Object.assign(evidence.currentHeadVerification!.reviews, {
+        nativeReviewAncestryProofs: [{
+          predecessorReviewId: priorId,
+          predecessorHeadSha: head,
+          currentHeadSha: head,
+          mergeBaseSha: head,
+          status: 'identical',
+          aheadBy: 0,
+          behindBy: 0,
+        }],
+      })
+
+      expect(routeContext(evidence).route).toBe('STOP')
+    })
+
     it('routes an exact-head native CORRECTION REQUIRED review with a usable finding to FIX', () => {
       const currentHeadVerification = verification({
         reviews: {
