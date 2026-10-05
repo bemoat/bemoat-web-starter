@@ -166,6 +166,13 @@ function exactCommentUrl(comment: RoleEvidence, evidence: NormalizedContextEvide
   }
 }
 
+export function hasMalformedNoPrBlockerResolutionEvidence(evidence: NormalizedContextEvidence): boolean {
+  if ((evidence.durableContext.invalidBlockerResolutions ?? []).length > 0) return true
+  return (evidence.durableContext.blockerResolutions ?? []).some((comment) =>
+    parseNoPrBlockerResolutionRecord(comment.body) === null || !exactCommentUrl(comment, evidence),
+  )
+}
+
 function bindsCurrentStop(
   resolution: BlockerResolutionRecord,
   source: RoleEvidence,

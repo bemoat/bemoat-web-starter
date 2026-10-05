@@ -158,6 +158,7 @@ function contextFor(
   identity: Identity,
   handoffs: RoleEvidence[],
   blockerResolutions: RoleEvidence[] = [],
+  invalidBlockerResolutions: RoleEvidence[] = [],
 ): NormalizedContextEvidence {
   return {
     repository: {
@@ -211,7 +212,7 @@ function contextFor(
       handoffs,
       historicalResults: [],
       blockerResolutions,
-      invalidBlockerResolutions: [],
+      invalidBlockerResolutions,
     },
     evidenceErrors: [],
   }
@@ -221,8 +222,9 @@ function routeNoPr(
   identity: Identity,
   handoffs: RoleEvidence[],
   resolutions: RoleEvidence[] = [],
+  invalidResolutions: RoleEvidence[] = [],
 ) {
-  return routeContext(contextFor(identity, handoffs, resolutions))
+  return routeContext(contextFor(identity, handoffs, resolutions, invalidResolutions))
 }
 
 describe('no-PR schema-v3 STOP resolution and terminal folding', () => {
@@ -338,6 +340,39 @@ describe('no-PR schema-v3 STOP resolution and terminal folding', () => {
     const complete = handoff(issue532, { id: 5983158999, route: 'COMPLETE' })
 
     expect(routeNoPr(issue532, [stop, complete], [oneResolution]).route).toBe('STOP')
+  })
+
+  // Authority: command-reference.md says malformed resolution evidence keeps
+  // Context at STOP and terminal folding explicitly forbids malformed
+  // resolution evidence; mission-control-guide.md repeats that no-PR terminal
+  // reconstruction rule. The oracle is therefore STOP even when no STOP
+  // HANDOFF invokes the per-blocker resolver.
+  it('keeps a unique COMPLETE at STOP when malformed no-PR resolution evidence exists without an applicable STOP', () => {
+    const complete = handoff(ordinaryIdentity, { id: 5983158999, route: 'COMPLETE' })
+    const malformed = resolution(complete, ordinaryIdentity, undefined, { id: 901, malformed: true })
+
+    expect(routeNoPr(ordinaryIdentity, [complete], [malformed]).route).toBe('STOP')
+  })
+
+  it('keeps a unique COMPLETE at STOP when the issue parser classified resolution identity as invalid without an applicable STOP', () => {
+    const complete = handoff(ordinaryIdentity, { id: 5983158999, route: 'COMPLETE' })
+    const invalid = { ...resolution(complete, ordinaryIdentity, undefined, { id: 901 }), id: '', url: '' }
+
+    expect(routeNoPr(ordinaryIdentity, [complete], [], [invalid]).route).toBe('STOP')
+  })
+
+  it('keeps malformed and invalid resolution evidence at STOP independent of HANDOFF and resolution array order', () => {
+    const complete = handoff(ordinaryIdentity, { id: 5983158999, route: 'COMPLETE' })
+    const prior = handoff(ordinaryIdentity, { id: 5983158998 })
+    const validResolution = resolution(complete, ordinaryIdentity, undefined, { id: 901 })
+    const malformed = resolution(complete, ordinaryIdentity, undefined, { id: 902, malformed: true })
+    const alsoMalformed = resolution(complete, ordinaryIdentity, undefined, { id: 904, malformed: true })
+    const invalid = { ...resolution(complete, ordinaryIdentity, undefined, { id: 903 }), id: '', url: '' }
+    const alsoInvalid = { ...resolution(complete, ordinaryIdentity, undefined, { id: 905 }), url: '' }
+
+    expect(routeNoPr(ordinaryIdentity, [prior, complete], [validResolution, malformed, alsoMalformed], [invalid, alsoInvalid]).route).toBe('STOP')
+    expect(routeNoPr(ordinaryIdentity, [complete, prior], [alsoMalformed, malformed, validResolution], [alsoInvalid, invalid]).route).toBe('STOP')
+    expect(routeNoPr(ordinaryIdentity, [complete, prior], [validResolution], [invalid]).route).toBe('STOP')
   })
 
   it('keeps multiple applicable COMPLETE records at STOP', () => {

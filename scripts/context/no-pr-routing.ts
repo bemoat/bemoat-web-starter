@@ -1,5 +1,5 @@
 import type { ContextDecision, NormalizedContextEvidence, RoleEvidence } from './model.ts'
-import { resolveStopBlockers } from './blocker-resolution.ts'
+import { hasMalformedNoPrBlockerResolutionEvidence, resolveStopBlockers } from './blocker-resolution.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 
@@ -48,6 +48,13 @@ function hasConsistentHistoricalBase(handoffs: ApplicableNoPrHandoff[]): boolean
 }
 
 export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecision {
+  if (hasMalformedNoPrBlockerResolutionEvidence(evidence)) {
+    return stop(
+      `EVIDENCE_CONFLICT: malformed no-PR BLOCKER_RESOLUTION evidence at ${evidence.localGit.head}.`,
+      'Resolve malformed no-PR blocker-resolution evidence before continuing.',
+    )
+  }
+
   const handoffs = applicableNoPrHandoffs(evidence)
 
   const commentIds = handoffs.map(({ source }) => String(source.id))
