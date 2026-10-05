@@ -17,6 +17,23 @@ export type BlockerResolutionRecord = {
   authority: { role: 'FOUNDER'; login: string }
 }
 
+export type NoPrBlockerResolutionRecord = {
+  schema_version: 2
+  record_type: 'BLOCKER_RESOLUTION'
+  repository: string
+  issue_number: string
+  pr_number: null
+  branch: string
+  exact_head: string
+  protected_base: { branch: string; sha: string }
+  policy: { path: string; policy_id: string; version: string; source_sha: string }
+  source_stop_handoff: { comment_id: string; url: string }
+  blocker_id: string
+  authority: { role: 'FOUNDER'; login: string }
+}
+
+type AnyBlockerResolutionRecord = BlockerResolutionRecord | NoPrBlockerResolutionRecord
+
 type StopBlockerResolution = 'resolved' | 'unresolved' | 'conflict'
 
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
@@ -69,6 +86,47 @@ export function parseBlockerResolutionRecord(body: string): BlockerResolutionRec
   return render(record) === body ? record : null
 }
 
+function renderNoPr(record: NoPrBlockerResolutionRecord): string {
+  return `## BLOCKER_RESOLUTION\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n`
+}
+
+export function parseNoPrBlockerResolutionRecord(body: string): NoPrBlockerResolutionRecord | null {
+  const match = body.match(/^## BLOCKER_RESOLUTION\n\n```json\n([\s\S]+)\n```\n$/)
+  if (!match) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(match[1]!)
+  } catch {
+    return null
+  }
+  if (!hasExactKeys(parsed, [
+    'schema_version', 'record_type', 'repository', 'issue_number', 'pr_number', 'branch', 'exact_head',
+    'protected_base', 'policy', 'source_stop_handoff', 'blocker_id', 'authority',
+  ])) return null
+  if (parsed.schema_version !== 2 || parsed.record_type !== 'BLOCKER_RESOLUTION') return null
+  if (typeof parsed.repository !== 'string' || !parsed.repository ||
+      typeof parsed.issue_number !== 'string' || !/^[1-9]\d*$/.test(parsed.issue_number) ||
+      parsed.pr_number !== null ||
+      typeof parsed.branch !== 'string' || !parsed.branch ||
+      typeof parsed.exact_head !== 'string' || !/^[0-9a-f]{40}$/.test(parsed.exact_head) ||
+      typeof parsed.blocker_id !== 'string' || !ID_RE.test(parsed.blocker_id)) return null
+  if (!hasExactKeys(parsed.protected_base, ['branch', 'sha']) ||
+      typeof parsed.protected_base.branch !== 'string' || !parsed.protected_base.branch ||
+      typeof parsed.protected_base.sha !== 'string' || !/^[0-9a-f]{40}$/.test(parsed.protected_base.sha)) return null
+  if (!hasExactKeys(parsed.policy, ['path', 'policy_id', 'version', 'source_sha']) ||
+      typeof parsed.policy.path !== 'string' || !parsed.policy.path ||
+      typeof parsed.policy.policy_id !== 'string' || !parsed.policy.policy_id ||
+      typeof parsed.policy.version !== 'string' || !parsed.policy.version ||
+      typeof parsed.policy.source_sha !== 'string' || !/^[0-9a-f]{40}$/.test(parsed.policy.source_sha)) return null
+  if (!hasExactKeys(parsed.source_stop_handoff, ['comment_id', 'url']) ||
+      typeof parsed.source_stop_handoff.comment_id !== 'string' || !/^[1-9]\d*$/.test(parsed.source_stop_handoff.comment_id) ||
+      typeof parsed.source_stop_handoff.url !== 'string' || !parsed.source_stop_handoff.url) return null
+  if (!hasExactKeys(parsed.authority, ['role', 'login']) || parsed.authority.role !== 'FOUNDER' ||
+      typeof parsed.authority.login !== 'string' || !/^[a-zA-Z0-9-]+$/.test(parsed.authority.login)) return null
+  const record = parsed as NoPrBlockerResolutionRecord
+  return renderNoPr(record) === body ? record : null
+}
+
 const parseRecord = parseBlockerResolutionRecord
 
 export function stopBlockerIds(record: HandoffRecord, source: RoleEvidence, policy: PolicyEvidence): string[] | null {
@@ -91,7 +149,7 @@ export function stopBlockerIds(record: HandoffRecord, source: RoleEvidence, poli
   return [`legacy-stop:${String(source.id)}:${digest}`]
 }
 
-function targetsSource(record: BlockerResolutionRecord | null, source: RoleEvidence): boolean {
+function targetsSource(record: AnyBlockerResolutionRecord | null, source: RoleEvidence): boolean {
   if (!record) return true
   return record.source_stop_handoff.comment_id === String(source.id) || record.source_stop_handoff.url === source.url
 }
@@ -108,6 +166,13 @@ function exactCommentUrl(comment: RoleEvidence, evidence: NormalizedContextEvide
   }
 }
 
+export function hasMalformedNoPrBlockerResolutionEvidence(evidence: NormalizedContextEvidence): boolean {
+  if ((evidence.durableContext.invalidBlockerResolutions ?? []).length > 0) return true
+  return (evidence.durableContext.blockerResolutions ?? []).some((comment) =>
+    parseNoPrBlockerResolutionRecord(comment.body) === null || !exactCommentUrl(comment, evidence),
+  )
+}
+
 function bindsCurrentStop(
   resolution: BlockerResolutionRecord,
   source: RoleEvidence,
@@ -119,6 +184,32 @@ function bindsCurrentStop(
     resolution.issue_number === evidence.issue.number &&
     resolution.pr_number === activePr.number &&
     resolution.exact_head === activePr.headSha &&
+    resolution.protected_base.branch === evidence.protectedBase.branch &&
+    resolution.protected_base.sha === evidence.protectedBase.sha &&
+    resolution.policy.path === evidence.policy.path &&
+    resolution.policy.policy_id === evidence.policy.policyId &&
+    resolution.policy.version === evidence.policy.version &&
+    resolution.policy.source_sha === evidence.policy.sourceSha &&
+    resolution.source_stop_handoff.comment_id === String(source.id) &&
+    resolution.source_stop_handoff.url === source.url &&
+    resolution.blocker_id === blockerId &&
+    exactCommentUrl(source, evidence)
+}
+
+function bindsNoPrCurrentStop(
+  resolution: NoPrBlockerResolutionRecord,
+  source: RoleEvidence,
+  record: HandoffRecord,
+  blockerId: string,
+  evidence: NormalizedContextEvidence,
+): boolean {
+  return record.schema_version === 3 && record.route === 'STOP' && record.pr === null &&
+    resolution.repository === evidence.repository.nameWithOwner &&
+    resolution.issue_number === evidence.issue.number &&
+    resolution.pr_number === null &&
+    resolution.branch === record.branch && resolution.branch === evidence.localGit.branch &&
+    resolution.exact_head === record.exact_head && resolution.exact_head === evidence.localGit.head &&
+    resolution.protected_base.branch === record.protected_base.branch &&
     resolution.protected_base.branch === evidence.protectedBase.branch &&
     resolution.protected_base.sha === evidence.protectedBase.sha &&
     resolution.policy.path === evidence.policy.path &&
@@ -204,7 +295,7 @@ export function resolveStopBlockers({
   record: HandoffRecord
   source: RoleEvidence
   evidence: NormalizedContextEvidence
-  activePr: ActivePullRequestEvidence
+  activePr: ActivePullRequestEvidence | null
 }): StopBlockerResolution {
   const blockers = stopBlockerIds(record, source, evidence.policy)
   if (!blockers) return 'conflict'
@@ -213,14 +304,19 @@ export function resolveStopBlockers({
   if (invalid.length > 0) return 'conflict'
 
   const relevant = resolutions.filter((comment) => {
-    const parsed = parseRecord(comment.body)
+    const parsed = parseRecord(comment.body) ?? parseNoPrBlockerResolutionRecord(comment.body)
     return targetsSource(parsed, source)
   })
   if (relevant.length === 0) return 'unresolved'
 
-  const parsedRelevant = relevant.map((comment) => ({ comment, parsed: parseRecord(comment.body) }))
+  const parsedRelevant = relevant.map((comment) => ({
+    comment,
+    parsed: parseRecord(comment.body) ?? parseNoPrBlockerResolutionRecord(comment.body),
+  }))
   if (parsedRelevant.some(({ parsed }) => parsed === null)) return 'conflict'
-  const records = parsedRelevant as Array<{ comment: RoleEvidence; parsed: BlockerResolutionRecord }>
+  const records = parsedRelevant as Array<{ comment: RoleEvidence; parsed: AnyBlockerResolutionRecord }>
+  const expectedVersion = activePr ? 1 : 2
+  if (records.some(({ parsed }) => parsed.schema_version !== expectedVersion)) return 'conflict'
   if (records.some(({ parsed }) => !blockers.includes(parsed.blocker_id))) return 'conflict'
 
   for (const blockerId of blockers) {
@@ -228,9 +324,14 @@ export function resolveStopBlockers({
     if (matches.length === 0) return 'unresolved'
     if (matches.length !== 1) return 'conflict'
     const { comment, parsed } = matches[0]!
-    const currentBound = bindsCurrentStop(parsed, source, blockerId, evidence, activePr) && exactCommentUrl(comment, evidence)
+    const currentBound = activePr && parsed.schema_version === 1
+      ? bindsCurrentStop(parsed, source, blockerId, evidence, activePr) && exactCommentUrl(comment, evidence)
+      : !activePr && parsed.schema_version === 2
+        ? bindsNoPrCurrentStop(parsed, source, record, blockerId, evidence) && exactCommentUrl(comment, evidence)
+        : false
     let trustedFounderLogin = evidence.policy.trustedFounderLogin
     if (!currentBound) {
+      if (!activePr || parsed.schema_version !== 1) return 'conflict'
       const proof = historicalProofFor(comment, evidence)
       if (!proof || !bindsHistoricalStop(parsed, source, blockerId, comment, evidence, activePr, proof)) return 'conflict'
       const historicalBlockers = stopBlockerIds(record, source, proof.historicalPolicy)

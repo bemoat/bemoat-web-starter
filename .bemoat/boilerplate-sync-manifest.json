@@ -104,6 +104,7 @@
     "tests/int/build-script-contract-guard.int.spec.ts",
     "tests/int/build-wrapper.int.spec.ts",
     "tests/int/branch-safety.int.spec.ts",
+    "tests/int/context-no-pr-blocker-resolution.int.spec.ts",
     "tests/int/context-parser.int.spec.ts",
     "tests/int/context-router.int.spec.ts",
     "tests/int/context-stale-base.int.spec.ts",

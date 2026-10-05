@@ -575,7 +575,7 @@ describe('bemoat:context pure routing', () => {
     })
   })
 
-  it('fails closed when a no-PR COMPLETE competes with another current-head HANDOFF', () => {
+  it('allows a no-PR COMPLETE to fold with a prior read-only IMPLEMENT HANDOFF', () => {
     const complete = noPrCompleteHandoff()
     const implementRecord = noPrCompleteHandoff({
       objective: 'Continue implementation on the same current head.',
@@ -598,9 +598,8 @@ describe('bemoat:context pure routing', () => {
       },
     })
 
-    expect(decision.route).toBe('STOP')
-    expect(decision.nextAction.type).toBe('STOP')
-    expect(decision.reasons.join(' ')).toContain('EVIDENCE_CONFLICT')
+    expect(decision.route).toBe('COMPLETE')
+    expect(decision.nextAction.type).toBe('COMPLETE')
   })
 
   it.each([

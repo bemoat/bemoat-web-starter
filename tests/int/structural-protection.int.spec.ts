@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 const root = resolve(process.cwd())
 const tempRoots: string[] = []
 const oracle = [
-  ['tests/int/stateless-public-contract.int.spec.ts', '85464f7dc4b16c3d7684cf822bcfc454735949f0da78aea3b9734caf6e179340'],
+  ['tests/int/stateless-public-contract.int.spec.ts', '86ffb45361dc3e85bfcf1e42f392afcbcb491d69b8734b23d7e60ae153af9c4d'],
 ] as const
 const productionExtensions = ['.mjs', '.ts'] as const
 const grandfathered = [

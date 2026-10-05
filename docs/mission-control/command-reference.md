@@ -20,9 +20,9 @@ strict JSON record in a `json` fence. Its native GitHub author and explicit
 `authority.login` must both match the trusted Founder login declared by merged
 protected-base policy. `OWNER` is an additional consistency check; neither
 `OWNER` nor a JSON role claim grants authority. An unmerged policy change
-cannot authorize its own evidence. The record binds the repository,
-Issue, active PR, exact head, protected base, protected policy identity, source
-STOP HANDOFF comment, and blocker ID:
+cannot authorize its own evidence. Schema-v1 remains the active-PR variant and
+binds the repository, Issue, active PR, exact head, protected base, protected
+policy identity, source STOP HANDOFF comment, and blocker ID:
 
 ```json
 {
@@ -54,6 +54,44 @@ STOP HANDOFF comment, and blocker ID:
 }
 ```
 
+Schema-v2 is the distinct no-PR variant. It requires `pr_number: null` and
+binds the exact durable topic branch and head, live protected-base branch and
+SHA, merged policy identity, exact source STOP comment, blocker, and Founder.
+The source STOP may retain its historical base snapshot; the exact comment ID
+and URL bind that immutable history while schema-v2 binds current live base
+and policy evidence. The two versions are not interchangeable:
+
+```json
+{
+  "schema_version": 2,
+  "record_type": "BLOCKER_RESOLUTION",
+  "repository": "owner/repository",
+  "issue_number": "535",
+  "pr_number": null,
+  "branch": "fix/535-no-pr-stop",
+  "exact_head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "protected_base": {
+    "branch": "main",
+    "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "policy": {
+    "path": "docs/mission-control/mission-control-guide.md",
+    "policy_id": "bemoat-mission-control",
+    "version": "1.4.0",
+    "source_sha": "cccccccccccccccccccccccccccccccccccccccc"
+  },
+  "source_stop_handoff": {
+    "comment_id": "9005",
+    "url": "https://github.com/owner/repository/issues/535#issuecomment-9005"
+  },
+  "blocker_id": "missing-founder-decision",
+  "authority": {
+    "role": "FOUNDER",
+    "login": "founder-login"
+  }
+}
+```
+
 For a STOP HANDOFF with explicit `verified_evidence` entries of kind
 `stop-blocker`, each entry's `value` is one blocker ID. Every ID needs exactly
 one valid resolution. An older STOP HANDOFF without these entries has one
@@ -67,10 +105,22 @@ IDs and cannot derive blockers from prose. The source HANDOFF remains unchanged.
 
 Missing, malformed, stale, wrong, duplicate, competing, or ambiguous
 resolution evidence keeps Context at STOP. A valid record removes only its
-named blocker. Once all blockers resolve, Context recomputes its route from
-current durable and native evidence; the record itself grants no workflow,
-review, merge, deployment, or migration authority. Comment timestamps and
-latest-comment order do not select authority.
+named blocker. For no-PR Context, all blockers on an applicable schema-v3 STOP
+must have one valid schema-v2 resolution before Context recomputes from current
+evidence. The resolved STOP remains immutable history.
+
+No-PR terminal folding permits one unique applicable `COMPLETE` HANDOFF to
+coexist only with prior `objective_mode: read_only` `IMPLEMENT` HANDOFFs and
+schema-v3 STOP HANDOFFs whose blockers are all uniquely resolved. Multiple
+COMPLETE records, unresolved or conflicting STOPs, malformed resolution
+evidence, mutation-capable nonterminal HANDOFFs, incompatible FIX/REVIEW/
+FOUNDER_GATE evidence, and identity conflicts remain STOP. Timestamps and
+comment order do not select authority. A terminal COMPLETE must bind the live
+protected-base SHA, and all coexisting historical HANDOFFs must agree on one
+protected-base SHA among themselves. When no COMPLETE exists, recomputable
+current-head HANDOFFs must likewise agree on one protected-base SHA. A
+resolution grants no implementation, review, merge, deployment, migration, or
+terminal-completion authority.
 
 Before an authorized Founder publishes one, use the canonical
 [BLOCKER_RESOLUTION template](blocker-resolution-template.md). The example is
