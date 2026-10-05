@@ -21,6 +21,35 @@ interface Authorization {
   allowed: boolean
   route: ContextDecision['route']
   reasons: string[]
+  recovery?: ContextSyncRecovery
+}
+
+export interface ContextSyncRecovery {
+  type: 'SYNC_BASE'
+  command: 'bemoat:context:sync-base'
+  args: [string, '--json']
+  binding: {
+    repository: string
+    issue: { number: string; scope: string | null }
+    pr: {
+      number: string
+      url: string
+      branch: string
+      head: string
+      base: { branch: string; sha: string }
+    }
+    protected_base: { branch: string; sha: string }
+    origin: { repository: string | null; upstream: string | null }
+    local_state: {
+      branch: string
+      head: string | null
+      clean: boolean
+      detached: boolean
+      pushed: boolean
+      durable: boolean
+    }
+    scope_handoff_id?: string
+  }
 }
 
 function stop(classification: Exclude<ContextSyncClassification, 'SUCCESS'>, reasons: string[], description = 'Resolve the stale-base synchronization blockers before continuing.'): ContextSyncResult {
@@ -116,7 +145,43 @@ export function authorizeContextSync(evidence: NormalizedContextEvidence): Autho
   if (!['VERIFY', 'FIX', 'REVIEW', 'FOUNDER_GATE'].includes(before.route)) {
     return { allowed: false, route: 'STOP', reasons: ['EVIDENCE_CONFLICT: pre-movement context is not otherwise valid for continuation'] }
   }
-  return { allowed: true, route: before.route, reasons: [`Protected ${evidence.protectedBase.branch} advanced from ${activePr.baseSha} to ${evidence.protectedBase.sha}; one bounded synchronization is authorized.`] }
+  return {
+    allowed: true,
+    route: before.route,
+    reasons: [`Protected ${evidence.protectedBase.branch} advanced from ${activePr.baseSha} to ${evidence.protectedBase.sha}; one bounded synchronization is authorized.`],
+    recovery: {
+      type: 'SYNC_BASE',
+      command: 'bemoat:context:sync-base',
+      args: [evidence.issue.number, '--json'],
+      binding: {
+        repository: evidence.repository.nameWithOwner,
+        issue: {
+          number: evidence.issue.number,
+          scope: evidence.issue.scope,
+        },
+        pr: {
+          number: activePr.number,
+          url: activePr.url,
+          branch: activePr.headBranch,
+          head: activePr.headSha,
+          base: { branch: activePr.baseBranch, sha: activePr.baseSha },
+        },
+        protected_base: { branch: evidence.protectedBase.branch, sha: evidence.protectedBase.sha },
+        origin: { repository: evidence.localGit.originRepository, upstream: evidence.localGit.upstream },
+        local_state: {
+          branch: evidence.localGit.branch,
+          head: evidence.localGit.head,
+          clean: evidence.localGit.clean,
+          detached: evidence.localGit.detached,
+          pushed: evidence.localGit.pushed,
+          durable: evidence.localGit.durable,
+        },
+        ...(!evidence.issue.scope?.trim() && evidence.durableContext.latestHandoff
+          ? { scope_handoff_id: String(evidence.durableContext.latestHandoff.id) }
+          : {}),
+      },
+    },
+  }
 }
 
 function readback(run: ContextCommandRunner, command: string, args: string[], cwd: string): string | null {

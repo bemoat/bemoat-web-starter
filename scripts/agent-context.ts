@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { ContextInvocationError, parseContextInvocation, renderContextHelp } from './context/cli.ts'
 import { collectContextEvidence } from './context/evidence.ts'
 import { routeContext } from './context/router.ts'
+import { authorizeContextSync } from './context/sync.ts'
 import type { NormalizedContextEvidence, ContextDecision } from './context/model.ts'
 
 function handleInvocationError(error: unknown): boolean {
@@ -16,7 +17,10 @@ function handleInvocationError(error: unknown): boolean {
   return true
 }
 
-function createContextOutput(evidence: NormalizedContextEvidence, decision: ContextDecision, issueNumber: string) {
+export function createContextOutput(evidence: NormalizedContextEvidence, decision: ContextDecision, issueNumber: string) {
+  const staleBaseSync = decision.route === 'STOP' && decision.nextAction.type === 'STOP' && decision.nextAction.command === null
+    ? authorizeContextSync(evidence)
+    : null
   return {
     schema_version: 1,
     command: 'bemoat:context',
@@ -35,6 +39,9 @@ function createContextOutput(evidence: NormalizedContextEvidence, decision: Cont
       : {}),
     route: decision.route,
     reasons: decision.reasons,
+    ...(staleBaseSync?.allowed && staleBaseSync.recovery
+      ? { recovery: staleBaseSync.recovery }
+      : {}),
     next_action: {
       type: decision.nextAction.type,
       command: decision.nextAction.command,

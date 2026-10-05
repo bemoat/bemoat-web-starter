@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
 import type { HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { routeContext } from '../../scripts/context/router.ts'
+import { createContextOutput } from '../../scripts/agent-context.ts'
 import { authorizeContextSync, synchronizeContext } from '../../scripts/context/sync.ts'
 import { ContextSyncWorktreeError, resolveContextSyncRoots } from '../../scripts/context/sync-worktree.ts'
 import { runCliBoundaryCase } from '../helpers/cli-boundary-harness'
@@ -26,6 +28,52 @@ function baseEvidence(overrides: Partial<NormalizedContextEvidence> = {}): Norma
     evidenceErrors: [`EVIDENCE_CONFLICT: PR #428 base does not match live protected main@${protectedBase}`],
     ...overrides,
   }
+}
+
+function issue554StaleEvidence(overrides: Partial<NormalizedContextEvidence> = {}): NormalizedContextEvidence {
+  const repository = 'boat1994/bemoat-web-starter'
+  const issueNumber = '554'
+  const prNumber = '555'
+  const branch = 'fix/554-no-pr-stop-resolution'
+  const oldBase = 'fc543f3f92b74cb492498c2ffdebfc845bbd3d6a'
+  const liveBase = '317da32cbf9be1f63eabba041f5d3a0f0d893d42'
+  const head = 'c1dfd217f85df66c504464a2f08ded7e372bc94e'
+  return baseEvidence({
+    repository: { owner: 'boat1994', name: 'bemoat-web-starter', nameWithOwner: repository, url: `https://github.com/${repository}` },
+    protectedBase: { branch: 'main', sha: liveBase, source: 'live GitHub ref', url: `https://github.com/${repository}/tree/main` },
+    issue: {
+      ...baseEvidence().issue,
+      number: issueNumber,
+      url: `https://github.com/${repository}/issues/${issueNumber}`,
+      objective: 'Complete the bounded Issue #554 correction.',
+      scope: 'Issue #554 / PR #555 only.',
+    },
+    localGit: {
+      ...baseEvidence().localGit,
+      branch,
+      head,
+      upstream: `origin/${branch}`,
+      originRepository: repository,
+    },
+    activePr: {
+      number: prNumber,
+      state: 'OPEN',
+      draft: false,
+      url: `https://github.com/${repository}/pull/${prNumber}`,
+      baseBranch: 'main',
+      baseSha: oldBase,
+      headBranch: branch,
+      headSha: head,
+      merged: false,
+      mergeCommitSha: null,
+    },
+    currentHeadVerification: {
+      ...baseEvidence().currentHeadVerification!,
+      exactHead: head,
+    },
+    evidenceErrors: [`EVIDENCE_CONFLICT: PR #${prNumber} base does not match live protected main@${liveBase}`],
+    ...overrides,
+  })
 }
 
 function response(stdout = '', status = 0): ContextCommandResult {
@@ -70,6 +118,102 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
 }
 
 describe('bounded stale-base synchronization', () => {
+  it('prescribes one exact Issue #554 / PR #555 stale-base recovery while leaving Context STOP separate', () => {
+    const evidence = issue554StaleEvidence()
+    const ordinary = routeContext(evidence)
+    const authorized = authorizeContextSync(evidence)
+
+    expect(ordinary).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP', command: null } })
+    expect(authorized).toMatchObject({
+      allowed: true,
+      recovery: {
+        type: 'SYNC_BASE',
+        command: 'bemoat:context:sync-base',
+        args: ['554', '--json'],
+        binding: {
+          repository: 'boat1994/bemoat-web-starter',
+          issue: {
+            number: '554',
+            scope: 'Issue #554 / PR #555 only.',
+          },
+          pr: {
+            number: '555',
+            url: 'https://github.com/boat1994/bemoat-web-starter/pull/555',
+            branch: 'fix/554-no-pr-stop-resolution',
+            head: 'c1dfd217f85df66c504464a2f08ded7e372bc94e',
+            base: { branch: 'main', sha: 'fc543f3f92b74cb492498c2ffdebfc845bbd3d6a' },
+          },
+          protected_base: { branch: 'main', sha: '317da32cbf9be1f63eabba041f5d3a0f0d893d42' },
+          origin: {
+            repository: 'boat1994/bemoat-web-starter',
+            upstream: 'origin/fix/554-no-pr-stop-resolution',
+          },
+          local_state: {
+            branch: 'fix/554-no-pr-stop-resolution',
+            head: 'c1dfd217f85df66c504464a2f08ded7e372bc94e',
+            clean: true,
+            detached: false,
+            pushed: true,
+            durable: true,
+          },
+        },
+      },
+    })
+    expect(authorized.reasons.join(' ')).toContain('one bounded synchronization is authorized')
+
+    const output = createContextOutput(evidence, ordinary, '554')
+    expect(output).toMatchObject({
+      route: 'STOP',
+      next_action: { type: 'STOP', command: null },
+      recovery: authorized.recovery,
+    })
+    expect(output.next_action.reason).toBe(ordinary.nextAction.description)
+  })
+
+  it.each([
+    ['wrong repository identity', { repository: { ...issue554StaleEvidence().repository, nameWithOwner: 'other/repository' } }],
+    ['wrong Issue identity', { issue: { ...issue554StaleEvidence().issue, number: '553' } }],
+    ['wrong PR identity', { activePr: { ...(issue554StaleEvidence().activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>), number: '556' } }],
+    ['wrong PR URL', { activePr: { ...(issue554StaleEvidence().activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>), url: 'https://github.com/boat1994/bemoat-web-starter/pull/556' } }],
+    ['wrong branch', { localGit: { ...issue554StaleEvidence().localGit, branch: 'fix/other' } }],
+    ['wrong head', { localGit: { ...issue554StaleEvidence().localGit, head: 'd'.repeat(40) } }],
+    ['wrong canonical origin', { localGit: { ...issue554StaleEvidence().localGit, originRepository: 'other/repository' } }],
+    ['wrong upstream remote or branch', { localGit: { ...issue554StaleEvidence().localGit, upstream: 'other/fix/554-no-pr-stop-resolution' } }],
+    ['scope missing without a structured HANDOFF binding', { issue: { ...issue554StaleEvidence().issue, scope: null } }],
+    ['dirty local state', { localGit: { ...issue554StaleEvidence().localGit, clean: false } }],
+    ['detached local state', { localGit: { ...issue554StaleEvidence().localGit, detached: true } }],
+    ['unpushed local state', { localGit: { ...issue554StaleEvidence().localGit, pushed: false } }],
+    ['non-durable local state', { localGit: { ...issue554StaleEvidence().localGit, durable: false } }],
+  ])('does not prescribe recovery for %s', (_story, overrides) => {
+    const evidence = issue554StaleEvidence(overrides)
+    const decision = routeContext(evidence)
+    expect(authorizeContextSync(evidence)).not.toHaveProperty('recovery')
+    expect(createContextOutput(evidence, decision, '554')).not.toHaveProperty('recovery')
+  })
+
+  it.each([
+    ['current-base PR', (evidence: NormalizedContextEvidence) => {
+      const pr = evidence.activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>
+      evidence.activePr = { ...pr, baseSha: evidence.protectedBase.sha }
+    }],
+    ['unrelated evidence conflict', (evidence: NormalizedContextEvidence) => { evidence.evidenceErrors.push('EVIDENCE_CONFLICT: unrelated authority ambiguity') }],
+    ['generic HANDOFF prose and later timestamp', (evidence: NormalizedContextEvidence) => {
+      evidence.issue.scope = null
+      evidence.durableContext.latestHandoff = {
+        id: '9999999999',
+        body: 'A later comment says to synchronize this PR.',
+        createdAt: '2999-01-01T00:00:00Z',
+        url: 'https://github.com/boat1994/bemoat-web-starter/issues/554#issuecomment-9999999999',
+      }
+    }],
+  ])('keeps %s out of the recovery payload', (_story, mutate) => {
+    const evidence = issue554StaleEvidence()
+    mutate(evidence)
+    expect(authorizeContextSync(evidence)).toMatchObject({ allowed: false, route: 'STOP' })
+    expect(authorizeContextSync(evidence)).not.toHaveProperty('recovery')
+    expect(createContextOutput(evidence, routeContext(evidence), '554')).not.toHaveProperty('recovery')
+  })
+
   it('characterizes the future TypeScript sync-base boundary as fail-closed without mutation', () => {
     const result = runCliBoundaryCase({
       entrypoint: 'scripts/agent-context-sync-base.ts',
@@ -522,7 +666,13 @@ describe('bounded stale-base synchronization', () => {
       return response()
     }
 
-    expect(synchronizeContext({ evidence: baseEvidence(), cwd: '/repo', run })).toMatchObject({ classification: 'SUCCESS', mutationPerformed: true, route: 'VERIFY', currentHead: nextHead })
+    const result = synchronizeContext({ evidence: baseEvidence(), cwd: '/repo', run })
+    expect(result).toMatchObject({ classification: 'SUCCESS', mutationPerformed: true, route: 'VERIFY', currentHead: nextHead })
+    expect(result.nextAction).toMatchObject({
+      type: 'COMMAND',
+      command: 'bemoat:context',
+      description: expect.stringMatching(/exact-head context; CI and semantic review are now stale until rerun/i),
+    })
     expect(calls.some((call) => call === `git push origin HEAD:${prHeadBranch}`)).toBe(true)
   })
 })
