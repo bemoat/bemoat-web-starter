@@ -97,5 +97,6 @@ describe('bemoat:context public CLI contract', () => {
       route: 'STOP',
       mutation_performed: false,
     })
+    expect(JSON.parse(result.stdout)).not.toHaveProperty('recovery')
   })
 })
