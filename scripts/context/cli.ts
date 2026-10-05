@@ -1,3 +1,5 @@
+import { isAbsolute } from 'node:path'
+
 const POSITIVE_INTEGER = /^[1-9]\d*$/
 
 export class ContextInvocationError extends Error {
@@ -13,20 +15,33 @@ export class ContextInvocationError extends Error {
 
 export type ContextInvocation =
   | { mode: 'help'; format: 'json' | 'text' }
-  | { mode: 'run'; format: 'json' | 'text'; issueNumber: string }
+  | { mode: 'run'; format: 'json' | 'text'; issueNumber: string; targetWorktree?: string }
 
 export function parseContextInvocation(argv: string[]): ContextInvocation {
   const tokens = Array.isArray(argv) ? argv.filter((value) => value !== '--') : []
   const help = tokens.filter((value) => value === '--help' || value === '-h')
   const json = tokens.filter((value) => value === '--json')
+  const targetFlagIndexes = tokens.flatMap((value, index) => value === '--target-worktree' ? [index] : [])
   if (help.length > 1) throw new ContextInvocationError('help may be provided only once')
   if (json.length > 1) throw new ContextInvocationError('--json may be provided only once')
+  if (targetFlagIndexes.length > 1) throw new ContextInvocationError('--target-worktree may be provided only once')
   if (help.length > 0) return { mode: 'help', format: json.length > 0 ? 'json' : 'text' }
 
-  const positional = tokens.filter((value) => value !== '--json')
+  const targetWorktreeIndex = targetFlagIndexes[0]
+  let targetWorktree: string | undefined
+  if (targetWorktreeIndex !== undefined) {
+    targetWorktree = tokens[targetWorktreeIndex + 1]
+    if (!targetWorktree || targetWorktree.startsWith('--')) throw new ContextInvocationError('--target-worktree requires an absolute path')
+    if (!isAbsolute(targetWorktree)) throw new ContextInvocationError('--target-worktree requires an absolute path')
+  }
+  const positional = tokens.filter((value, index) => value !== '--json' &&
+    !(targetFlagIndexes.length && (index === targetWorktreeIndex || index === targetWorktreeIndex! + 1)))
+  if (tokens.some((value) => value.startsWith('--') && value !== '--json' && value !== '--target-worktree')) {
+    throw new ContextInvocationError('unknown option')
+  }
   if (positional.length !== 1) throw new ContextInvocationError('one positive Issue number is required')
   if (!POSITIVE_INTEGER.test(positional[0])) throw new ContextInvocationError('Issue number must be a positive integer')
-  return { mode: 'run', format: json.length > 0 ? 'json' : 'text', issueNumber: String(BigInt(positional[0])) }
+  return { mode: 'run', format: json.length > 0 ? 'json' : 'text', issueNumber: String(BigInt(positional[0])), ...(targetWorktree ? { targetWorktree } : {}) }
 }
 
 export function renderContextHelp(format = 'text') {
@@ -39,8 +54,11 @@ export function renderContextHelp(format = 'text') {
       tier: 'B',
       purpose: 'Reconstruct deterministic bounded task context without mutation.',
       required_inputs: [{ name: 'issue_number', syntax: '<issue-number>', kind: 'positional', value_type: 'positive_integer', required: true, source: 'caller', multiple: false, values: [], description: 'Issue number to reconstruct.' }],
-      optional_flags: [{ name: 'json', syntax: '--json', kind: 'flag', value_type: 'boolean', required: false, source: 'caller', multiple: false, values: [], description: 'Emit deterministic machine-readable context output.' }],
-      reads: ['local Git refs, status, branch, upstream, and origin identity', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base'],
+      optional_flags: [
+        { name: 'json', syntax: '--json', kind: 'flag', value_type: 'boolean', required: false, source: 'caller', multiple: false, values: [], description: 'Emit deterministic machine-readable context output.' },
+        { name: 'target_worktree', syntax: '--target-worktree <absolute-path>', kind: 'option', value_type: 'path', required: false, source: 'caller', multiple: false, values: [], description: 'Evaluate one existing target worktree using this command source; omit for same-worktree mode.' },
+      ],
+      reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base'],
       writes: [],
       result_classifications: ['SUCCESS', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT'],
       stop_classifications: ['INVALID_INVOCATION', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT', 'INTERNAL_ERROR'],
@@ -53,7 +71,7 @@ export function renderContextHelp(format = 'text') {
   }
   return [
     'HELP: bemoat:context',
-    'Usage: pnpm run bemoat:context -- <issue-number> [--json]',
+    'Usage: pnpm run bemoat:context -- <issue-number> [--target-worktree <absolute-path>] [--json]',
     'Purpose: Reconstruct deterministic bounded task context without mutation.',
     'Writes: none',
     'Safe help invocation: pnpm run bemoat:context -- --help --json',

@@ -7,6 +7,8 @@ import { ContextInvocationError, parseContextInvocation, renderContextHelp } fro
 import { collectContextEvidence } from './context/evidence.ts'
 import { routeContext } from './context/router.ts'
 import { authorizeContextSync } from './context/sync.ts'
+import { resolveContextBootstrapRoots, verifyContextBootstrap } from './context/bootstrap-worktree.ts'
+import { ContextSyncWorktreeError } from './context/sync-worktree.ts'
 import type { NormalizedContextEvidence, ContextDecision } from './context/model.ts'
 
 function handleInvocationError(error: unknown): boolean {
@@ -84,7 +86,25 @@ function main() {
   }
 
   const issueNumber = invocation.issueNumber
-  const evidence = collectContextEvidence({ issueNumber })
+  let cwd = process.cwd()
+  let bootstrapRoots = null
+  let bootstrapError: string | null = null
+  if (invocation.targetWorktree) {
+    try {
+      bootstrapRoots = resolveContextBootstrapRoots({
+        sourceCwd: process.cwd(),
+        targetWorktree: invocation.targetWorktree,
+        entrypointPath: fileURLToPath(import.meta.url),
+      })
+      cwd = bootstrapRoots.targetCwd
+    } catch (error) {
+      if (!(error instanceof ContextSyncWorktreeError)) throw error
+      bootstrapError = `EVIDENCE_CONFLICT: ${error.message}`
+    }
+  }
+  const evidence = collectContextEvidence({ cwd, issueNumber })
+  if (bootstrapRoots) evidence.evidenceErrors.push(...verifyContextBootstrap({ roots: bootstrapRoots, evidence }))
+  if (bootstrapError) evidence.evidenceErrors.push(bootstrapError)
   const decision = routeContext(evidence)
   const output = createContextOutput(evidence, decision, issueNumber)
   if (invocation.format === 'json') {
