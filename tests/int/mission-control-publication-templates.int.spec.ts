@@ -5,7 +5,7 @@ import { parse as parseYaml } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 import { parseIssueBody } from '../../scripts/context/issue-parser.ts'
-import { parseBlockerResolutionRecord } from '../../scripts/context/blocker-resolution.ts'
+import { parseBlockerResolutionRecord, parseNoPrBlockerResolutionRecord } from '../../scripts/context/blocker-resolution.ts'
 import { parseProductionMergeReviewVerdict } from '../../scripts/context/merge-review-verdict.ts'
 import { hasNativeReviewLineage } from '../../scripts/context/semantic-review-evidence.ts'
 import { routeContext } from '../../scripts/context/router.ts'
@@ -133,6 +133,28 @@ describe('Mission Control publication templates', () => {
     })
     expect(parseBlockerResolutionRecord(`${body.replace('"repository": "owner/repository"', '"repository": ""')}\n`)).toBeNull()
     expect(parseBlockerResolutionRecord(`${body.replace('"role": "FOUNDER"', '"role": "REVIEWER"')}\n`)).toBeNull()
+  })
+
+  it('parses the distinct canonical no-PR BLOCKER_RESOLUTION variant without broadening schema-v1', async () => {
+    const body = await markedExample(
+      blockerTemplatePath,
+      '<!-- blocker-resolution:no-pr-example:start -->',
+      '<!-- blocker-resolution:no-pr-example:end -->',
+    )
+    const parsed = parseNoPrBlockerResolutionRecord(`${body}\n`)
+
+    expect(parsed).toMatchObject({
+      schema_version: 2,
+      record_type: 'BLOCKER_RESOLUTION',
+      repository: 'owner/repository',
+      issue_number: '535',
+      pr_number: null,
+      branch: 'fix/535-no-pr-stop',
+      blocker_id: 'missing-founder-decision',
+      authority: { role: 'FOUNDER', login: 'founder-login' },
+    })
+    expect(parseBlockerResolutionRecord(`${body}\n`)).toBeNull()
+    expect(parseNoPrBlockerResolutionRecord(`${body.replace('"pr_number": null', '"pr_number": "9002"')}\n`)).toBeNull()
   })
 
   it('requires valid workflow metadata in the Issue Form and parses the rendered fields through Context', async () => {

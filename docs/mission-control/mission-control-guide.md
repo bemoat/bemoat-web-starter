@@ -1,6 +1,6 @@
 ---
 policy_id: bemoat-mission-control
-version: 1.3.0
+version: 1.4.0
 trusted_founder_login: boat1994
 legacy_stop_handoffs: 513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7,509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2
 scope: repository-development
@@ -149,6 +149,31 @@ association cannot supply missing authority. An unmerged policy change cannot
 authorize evidence for its own PR. This value applies only when
 `canonical_repository` matches the live repository; a copied starter guide
 cannot grant Founder authority in a child repository.
+
+`BLOCKER_RESOLUTION` schema-v1 is bound to an active PR and remains unchanged.
+Schema-v2 is the no-PR variant: it requires `pr_number: null` and binds the
+exact topic branch, durable head, live protected-base branch and SHA, merged
+policy identity, exact source schema-v3 STOP comment, blocker ID, and trusted
+Founder. The source STOP may retain a historical protected-base snapshot; its
+exact comment identity binds that immutable record while the resolution binds
+the current live base and policy. A no-PR STOP remains unresolved unless each
+explicit blocker has exactly one valid schema-v2 resolution. Resolved STOP
+HANDOFFs stay in immutable history; Context recomputes from the remaining
+current-head evidence.
+
+For no-PR terminal reconstruction, one unique applicable `COMPLETE` HANDOFF
+may coexist only with prior `objective_mode: read_only` `IMPLEMENT` HANDOFFs
+and schema-v3 STOP HANDOFFs whose blockers are all uniquely resolved. Multiple
+COMPLETE records, unresolved or conflicting STOPs, malformed resolution
+evidence, mutation-capable nonterminal HANDOFFs, incompatible FIX, REVIEW, or
+FOUNDER_GATE evidence, and identity conflicts remain STOP. The unique COMPLETE
+must bind the current live protected-base SHA; all coexisting historical
+HANDOFFs must agree on one protected-base SHA among themselves. Without a
+COMPLETE, all recomputable current-head HANDOFFs must likewise agree on one
+protected-base SHA. Context never uses timestamps or comment ordering to
+select authority. A blocker resolution removes only its named blocker and
+grants no implementation, review, merge, deployment, migration, or
+terminal-completion authority.
 
 Only schema-v2 STOP HANDOFFs identified by `legacy_stop_handoffs` in merged
 protected-base policy retain one legacy blocker derived from immutable
