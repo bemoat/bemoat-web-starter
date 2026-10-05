@@ -126,13 +126,37 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(normalizedExecutionHandoff).toMatch(/switch grants no synchronization, rebase, reset, merge, implementation, edit, or future.objective authority/i)
   })
 
+  // Oracle: Founder decision #565 comment 5991707507 and the Context Story
+  // Matrix's stale-branch bootstrap story authorize only the existing registered
+  // sync-base command from exact protected main into one explicit stale target.
+  // Ordinary stale Context remains STOP; every other ambiguity stays STOP.
+  it('recognizes the registered protected-main sync command as the exact stale-branch recovery', () => {
+    const bridgeBContract = normalizedExecutionHandoff
+      .split('### Bridge B: stale target predates recovery emission')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+
+    expect(normalizedExecutionHandoff).toMatch(/stale target branch predates the recovery.emitting Context implementation/i)
+    expect(normalizedExecutionHandoff).toMatch(/ordinary stale Context remains `STOP`/i)
+    expect(normalizedExecutionHandoff).toMatch(/route is `STOP` solely because.*recorded base differs from the live protected.main SHA.*no additional Context conflicts/i)
+    expect(normalizedExecutionHandoff).toMatch(/does not add a Context mode or let Execution infer a fallback from prose/i)
+    expect(bridgeBContract).toMatch(/`bemoat:context:sync-base`.*command contract and its safe help invocation/i)
+    expect(bridgeBContract).toMatch(/unique clean checkout of the canonical protected.main branch at the exact live protected.main SHA, with exactly one explicit `--target-worktree`/i)
+    expect(bridgeBContract).toMatch(/bemoat:context:sync-base -- <issue.number> --target-worktree <absolute.path> --json/i)
+    expect(bridgeBContract).toMatch(/canonical origin.*upstream|upstream.*canonical origin/i)
+    expect(bridgeBContract).toMatch(/source and target identity, same Issue\/PR\/base\/head, canonical origin\/upstream, clean attached and pushed target durability, old.base ancestry, stale.base.only eligibility, merge.tree conflict preflight, head.drift, exact post.write head, push, and remote.readback/i)
+    expect(bridgeBContract).toMatch(/metadata changes, PR merge, or bypassing any branch.protection, CI, review, or no.autonomous.merge gate/i)
+    expect(bridgeBContract).toMatch(/fresh `bemoat:context` in the target.*fresh exact.head CI and independent semantic\/Delta review/i)
+    expect(normalizedExecutionHandoff).toMatch(/every other `STOP`.*remains `STOP`/i)
+    expect(normalizedExecutionHandoff).toMatch(/missing, multiple, ambiguous, or conflicting.*remain `STOP`/i)
+  })
+
   // Oracle: Founder comment 5976454479 explicitly requires fail-closed STOP
   // when the Issue-owned branch candidate is missing, multiple, ambiguous, or
   // conflicting; no branch may be guessed or switched in those cases.
   it('keeps missing or ambiguous Issue-owned branch candidates at STOP', () => {
     expect(normalizedExecutionHandoff).toMatch(/missing, multiple, ambiguous, or conflicting candidates remain `STOP`; do not guess/i)
     expect(normalizedLoader).toMatch(/absent, conflicting, or unsupported recovery.*stop/i)
-    expect(normalizedExecutionHandoff).toMatch(/at `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12/i)
+    expect(normalizedExecutionHandoff).toMatch(/at `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12 or the fully qualified Bridge B recovery in section 12/i)
     expect(normalizedExecutionHandoff).toMatch(/at `FOUNDER_GATE`, include no mutation.capable instructions or delegated mutation/i)
   })
 

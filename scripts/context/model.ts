@@ -88,6 +88,7 @@ export interface HeadVerificationEvidence {
     approvedCount?: number
     exactHeadApprovedCount?: number
     nativeReviews?: NativeReviewEvidence[]
+    nativeReviewAncestryProofs?: NativeReviewAncestryProof[]
   }
   protection: ProtectionEvidence
 }
@@ -105,6 +106,16 @@ export interface NativeReviewEvidence {
   state: string
   body: string
   commitId: string | null
+}
+
+export interface NativeReviewAncestryProof {
+  predecessorReviewId: number
+  predecessorHeadSha: string
+  currentHeadSha: string
+  status: string
+  mergeBaseSha: string
+  aheadBy: number
+  behindBy: number
 }
 
 export interface RoleEvidence {

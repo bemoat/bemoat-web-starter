@@ -6,6 +6,7 @@ import type {
 import { hasBlockingHandoffReview, isCurrentHandoffReviewVerdict, isFullSha, isPositiveInteger, isRepositoryObjectUrl, resolveCurrentHandoff } from './runtime.ts'
 import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './semantic-review-evidence.ts'
+import { hasStrictCrossHeadNativeReviewPredecessor } from './native-review-lineage.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
 import { routeNoPrContext } from './no-pr-routing.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
@@ -305,6 +306,10 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
         })
         if (matchingMalformed.length === 1) {
           supersededIds.add(String(matchingMalformed[0]!.id))
+        } else if (matchingMalformed.length === 0 &&
+          hasStrictCrossHeadNativeReviewPredecessor(validVerdict.id, supersedes, evidence, activePr)) {
+          // A strict ancestral native predecessor remains historical; only the
+          // current exact-head review participates in the current outcome.
         } else {
           conflictingLiveHeadEvidence = true
         }

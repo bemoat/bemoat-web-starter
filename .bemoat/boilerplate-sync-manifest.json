@@ -109,6 +109,7 @@
     "tests/int/context-router.int.spec.ts",
     "tests/int/context-stale-base.int.spec.ts",
     "tests/int/context-evidence.int.spec.ts",
+    "tests/int/native-review-lineage.int.spec.ts",
     "tests/int/context-acquisition.int.spec.ts",
     "tests/int/approved-base.int.spec.ts",
     "tests/int/context-cli.int.spec.ts",

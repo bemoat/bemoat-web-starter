@@ -41,7 +41,7 @@ State repository, Issue, applicable PR, branch and exact head, approved protecte
 State the one objective authorized by fresh Context, its acceptance criteria, and its in-scope boundary. If Global MC cannot run repository-local CLI, identify the objective candidate from the verified Issue as pending fresh Execution/IDE Context authorization; only a fresh Context result with `next_action.type: COMMAND` authorizes mutation for that objective.
 
 ## 3. Verified live authority / route
-State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context may precede a later `COMMAND`, and then only within that recovery's scope. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND`, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
+State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context may precede a later `COMMAND`, and then only within that recovery's scope. The sole exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or that exact Bridge B recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
 
 ## 4. Startup / reconstruction instructions
 Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, perform registered CLI Discovery with its declared safe help, and run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
@@ -61,7 +61,7 @@ For every applicable role—`controller`, `read_only_characterization`, `impleme
 If Global MC cannot run repository-local CLI, any implementation recommendation remains conditional on fresh Context returning `next_action.type: COMMAND`; model routing grants no authority.
 
 ## 8. Execution / delegation rules
-Identify one accountable controller and the mutation owner. State permitted bounded delegation, its read-only or mutation effect, and how delegated work stays within this objective. No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
+Identify one accountable controller and the mutation owner. State permitted bounded delegation, its read-only or mutation effect, and how delegated work stays within this objective. No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, or when every condition of the Bridge B recovery in section 12 is satisfied. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
 
 ## 9. Validation requirements
 Discover public commands before use. Run focused regressions and the repository-required validation tier for the changed files; report exact commands and results. Require exact-head CI and independent review when current policy requires them. Do not invent a validation tier or claim checks that were not run.
@@ -124,8 +124,52 @@ grants no synchronization, rebase, reset, merge, implementation, edit, or
 future-objective authority. No general recovery authority or gate waiver is
 implied.
 
+### Bridge B: stale target predates recovery emission
+
+Ordinary stale Context remains `STOP`. This single bounded exception makes the
+existing protected-main-source synchronization lifecycle reachable when the
+stale target branch predates the recovery-emitting Context implementation. It
+does not add a Context mode or let Execution infer a fallback from
+prose. Proceed only when all of the following are established from fresh live
+evidence:
+
+- The current objective has a fresh Context result for the exact Issue, local
+  branch, PR number, PR head, and PR base. Its route is `STOP` solely because
+  the PR's recorded base differs from the live protected-main SHA; there are no
+  additional Context conflicts or blockers.
+- The target worktree is the unique existing worktree whose canonical
+  repository root, branch, and exact head match that Context and the active PR.
+  Its local Context implementation predates the recovery-emitting
+  implementation, as verified from the target and source revisions. Missing,
+  multiple, ambiguous, or conflicting target evidence remains `STOP`.
+- Registered CLI Discovery has confirmed the current `bemoat:context:sync-base`
+  command contract and its safe help invocation. Invoke only that existing
+  command from the unique clean checkout of the canonical protected-main
+  branch at the exact live protected-main SHA, with exactly one explicit
+  `--target-worktree` naming the verified target, and require its canonical
+  machine-readable result with `--json`. Do not copy command files or invoke
+  internal workflow code. Run exactly `pnpm --dir
+  <absolute-protected-main-worktree> run bemoat:context:sync-base --
+  <issue-number> --target-worktree <absolute-path> --json`.
+- The registered command independently passes every source and target
+  identity, same Issue/PR/base/head, canonical origin/upstream, clean attached
+  and pushed target durability, old-base ancestry, stale-base-only eligibility,
+  merge-tree conflict preflight, head-drift, exact post-write head, push, and
+  remote-readback check in its current contract. A failed preflight, changed
+  head, command failure, or incomplete readback stops the recovery; do not
+  retry after a target-head change.
+
+This exception authorizes only that command invocation and its prescribed
+push. It does not authorize direct Git synchronization, unrelated edits,
+metadata changes, PR merge, or bypassing any branch-protection, CI, review, or
+no-autonomous-merge gate. After a successful synchronization, immediately run
+applicable CLI Discovery and fresh `bemoat:context` in the target. The new exact
+PR head requires fresh exact-head CI and independent semantic/Delta review
+before its next route can be selected. Every other `STOP`, including a stale Context with
+any additional conflict, remains `STOP`.
+
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12; otherwise report the blocker and stop. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12 or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.

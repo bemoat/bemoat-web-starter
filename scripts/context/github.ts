@@ -1,6 +1,7 @@
 import { parseIssueBody } from './issue-parser.ts'
 import { prOwnsIssue } from './pr-issue-ownership.ts'
 import { hasUniqueCanonicalReviewIdentity, nativeReviewRows, reviewCounts } from './semantic-review-evidence.ts'
+import { readNativeReviewAncestryProofs } from './native-review-lineage.ts'
 import type {
   ActivePullRequestEvidence,
   HeadVerificationEvidence,
@@ -354,6 +355,17 @@ export function readGithubEvidence({
       errors.push(`EVIDENCE_CONFLICT: native review identity for PR #${input.number} is malformed or ambiguous`)
     }
     const counts = reviewCounts(reviews ?? [], input.headSha)
+    const nativeReviewAncestryProofs = readNativeReviewAncestryProofs({
+      reviews: counts.nativeReviews,
+      repository: repo,
+      issue: issueNumber,
+      pr: input.number,
+      base: selectedPr.baseBranch,
+      currentHead: input.headSha,
+      run,
+      cwd,
+      env,
+    })
     const requiredApprovals = protection.requiredApprovals
     return [{
       exactHead: input.headSha,
@@ -365,6 +377,7 @@ export function readGithubEvidence({
         approvedCount: counts.approvedCount,
         exactHeadApprovedCount: counts.exactHeadApprovedCount,
         nativeReviews: counts.nativeReviews,
+        nativeReviewAncestryProofs,
       },
       protection,
     } satisfies HeadVerificationEvidence]
