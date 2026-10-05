@@ -15,6 +15,12 @@ const head = 'b'.repeat(40)
 const nextHead = 'd'.repeat(40)
 const advancedAgain = 'f'.repeat(40)
 const prHeadBranch = 'test/427-story-first-context-coverage'
+const issue554ConflictReplay = {
+  path: 'scripts/boilerplate/inventory.ts',
+  stage1: 'f28d2ba5cbf9857a94d1d13d4884b4c8f85519a9',
+  stage2: '8ceab799b0058bafb278b1781a0822321ff39980',
+  stage3: 'a460d902fde0b02e5abdde9dae40014d2c1a7f1a',
+}
 function baseEvidence(overrides: Partial<NormalizedContextEvidence> = {}): NormalizedContextEvidence {
   return {
     repository: { owner: 'boat1994', name: 'bemoat-web-starter', nameWithOwner: 'boat1994/bemoat-web-starter', url: 'https://github.com/boat1994/bemoat-web-starter' },
@@ -392,6 +398,66 @@ describe('bounded stale-base synchronization', () => {
     }))).toMatchObject({ allowed: true, route: 'VERIFY' })
   })
 
+  // Oracle: the protected-baseline replay for Issue #554 / PR #555 reproduced
+  // this sole stage-1/2/3 conflict. Existing sync-base authority requires STOP
+  // before merge/push; this characterizes the current command, not the future
+  // separately bounded worker resolver.
+  it('keeps the exact Issue #554 / PR #555 inventory conflict at STOP without mutation', () => {
+    const evidence = issue554StaleEvidence()
+    const pr = evidence.activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>
+    const conflictOutput = [
+      `CONFLICT (content): Merge conflict in ${issue554ConflictReplay.path}`,
+      `stage-1 ${issue554ConflictReplay.stage1}`,
+      `stage-2 ${issue554ConflictReplay.stage2}`,
+      `stage-3 ${issue554ConflictReplay.stage3}`,
+    ].join('\n')
+    const calls: string[] = []
+    const run: ContextCommandRunner = (_command, args) => {
+      const key = args.join(' ')
+      calls.push(key)
+      if (key === 'status --short') return response('')
+      if (key === 'branch --show-current') return response(pr.headBranch)
+      if (key === 'rev-parse HEAD') return response(pr.headSha)
+      if (key === 'ls-remote --heads origin main') return response(`${evidence.protectedBase.sha}\trefs/heads/main\n`)
+      if (key === `ls-remote --heads origin ${pr.headBranch}`) return response(`${pr.headSha}\trefs/heads/${pr.headBranch}\n`)
+      if (key === 'fetch --no-tags origin main') return response()
+      if (key === 'rev-parse FETCH_HEAD') return response(evidence.protectedBase.sha)
+      if (key === `merge-base --is-ancestor ${pr.baseSha} FETCH_HEAD` || key === `merge-base --is-ancestor ${pr.baseSha} HEAD`) return response()
+      if (key === 'merge-tree --write-tree HEAD FETCH_HEAD') return response(conflictOutput, 1)
+      return response('', 1)
+    }
+
+    expect(evidence).toMatchObject({
+      repository: { nameWithOwner: 'boat1994/bemoat-web-starter' },
+      issue: { number: '554' },
+      protectedBase: { branch: 'main', sha: '317da32cbf9be1f63eabba041f5d3a0f0d893d42' },
+      localGit: {
+        branch: 'fix/554-no-pr-stop-resolution',
+        head: 'c1dfd217f85df66c504464a2f08ded7e372bc94e',
+        upstream: 'origin/fix/554-no-pr-stop-resolution',
+        originRepository: 'boat1994/bemoat-web-starter',
+      },
+      activePr: {
+        number: '555',
+        url: 'https://github.com/boat1994/bemoat-web-starter/pull/555',
+        headBranch: 'fix/554-no-pr-stop-resolution',
+        baseSha: 'fc543f3f92b74cb492498c2ffdebfc845bbd3d6a',
+        headSha: 'c1dfd217f85df66c504464a2f08ded7e372bc94e',
+      },
+    })
+    expect(conflictOutput).toContain(`CONFLICT (content): Merge conflict in ${issue554ConflictReplay.path}`)
+    expect(conflictOutput).toContain(`stage-1 ${issue554ConflictReplay.stage1}`)
+    expect(conflictOutput).toContain(`stage-2 ${issue554ConflictReplay.stage2}`)
+    expect(conflictOutput).toContain(`stage-3 ${issue554ConflictReplay.stage3}`)
+    expect(synchronizeContext({ evidence, cwd: '/issue-554-pr-555', run })).toMatchObject({
+      classification: 'EVIDENCE_CONFLICT',
+      mutationPerformed: false,
+      route: 'STOP',
+    })
+    expect(calls).toContain('merge-tree --write-tree HEAD FETCH_HEAD')
+    expect(calls.some((call) => call === 'merge --no-edit FETCH_HEAD' || call.startsWith('push '))).toBe(false)
+  })
+
   it('uses the exact protected-main command source to synchronize an explicit stale target worktree', () => {
     const sourceCwd = '/protected-main'
     const targetCwd = '/stale-pr'
@@ -567,6 +633,30 @@ describe('bounded stale-base synchronization', () => {
     ['not stale', { evidenceErrors: [], protectedBase: { ...baseEvidence().protectedBase, sha: oldBase } }],
   ])('keeps %s fail-closed', (_label, overrides) => {
     expect(authorizeContextSync(baseEvidence(overrides as Partial<NormalizedContextEvidence>))).toMatchObject({ allowed: false, route: 'STOP' })
+  })
+
+  it.each([
+    ['wrong repository', { repository: { ...issue554StaleEvidence().repository, nameWithOwner: 'other/repository' } }],
+    ['wrong Issue', { issue: { ...issue554StaleEvidence().issue, number: '553' } }],
+    ['wrong PR', { activePr: { ...(issue554StaleEvidence().activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>) , number: '556' } }],
+    ['wrong branch identity', { localGit: { ...issue554StaleEvidence().localGit, branch: 'fix/554-other' } }],
+    ['wrong canonical origin', { localGit: { ...issue554StaleEvidence().localGit, originRepository: 'other/repository' } }],
+    ['wrong origin upstream', { localGit: { ...issue554StaleEvidence().localGit, upstream: 'fork/fix/554-no-pr-stop-resolution' } }],
+    ['changed PR head', { localGit: { ...issue554StaleEvidence().localGit, head: advancedAgain } }],
+    ['dirty target', { localGit: { ...issue554StaleEvidence().localGit, clean: false } }],
+    ['detached target', { localGit: { ...issue554StaleEvidence().localGit, detached: true } }],
+    ['unpushed or non-durable target', { localGit: { ...issue554StaleEvidence().localGit, pushed: false, durable: false } }],
+    ['ambiguous active PR', {
+      activePr: [
+        issue554StaleEvidence().activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>,
+        { ...(issue554StaleEvidence().activePr as Exclude<NormalizedContextEvidence['activePr'], null | NormalizedContextEvidence['activePr'][]>) , number: '556' },
+      ],
+    }],
+    ['unrelated evidence conflict', { evidenceErrors: [...issue554StaleEvidence().evidenceErrors, 'EVIDENCE_CONFLICT: competing review evidence'] }],
+  ])('keeps the #554 conflict continuation unauthorized for %s', (_story, overrides) => {
+    const decision = authorizeContextSync(issue554StaleEvidence(overrides as Partial<NormalizedContextEvidence>))
+    expect(decision).toMatchObject({ allowed: false, route: 'STOP' })
+    expect(decision).not.toHaveProperty('recovery')
   })
 
   it('stops before merge or push when native merge-tree detects a conflict', () => {

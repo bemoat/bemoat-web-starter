@@ -150,16 +150,17 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(normalizedExecutionHandoff).toMatch(/missing, multiple, ambiguous, or conflicting.*remain `STOP`/i)
   })
 
-  // Oracle: Founder choice A on Issue #568 keeps sync-base fail-closed while
-  // permitting a separate worker-owned resolution only for an otherwise-valid
-  // stale-PR sync blocked solely by an unchanged, reproducible conflict set.
+  // Oracle: Issue #568 acceptance criterion #1 plus the current user-selected A
+  // instruction preserve sync-base STOP and authorize a separate worker-owned
+  // resolution for an otherwise-valid future stale-PR sync with a reproduced
+  // conflict set. This source-level test claims no durable Founder comment.
   it('keeps conflict resolution separate and bound to the exact stale-PR conflict identity', () => {
     const conflictRecovery = normalizedExecutionHandoff
       .split('### Separately bounded conflict-resolution continuation')[1]
       ?.split('## 13. Stop conditions')[0] ?? ''
 
     expect(conflictRecovery).toMatch(/ordinary `bemoat:context:sync-base` remains fail.closed.*conflict/i)
-    expect(conflictRecovery).toMatch(/distinct, separately bounded.*worker.owned.*semantic conflict.resolution/i)
+    expect(conflictRecovery).toMatch(/separate worker.owned, separately bounded.*semantic conflict.resolution/i)
     expect(conflictRecovery).toMatch(/only when.*otherwise.valid.*stale.PR.*sync.*fails solely.*reproducible native Git merge replay reports a conflict set/i)
     expect(conflictRecovery).toMatch(/repository.*Issue.*PR.*branch.*stale PR head.*old base.*live protected.base SHA.*conflict.set identity/i)
     expect(conflictRecovery).toMatch(/sorted conflicting paths.*stage.1.*stage.2.*stage.3.*blob IDs/i)
@@ -171,7 +172,10 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(conflictRecovery).toMatch(/do not replace.*no.op.*fake commit/i)
     expect(conflictRecovery).toMatch(/read back the durable exact head.*immediately run fresh.*Context.*fresh exact.head CI.*independent semantic review/i)
     expect(conflictRecovery).toMatch(/never authorizes an autonomous PR merge/i)
-    expect(conflictRecovery).toMatch(/does not authorize work on Issue #554 or PR #555/i)
+    expect(conflictRecovery).toMatch(/this Issue #568 execution.*does not execute recovery for Issue #554 \/ PR #555/i)
+    expect(conflictRecovery).toMatch(/after it is merged.*matching future Issue\/PR.*without another per.incident Founder gate/i)
+    expect(conflictRecovery).toMatch(/exactly one worker owns resolution mutation.*controller.*performs no resolution mutation/i)
+    expect(conflictRecovery).toMatch(/Fresh Context must still authorize the active Issue's stale.base continuation/i)
   })
 
   // Oracle: Founder comment 5976454479 explicitly requires fail-closed STOP

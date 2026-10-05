@@ -172,14 +172,23 @@ any additional conflict, remains `STOP`.
 
 Ordinary `bemoat:context:sync-base` remains fail-closed on conflict: a merge
 conflict returns `STOP` before merge or push. It never resolves conflicts
-automatically. A distinct, separately bounded worker-owned semantic
+automatically. A separate worker-owned, separately bounded semantic
 conflict-resolution objective is permitted only when the active Issue's
-current objective or an explicit Founder decision authorizes that exact
-continuation, and an otherwise-valid stale-PR synchronization fails solely
-because a reproducible native Git merge replay reports a conflict set. The
-Issue #568 Founder choice authorizes only its own bounded objective; it does
-not authorize work on Issue #554 or PR #555, or create authority for another
-Issue.
+current objective authorizes the stale-base recovery, and an otherwise-valid
+stale-PR synchronization fails solely because a reproducible native Git merge
+replay reports a conflict set. The Issue #568 acceptance criterion and the
+current user-selected A instruction establish this durable contract: after it
+is merged, a matching future Issue/PR may use one separately bounded
+worker-owned semantic resolution without another per-incident Founder gate.
+Fresh Context must still authorize the active Issue's stale-base continuation,
+and every identity and conflict-set precondition below must pass. This Issue
+#568 execution changes only its own contract and tests; it does not execute
+recovery for Issue #554 / PR #555 or send Issue/PR messages about them.
+
+Exactly one worker owns resolution mutation. The controller retains
+control-plane accountability for fresh Context, identity/evidence checks,
+gates, durable readback, and next-action routing, and performs no resolution
+mutation. Do not delegate a second mutator.
 
 Before any resolution mutation, bind and revalidate the exact repository,
 Issue, PR, branch, stale PR head, PR's recorded old base, live protected-base
