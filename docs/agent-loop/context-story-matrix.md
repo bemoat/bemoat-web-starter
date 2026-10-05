@@ -36,6 +36,7 @@ uniquely establishes the outcome. Keep the A/B/C classification below intact.
 | Terminal merge evidence is authoritative. | Issue #410 plus merged Issue #423 / PR #424 behavior | A valid `MERGED` PR with a valid merge commit can route `COMPLETE` despite a historical base or irrelevant local checkout. |
 | Active PR evidence uses the live protected base and exact head. | Issue #410 exact-identity contract | An open PR with a stale/wrong base or stale head evidence cannot continue silently. |
 | A stale active PR may receive one bounded deterministic continuation without a per-incident Founder gate. | Founder decision on Issue #427 comment 5414458566 | `bemoat:context:sync-base` may synchronize protected `main` into the same PR branch only when live identity, ancestry, scope, and local durability remain exact; every ambiguity remains `STOP`. |
+| A conflict in otherwise-valid stale-base synchronization stays fail-closed in `sync-base`; an explicitly authorized separate resolution must bind to one exact reproducible conflict set. | Founder choice A on Issue #568 plus `docs/mission-control/execution-handoff-contract.md#separately-bounded-conflict-resolution-continuation` | `sync-base` stops before merge or push. A distinct worker-owned semantic objective is allowed only with exact repository/Issue/PR/branch/stale-head/old-base/live-base/conflict-set identity and same-set revalidation; drift or ambiguity stays `STOP`. |
 | CI and semantic review bind to the exact current PR head. | Issue #410 verification contract and merged policy v1.3.0 | A new commit invalidates old CI/review satisfaction. |
 | Native evidence must agree with itself. | Issue #427 and CTX-423-001 | `OPEN` plus a merge commit, malformed merge identity, or competing PR/review evidence fails closed. |
 
@@ -54,6 +55,7 @@ uniquely establishes the outcome. Keep the A/B/C classification below intact.
 | Exact-head clean semantic review and satisfied native requirements | current head × clean review | `FOUNDER_GATE` | B | clean native review case |
 | Stale active PR base with failed, pending, or fully satisfied downstream gates | base drift × CI/review state | `STOP` before downstream routing | B | story-first stale-base precedence table |
 | Otherwise-valid stale active PR with exact same-scope identity and durable local state | stale-base `STOP` × live identity × native ancestry | one bounded `bemoat:context:sync-base` continuation, then `VERIFY` on the new head | B | `context-sync.int.spec.ts`: authorized continuation and fail-closed siblings |
+| Otherwise-valid stale PR sync stops solely on a reproducible conflict set | exact stale PR identity × three-way Git conflict data × worker objective authority | ordinary `sync-base` remains `STOP`; a separately authorized worker-owned semantic resolution may proceed only after exact identity and conflict-set revalidation | B (`MISSING_COVERAGE`) | `mission-control-loader-router.int.spec.ts`: continuation boundary and hard exclusions; current `context-sync.int.spec.ts`: sync-base still stops before merge/push |
 | Stale PR branch predates the sync command, with an exact protected-main command source and one explicit durable target worktree | source-command identity × target canonicalization × stale-base eligibility | the protected-main registered command may run the existing bounded synchronization against only that target; every source/target ambiguity remains `STOP` | B | `context-sync.int.spec.ts`: protected-main bootstrap lifecycle and source/target drift cases |
 | New PR head with old CI verification | head movement × stale CI | `STOP` | B | head-transition story and stale verification case |
 | New PR head with fresh CI but old semantic review | head movement × stale review | `REVIEW` | B | head-transition story and stale-review cases |
@@ -101,10 +103,17 @@ production change.
    target. It does not create or remove worktrees, copy command files, or mutate
    Issue/PR metadata. PR #420 remains unchanged until the independent Issue #430
    correction is Founder-manually merged and freshly reconstructed.
-7. Founder manually merges the active PR → fresh reconstruction accepts valid
+7. If otherwise-valid stale-base sync stops solely on a reproducible
+   merge-conflict set, the ordinary command remains `STOP`. A separately
+   authorized worker may resolve only that exact set after revalidating the
+   same repository/Issue/PR/branch/stale-head/old-base/live-base/conflict-set
+   identity immediately before mutation. Any mismatch stays `STOP`; the same
+   PR and branch must retain the exact upstream merge, and the new durable head
+   requires fresh Context, exact-head CI, and independent semantic review.
+8. Founder manually merges the active PR → fresh reconstruction accepts valid
    native `MERGED` plus merge-commit evidence → `COMPLETE`, even though the PR
    retains its historical base and the local checkout is detached or irrelevant.
-8. Contradictory, malformed, missing, or competing native evidence interrupts
+9. Contradictory, malformed, missing, or competing native evidence interrupts
    the transition and fails closed.
 
 ## Resolved continuation decision

@@ -168,8 +168,54 @@ PR head requires fresh exact-head CI and independent semantic/Delta review
 before its next route can be selected. Every other `STOP`, including a stale Context with
 any additional conflict, remains `STOP`.
 
+### Separately bounded conflict-resolution continuation
+
+Ordinary `bemoat:context:sync-base` remains fail-closed on conflict: a merge
+conflict returns `STOP` before merge or push. It never resolves conflicts
+automatically. A distinct, separately bounded worker-owned semantic
+conflict-resolution objective is permitted only when the active Issue's
+current objective or an explicit Founder decision authorizes that exact
+continuation, and an otherwise-valid stale-PR synchronization fails solely
+because a reproducible native Git merge replay reports a conflict set. The
+Issue #568 Founder choice authorizes only its own bounded objective; it does
+not authorize work on Issue #554 or PR #555, or create authority for another
+Issue.
+
+Before any resolution mutation, bind and revalidate the exact repository,
+Issue, PR, branch, stale PR head, PR's recorded old base, live protected-base
+SHA, conflict-set identity, canonical `origin`, and the unique attached, clean,
+pushed, durable target worktree. Record the conflict set as reproducible Git
+evidence: sorted conflicting paths and each path's stage-1/base,
+stage-2/stale-head, and stage-3/live-base blob IDs, or equivalent evidence
+that identifies the same three-way inputs and paths. The native replay must
+establish that these are the only conflicts and that no unrelated identity,
+scope, ancestry, or precondition failed. Immediately before mutation, re-read
+every bound identity and replay the merge against the same stale head and
+live-base SHA; the conflict set must match exactly. Any missing, ambiguous, dirty, detached,
+unpushed, non-durable, non-canonical, changed, or unreproducible evidence,
+including any drift in the Issue/PR/branch/head/old-base/live-base or conflict
+set, is `STOP` with no mutation and no fallback.
+
+Resolution preserves the existing PR and branch lineage and incorporates the
+exact live protected-base commit as the upstream parent. A worker may make
+semantic choices only on actual paths in the reproduced conflict set; it must
+retain every non-conflicting change from both sides. Do not replace the branch
+or PR, create a no-op or fake commit, or
+resolve paths outside the conflict set. If the semantic result cannot be
+determined from the active objective's authority, stop for a protocol/Founder
+decision instead of inventing the result.
+
+After resolution, require a real new merge head, push only the same branch, and
+read back the durable exact head from local `HEAD`, its upstream, and the PR
+branch ref. A successful durable readback ends this objective; it does not
+reuse prior CI or review. Immediately run fresh CLI Discovery and fresh
+`bemoat:context` against the same Issue/PR/head, then require fresh exact-head
+CI and independent semantic review before selecting another route. This
+continuation never authorizes an autonomous PR merge or changes any PR/Issue
+metadata.
+
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12 or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, the fully qualified Bridge B recovery, or the separately authorized conflict-resolution continuation in section 12; otherwise report the blocker and stop. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.
