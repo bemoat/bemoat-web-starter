@@ -368,10 +368,182 @@ deterministic internal work.
 
 Static repository tests cover this artifact contract. They do not prove that a
 live Global MC session fetched or followed the router and phase contracts.
-## Response shape
 
-Report the current objective and route, verified evidence, the next permitted
-action and why it follows, any Founder decision required, and the exact branch,
-commit, PR, checks, and risks relevant to the bounded work. Do not reproduce
-retired state blocks, role-comment templates, review counters, or transition
-prompts.
+## Execution response presentation
+
+This is the canonical, docs-only presentation contract for Execution responses.
+It presents the state and next action already selected by fresh Context and
+canonical policy; it does not select a route, create authority, or change any
+session, recovery, approval, or transfer rule above.
+
+Separate each result response into these two blocks, in this order:
+
+**RESULT SUMMARY**
+
+- Objective / Issue.
+- Current route or terminal status.
+- Verified result and relevant branch, exact head, PR, validation, review, or
+  durable state.
+- Remaining blocker or Founder gate, when one exists.
+- Relevant risks or unresolved assumptions.
+
+Include only fields relevant to the result. Keep operator instructions and
+copy-ready artifacts out of this block.
+
+**OPERATOR ACTION**
+
+End with exactly one applicable heading from the eight classes below. Make the
+destination and responsible party clear in the heading when the class
+determines them, then state the exact destination and concrete action in the
+panel whenever a human must act. Do not make the Founder infer a path, session,
+runtime, decision owner, or next step from the summary. State why the action
+follows from the verified route and evidence. When text must be transferred to
+another session or runtime, include the complete copy-ready artifact in one
+copyable container in the same response, as required by the continuation rules
+above. Examples below illustrate presentation only; they do not route work or
+authorize an action.
+
+### Canonical action-class examples
+
+#### 1. NO ACTION REQUIRED
+
+**RESULT SUMMARY**
+
+- Issue: `#578`.
+- Route: `COMMAND`; fresh Context authorizes the next bounded step.
+
+**OPERATOR ACTION**
+
+**NO ACTION REQUIRED — EXECUTION CONTINUES IN THIS SESSION** — Execution
+continues automatically in this same Execution session. The Founder should not
+paste anything elsewhere or grant another approval.
+
+#### 2. ACTION REQUIRED — SAME EXECUTION SESSION
+
+**RESULT SUMMARY**
+
+- Issue: `#578`.
+- State: preflight passed; the one-time first-edit trigger is still required.
+
+**OPERATOR ACTION**
+
+**ACTION REQUIRED — SAME EXECUTION SESSION**
+
+- **Destination:** this same valid Execution session, not Global MC.
+- **Action:** send the copy-ready trigger below to start the approved first
+  edit.
+
+```text
+Continue the approved #578 implementation in this same Execution session for
+boat1994/bemoat-web-starter.
+```
+
+#### 3. ACTION REQUIRED — NEW EXECUTION SESSION
+
+**RESULT SUMMARY**
+
+- Issue: `#578`.
+- State: a new Execution session is required for the authorized objective.
+
+**OPERATOR ACTION**
+
+**ACTION REQUIRED — NEW EXECUTION SESSION**
+
+- **Destination:** a new Execution/IDE session for `boat1994/bemoat-web-starter`,
+  Issue `#578`.
+- **Action:** open that session and use the complete canonical 15-section
+  handoff, not a same-session continuation.
+- **Copy-ready artifact:** include the complete, resolved handoff in one
+  copyable container immediately below this panel in the same response. This
+  note describes the example; an actual response must contain the handoff
+  itself.
+
+#### 4. ACTION REQUIRED — OPEN PREPARED WORKSPACE
+
+**RESULT SUMMARY**
+
+- Issue: `#578`.
+- State: the sibling workspace was prepared and its path verified; the host
+  cannot rebind itself.
+
+**OPERATOR ACTION**
+
+**ACTION REQUIRED — OPEN PREPARED WORKSPACE AT `<exact verified absolute path>`**
+
+- **Destination:** open/rebind this Execution session to
+  `<exact verified absolute workspace path>`.
+- **Action:** use the app's open/rebind control for that path, then run fresh
+  Context there. Do not run Git clone, fetch, or checkout commands.
+
+#### 5. FOUNDER APPROVAL REQUIRED
+
+**RESULT SUMMARY**
+
+- Route: `FOUNDER_GATE`.
+- Gate: the exact PR, head, and bounded scope are identified in the result.
+
+**OPERATOR ACTION**
+
+**FOUNDER APPROVAL REQUIRED — FOUNDER DECISION IN THIS CHAT**
+
+- **Destination:** the Founder decision in this chat.
+- **Decision:** approve or reject PR `#<number>` at head `<exact SHA>` for the
+  stated scope, or choose the stated bounded alternative.
+- No mutation-capable continuation assumes approval. Do not send this decision
+  to Global MC as a substitute for the Founder decision.
+
+#### 6. BLOCKED — OPERATOR ACTION REQUIRED
+
+**RESULT SUMMARY**
+
+- Route: `STOP`; required GitHub evidence is unavailable in the current
+  Execution environment.
+- No objective work is authorized until evidence can be reconstructed.
+
+**OPERATOR ACTION**
+
+**BLOCKED — OPERATOR ACTION REQUIRED — EXECUTION ACCESS OWNER**
+
+- **Destination:** the operator responsible for access to this Execution
+  environment.
+- **Action:** restore its required GitHub read access, then have Execution run
+  fresh Context.
+- This is an evidence blocker, not a request for Founder approval. Follow only
+  the recovery, if any, that fresh Context prescribes.
+
+#### 7. BACK TO GLOBAL MC
+
+**RESULT SUMMARY**
+
+- Issue: `#578` is terminal for this Execution session; the durable terminal
+  result and route are stated above.
+- The canonical queue identifies Issue `#<next issue>` for fresh orchestration.
+
+**OPERATOR ACTION**
+
+**BACK TO GLOBAL MC**
+
+- **Destination:** Global MC for fresh reconstruction and next-Issue
+  selection.
+- **Action:** provide the smallest copy-ready Global MC seed required by the
+  canonical queue in this same response. Do not return here merely to relay a
+  same-Issue `COMMAND`, deterministic recovery, or verification result.
+
+```text
+#<next issue from the canonical queue>
+```
+
+#### 8. COMPLETE — NO ACTION REQUIRED
+
+**RESULT SUMMARY**
+
+- Issue: `#578` is terminal with its durable completion evidence recorded.
+- No further orchestration is requested by the canonical queue.
+
+**OPERATOR ACTION**
+
+**COMPLETE — NO ACTION REQUIRED** — There is no transfer or decision for the
+Founder to make. Do not manufacture a Global MC round-trip.
+
+Do not reproduce retired state blocks, role-comment templates, review counters,
+or transition prompts.
