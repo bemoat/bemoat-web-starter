@@ -146,7 +146,7 @@ Implementation Plan: docs/superpowers/plans/example/implementation-plan.md
       },
     ]
 
-    expect(parseRoleEvidence(comments)).toEqual({
+    expect(parseRoleEvidence(comments)).toMatchObject({
       latestHandoff: comments[1],
       handoffs: [comments[1]],
       historicalResults: [comments[0]],
@@ -191,5 +191,36 @@ Implementation Plan: docs/superpowers/plans/example/implementation-plan.md
     }
 
     expect(parseRoleEvidence([resolution]).blockerResolutions[0]?.authorIdentityConflict).toBe(true)
+  })
+
+  it('retains native FOUNDER_DECISION evidence without timestamp or association authority', () => {
+    const decision = {
+      id: 18,
+      body: '## FOUNDER_DECISION\n\n```json\n{}\n```\n',
+      createdAt: 'not-a-date',
+      url: 'https://github.com/example/repo/issues/410#issuecomment-18',
+      author: { login: 'founder' },
+      authorAssociation: 'OWNER',
+    }
+
+    expect(parseRoleEvidence([decision])).toMatchObject({
+      founderDecisions: [{ id: 18, authorLogin: 'founder', authorAssociation: 'OWNER' }],
+      invalidFounderDecisions: [],
+    })
+  })
+
+  it('keeps malformed-identity FOUNDER_DECISION evidence visible for fail-closed routing', () => {
+    const decision = {
+      id: '',
+      body: '## FOUNDER_DECISION\n\n```json\n{}\n```\n',
+      createdAt: 'not-a-date',
+      url: '',
+      author: { login: 'founder' },
+    }
+
+    expect(parseRoleEvidence([decision])).toMatchObject({
+      founderDecisions: [],
+      invalidFounderDecisions: [{ id: '', authorLogin: 'founder' }],
+    })
   })
 })

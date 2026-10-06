@@ -133,9 +133,26 @@ on exactly one recorded protected-base SHA. Malformed, stale, wrong-identity,
 duplicate, mutation-capable, or otherwise ambiguous gate evidence remains
 STOP. The gate records a human decision boundary only and grants no mutation
 authority; after the decision is consumed, fresh Context against current
-merged authority is required before a mutation-capable objective. A competing
-gate keeps a `COMPLETE` at STOP. A no-PR `COMPLETE` must still bind the current
-live protected-base SHA. Context never selects by timestamp or comment order.
+merged authority is required before a mutation-capable objective. An
+unconsumed competing gate keeps a `COMPLETE` at STOP. A no-PR `COMPLETE` must
+still bind the current live protected-base SHA. Context never selects by
+timestamp or comment order.
+
+One strict schema-v1 `FOUNDER_DECISION` may consume one exact no-PR gate. It
+binds the exact source-gate comment ID and URL, repository, Issue, null PR,
+branch, exact head, current protected-base branch and SHA, current merged
+policy identity, and the trusted Founder. The native comment author and
+declared `FOUNDER` login must both match the merged policy; `OWNER` association
+does not grant authority. Only `PROCEED` is supported. Malformed, duplicate,
+conflicting, stale, wrong-gate, wrong-identity, or wrong-author evidence keeps
+Context at STOP. A valid decision filters only its exact gate, then Context
+recomputes all remaining STOP, HANDOFF, and COMPLETE rules. No timestamp or
+comment order is consulted, and the decision grants no generic mutation or
+blocker-resolution authority. Active-PR Founder gates are unchanged.
+
+Before an authorized Founder publishes one, use the canonical
+[FOUNDER_DECISION template](founder-decision-template.md). Replace every
+sample value with exact current evidence and preserve the strict body format.
 
 Before an authorized Founder publishes one, use the canonical
 [BLOCKER_RESOLUTION template](blocker-resolution-template.md). The example is

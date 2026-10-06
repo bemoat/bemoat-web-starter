@@ -1,6 +1,7 @@
 import type { ContextBranchRecovery, ContextDecision, NormalizedContextEvidence, RoleEvidence } from './model.ts'
 import { hasMalformedNoPrBlockerResolutionEvidence, resolveStopBlockers } from './blocker-resolution.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
+import { parseFounderDecisionComment } from './founder-decision.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
@@ -196,6 +197,13 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     )
   }
 
+  if ((evidence.durableContext.invalidFounderDecisions ?? []).length > 0) {
+    return stop(
+      `EVIDENCE_CONFLICT: malformed no-PR FOUNDER_DECISION native comment identity at ${evidence.localGit.head}.`,
+      'Resolve malformed FOUNDER_DECISION evidence before continuing.',
+    )
+  }
+
   if (hasInvalidNoPrFounderGateEvidence(evidence)) {
     return stop(
       `EVIDENCE_CONFLICT: no-PR FOUNDER_GATE HANDOFF evidence is malformed, stale, or bound to a different identity at ${evidence.localGit.head}.`,
@@ -203,7 +211,7 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     )
   }
 
-  const handoffs = applicableNoPrHandoffs(evidence)
+  let handoffs = applicableNoPrHandoffs(evidence)
 
   const commentIds = handoffs.map(({ source }) => String(source.id))
   const commentUrls = handoffs.map(({ source }) => source.url)
@@ -212,6 +220,47 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
       `EVIDENCE_CONFLICT: duplicate applicable current-head HANDOFF comment identity at ${evidence.localGit.head}.`,
       'Resolve duplicate current-head HANDOFF identity evidence before continuing.',
     )
+  }
+
+  const decisions = evidence.durableContext.founderDecisions ?? []
+  if (decisions.length > 1) {
+    return stop(
+      `EVIDENCE_CONFLICT: multiple no-PR FOUNDER_DECISION records compete at ${evidence.localGit.head}.`,
+      'Resolve competing FOUNDER_DECISION evidence before continuing; timestamps and comment order do not select authority.',
+    )
+  }
+
+  if (decisions.length === 1) {
+    const source = decisions[0]!
+    const record = parseFounderDecisionComment(source.body)
+    const gates = handoffs.filter(({ record: handoffRecord }) => handoffRecord.route === 'FOUNDER_GATE')
+    const trustedFounderLogin = evidence.policy.trustedFounderLogin
+    const gate = gates.length === 1 ? gates[0]! : null
+    if (
+      !record || !gate || !trustedFounderLogin || source.authorIdentityConflict || !source.authorLogin ||
+      source.authorLogin.toLowerCase() !== trustedFounderLogin.toLowerCase() ||
+      record.authority.login.toLowerCase() !== trustedFounderLogin.toLowerCase() ||
+      record.repository !== evidence.repository.nameWithOwner || record.issue_number !== evidence.issue.number ||
+      record.pr_number !== null || record.branch !== evidence.localGit.branch ||
+      record.exact_head !== evidence.localGit.head ||
+      record.protected_base.branch !== evidence.protectedBase.branch ||
+      record.protected_base.sha !== evidence.protectedBase.sha ||
+      record.policy.path !== evidence.policy.path || record.policy.policy_id !== evidence.policy.policyId ||
+      record.policy.version !== evidence.policy.version || record.policy.source_sha !== evidence.policy.sourceSha ||
+      record.source_founder_gate.comment_id !== String(gate.source.id) ||
+      record.source_founder_gate.url !== gate.source.url ||
+      !isExactIssueCommentUrl(source.url, source, evidence)
+    ) {
+      return stop(
+        `EVIDENCE_CONFLICT: no-PR FOUNDER_DECISION is malformed, stale, wrong-author, or not uniquely bound to the current exact FOUNDER_GATE at ${evidence.localGit.head}.`,
+        'Resolve the exact native Founder decision and source-gate identity before continuing.',
+      )
+    }
+
+    // Keep both comments immutable. Consumption removes only this exact gate from
+    // route folding; every remaining STOP, incompatible handoff, and base check
+    // is evaluated by the ordinary no-PR reconstruction below.
+    handoffs = handoffs.filter(({ source: handoffSource }) => handoffSource !== gate.source)
   }
 
   const stops = handoffs.filter(({ record }) => record.route === 'STOP')
