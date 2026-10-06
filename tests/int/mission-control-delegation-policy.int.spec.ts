@@ -191,6 +191,15 @@ describe('Mission Control delegation and execution model policy', () => {
 
     it('emits a compact copy-ready continuation in the same response after REVIEW when the same Execution destination remains valid', () => {
       expect(contract).toMatch(/after REVIEW or another durable result.*same valid Execution session, workspace, and authority.*compact continuation in that same response/i)
+      // Authority: the same-response transfer invariant applies even to the
+      // compact same-session case. The copy-ready artifact itself must carry
+      // identity and the exact action; a bare `continue` or surrounding prose
+      // cannot supply either requirement. The valid case still avoids 15 sections.
+      expect(contract).toMatch(/After REVIEW or another durable result.*same valid Execution session.*emit the compact continuation in that same response/i)
+      expect(contract).toMatch(/current response MUST contain the required self-contained copy-ready operator artifact itself.*artifact itself MUST identify the repository, Issue, and exact next action/i)
+      expect(contract).toMatch(/Status, explanation, or wording such as "continue there" without that artifact is incomplete/i)
+      expect(continuation).toMatch(/existing active Execution\/IDE session for the same Issue.*compact operator action.*`continue`/i)
+      expect(continuation).toMatch(/full 15-section handoff.*valid same-session case.*MUST NOT be used when the compact continuation is sufficient/i)
       expect(loader).toMatch(/existing Execution\/IDE session.*send `continue`.*already-authorized/i)
     })
 
@@ -223,7 +232,7 @@ describe('Mission Control delegation and execution model policy', () => {
     it('rejects transfer prose without the required copy-ready artifact', () => {
       expect(contract).toMatch(/selected next action requires another session or runtime to act.*current response MUST contain.*copy-ready operator artifact itself/i)
       expect(contract).toMatch(/continue there.*without that artifact is incomplete.*do not make the Founder ask a second time/i)
-      expect(loader).toMatch(/Cross-runtime Next action puts copy-ready in same response.*no second ask/i)
+      expect(loader).toMatch(/existing Execution\/IDE session, send `continue` for already-authorized objective; this response's copy-ready artifact names repository, Issue, and exact next action/i)
     })
 
     it('keeps repository, Issue, and exact next action inside the transfer artifact rather than surrounding prose', () => {

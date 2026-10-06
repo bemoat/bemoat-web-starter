@@ -84,8 +84,12 @@ Classify the destination session before choosing a cross-session action:
 - **Existing active Execution/IDE session for the same Issue:** when the session,
   workspace, and authority are still valid, live authority says a cross-session
   operator action is actually required, and the already-authorized
-  objective/session remains the valid continuation target, MUST use the smallest
-  canonical compact operator action, such as `continue`, in the same response.
+  objective/session remains the valid continuation target, MUST include the
+  smallest canonical compact operator action, such as `continue`, in a
+  self-contained copy-ready artifact in the same response. The artifact itself
+  MUST identify the repository, Issue, and exact next action, including that
+  the authorized objective continues in this existing session. `continue` by
+  itself or in surrounding prose is incomplete.
   MUST NOT use this compact continuation form to start a new Issue or a new
   Execution session, or for a changed execution workspace or changed authority
   context. Emitting the full
@@ -111,10 +115,10 @@ without substantive surrounding prose.
 
 After REVIEW or another durable result, if the same valid Execution session,
 workspace, and authority remain the destination and operator transfer is
-actually required, emit the compact continuation in that same response. If the
-current agent/runtime can execute the authorized next action directly, perform
-it directly instead; do not manufacture a handoff merely to relay deterministic
-work.
+actually required, emit the compact continuation in that same response as the
+required copy-ready artifact. If the current agent/runtime can execute the
+authorized next action directly, perform it directly instead; do not
+manufacture a handoff merely to relay deterministic work.
 
 When the next action is objective execution in a new session, changed execution
 workspace, or changed authority context, emit the complete canonical
