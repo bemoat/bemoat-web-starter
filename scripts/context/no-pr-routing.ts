@@ -1,4 +1,4 @@
-import type { ContextDecision, NormalizedContextEvidence, RoleEvidence } from './model.ts'
+import type { ContextBranchRecovery, ContextDecision, NormalizedContextEvidence, RoleEvidence } from './model.ts'
 import { hasMalformedNoPrBlockerResolutionEvidence, resolveStopBlockers } from './blocker-resolution.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
@@ -35,16 +35,115 @@ function applicableNoPrHandoffs(evidence: NormalizedContextEvidence): Applicable
   return applicable
 }
 
-function stop(reason: string, description: string): NoPrDecision {
+function stop(reason: string, description: string, recovery?: ContextBranchRecovery): NoPrDecision {
   return {
     route: 'STOP',
     reasons: [reason],
     nextAction: { type: 'STOP', command: null, description },
+    ...(recovery ? { recovery } : {}),
   }
 }
 
 function hasConsistentHistoricalBase(handoffs: ApplicableNoPrHandoff[]): boolean {
   return new Set(handoffs.map(({ record }) => record.protected_base.sha)).size <= 1
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+export function uniqueWrongIssueBranchRecovery(evidence: NormalizedContextEvidence): ContextBranchRecovery | null {
+  const candidates = evidence.issueBranchRecoveryCandidates ?? []
+  if (candidates.length !== 1) return null
+
+  const candidate = candidates[0]!
+  const ownerIssue = candidate.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
+  const activePr = !Array.isArray(evidence.activePr) && evidence.activePr &&
+    !evidence.activePr.merged && evidence.activePr.state.toUpperCase() !== 'MERGED'
+    ? evidence.activePr
+    : null
+  const localGit = evidence.localGit
+  if (
+    (activePr
+      ? candidate.branch !== activePr.headBranch || candidate.liveHead.toLowerCase() !== activePr.headSha.toLowerCase() ||
+        activePr.baseBranch !== evidence.protectedBase.branch || activePr.baseSha.toLowerCase() !== evidence.protectedBase.sha.toLowerCase()
+      : ownerIssue !== evidence.issue.number) ||
+    !candidate.eligible ||
+    candidate.checkedOutElsewhere ||
+    !/^[0-9a-f]{40}$/i.test(candidate.liveHead) ||
+    candidate.remoteTrackingHead !== candidate.liveHead ||
+    !localGit.head ||
+    localGit.upstream !== `origin/${localGit.branch}` ||
+    localGit.originRepository !== evidence.repository.nameWithOwner ||
+    !evidence.protectedBase.branch ||
+    !/^[0-9a-f]{40}$/i.test(evidence.protectedBase.sha) ||
+    !localGit.clean ||
+    localGit.detached ||
+    !localGit.pushed ||
+    !localGit.durable
+  ) return null
+
+  let args: string[]
+  if (candidate.localHead) {
+    if (candidate.localHead !== candidate.liveHead || candidate.upstream !== `origin/${candidate.branch}`) return null
+    args = ['switch', '--', candidate.branch]
+  } else {
+    args = ['switch', '--track', `origin/${candidate.branch}`]
+  }
+
+  return {
+    type: 'SWITCH_BRANCH',
+    command: 'git',
+    args,
+    display_command: `git ${args.slice(0, -1).join(' ')} ${shellQuote(args.at(-1)!)}`,
+    binding: {
+      repository: evidence.repository.nameWithOwner,
+      issue_number: evidence.issue.number,
+      protected_base: {
+        branch: evidence.protectedBase.branch,
+        sha: evidence.protectedBase.sha,
+      },
+      source: {
+        branch: localGit.branch,
+        head: localGit.head,
+        upstream: localGit.upstream,
+        clean: localGit.clean,
+        detached: localGit.detached,
+        pushed: localGit.pushed,
+        durable: localGit.durable,
+      },
+      target: { branch: candidate.branch, head: candidate.liveHead },
+      ...(activePr ? {
+        active_pr: {
+          number: activePr.number,
+          url: activePr.url,
+          base_branch: activePr.baseBranch,
+          base_sha: activePr.baseSha,
+          head_branch: activePr.headBranch,
+          head: activePr.headSha,
+        },
+      } : {}),
+    },
+  }
+}
+
+export function routeWrongIssueActivePrContext(evidence: NormalizedContextEvidence): NoPrDecision | null {
+  const activePr = !Array.isArray(evidence.activePr) ? evidence.activePr : null
+  const sourceIssue = evidence.localGit.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
+  if (
+    !activePr || activePr.merged || activePr.state.toUpperCase() === 'MERGED' ||
+    !sourceIssue || sourceIssue === evidence.issue.number ||
+    (evidence.localGit.branch === activePr.headBranch && evidence.localGit.head?.toLowerCase() === activePr.headSha.toLowerCase())
+  ) return null
+
+  const recovery = uniqueWrongIssueBranchRecovery(evidence)
+  return stop(
+    `EVIDENCE_CONFLICT: local branch ${evidence.localGit.branch}@${evidence.localGit.head} belongs to a different Issue and does not match active PR #${activePr.number} ${activePr.headBranch}@${activePr.headSha}`,
+    recovery
+      ? `Next Action: run \`${recovery.display_command}\` to switch to the exact live branch for active PR #${activePr.number}, then immediately rerun registered CLI Discovery and fresh \`bemoat:context ${evidence.issue.number} --json\`. Do not perform PR or objective work until fresh Context authorizes it.`
+      : 'Resolve the wrong-Issue workspace mismatch through the canonical acquisition rule before continuing.',
+    recovery ?? undefined,
+  )
 }
 
 export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecision {
@@ -88,9 +187,14 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
 
   const branchIssueNumber = evidence.localGit.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
   if (branchIssueNumber && branchIssueNumber !== evidence.issue.number) {
+    const recovery = uniqueWrongIssueBranchRecovery(evidence)
+    const recoveryDescription = recovery
+      ? `Next Action: run \`${recovery.display_command}\` to switch to the unique live Issue #${evidence.issue.number} branch, then immediately rerun registered CLI Discovery and \`pnpm run bemoat:context ${evidence.issue.number} --json\`. No Founder/Global MC return is needed for this deterministic recovery. Do not begin objective work until fresh Context authorizes it.`
+      : 'Switch to a topic branch owned by the queried Issue before continuing.'
     return stop(
       `EVIDENCE_CONFLICT: local topic branch ${evidence.localGit.branch} belongs to Issue #${branchIssueNumber}, not queried Issue #${evidence.issue.number}`,
-      'Switch to a topic branch owned by the queried Issue before continuing.',
+      recoveryDescription,
+      recovery ?? undefined,
     )
   }
 

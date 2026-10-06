@@ -43,7 +43,9 @@ export function createContextOutput(evidence: NormalizedContextEvidence, decisio
     reasons: decision.reasons,
     ...(staleBaseSync?.allowed && staleBaseSync.recovery
       ? { recovery: staleBaseSync.recovery }
-      : {}),
+      : decision.recovery
+        ? { recovery: decision.recovery }
+        : {}),
     next_action: {
       type: decision.nextAction.type,
       command: decision.nextAction.command,

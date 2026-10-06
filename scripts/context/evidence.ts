@@ -1,6 +1,6 @@
 import { parseRoleEvidence } from './issue-parser.ts'
 import { readGithubEvidence } from './github.ts'
-import { readLocalGitEvidence } from './local-git.ts'
+import { readIssueBranchRecoveryCandidates, readLocalGitEvidence } from './local-git.ts'
 import { readProtectedPolicy } from './policy.ts'
 import { resolveApprovedBase } from './approved-base.ts'
 import { repositoryEvidence, runContextCommand } from './runtime.ts'
@@ -31,7 +31,6 @@ export function collectContextEvidence({
   if (configuredRepo && localGit.originRepository && configuredRepo !== localGit.originRepository) {
     errors.push(`EVIDENCE_CONFLICT: configured repository ${configuredRepo} differs from origin ${localGit.originRepository}`)
   }
-
   const repository = repositoryEvidence(repo ?? 'unknown/unknown')
   const approvedBase = repo
     ? resolveApprovedBase({ repo, run, cwd, env })
@@ -61,6 +60,16 @@ export function collectContextEvidence({
     }
   const roleEvidence = parseRoleEvidence(github.comments)
   const activePr = github.activePrs.length === 0 ? null : github.activePrs.length === 1 ? github.activePrs[0] : github.activePrs
+  const sourceIssue = localGit.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
+  const activePrRecoveryTarget = github.activePrs.length === 1 &&
+    !github.activePrs[0]!.merged && github.activePrs[0]!.state.toUpperCase() !== 'MERGED' &&
+    sourceIssue && sourceIssue !== issueNumber &&
+    (localGit.branch !== github.activePrs[0]!.headBranch || localGit.head?.toLowerCase() !== github.activePrs[0]!.headSha.toLowerCase())
+    ? { branch: github.activePrs[0]!.headBranch, head: github.activePrs[0]!.headSha }
+    : undefined
+  const issueBranchRecoveryCandidates = repo && (github.activePrs.length === 0 || activePrRecoveryTarget)
+    ? readIssueBranchRecoveryCandidates({ cwd, run, issueNumber, repository: repo, localGit, preferredTarget: activePrRecoveryTarget })
+    : []
   const issue = github.issue ?? {
     number: issueNumber,
     title: '',
@@ -116,6 +125,7 @@ export function collectContextEvidence({
     localGit,
     activePr,
     currentHeadVerification: github.activePrs.length === 1 ? github.exactHead : null,
+    ...(issueBranchRecoveryCandidates.length > 0 ? { issueBranchRecoveryCandidates } : {}),
     durableContext: {
       latestHandoff: roleEvidence.latestHandoff,
       handoffs: roleEvidence.handoffs,

@@ -4,6 +4,14 @@ Reusable rule for **issue-based agent tasks** in `bemoat-web-starter` and child 
 
 Child projects receive this file through harness sync. Agents must follow it whenever work is tied to a GitHub issue.
 
+When fresh Context stops because the current clean, durable workspace belongs
+to a different Issue, follow the canonical [wrong-Issue workspace acquisition
+rule](../mission-control/execution-handoff-contract.md#wrong-issue-workspace-acquisition)
+before reporting a setup blocker. That rule prefers one exact existing Issue
+workspace, then permits only an isolated canonical-base checkout and the
+ordinary zero-delta branch bootstrap. It never authorizes objective edits;
+rerun CLI Discovery and fresh Context before continuing.
+
 When creating or normalizing a GitHub issue from a conversation, use
 [issue-intake-contract.md](./issue-intake-contract.md) as the canonical intake
 structure instead of duplicating issue-shaping guidance in multiple workflow

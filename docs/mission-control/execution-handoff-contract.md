@@ -41,7 +41,7 @@ State repository, Issue, applicable PR, branch and exact head, approved protecte
 State the one objective authorized by fresh Context, its acceptance criteria, and its in-scope boundary. If Global MC cannot run repository-local CLI, identify the objective candidate from the verified Issue as pending fresh Execution/IDE Context authorization; only a fresh Context result with `next_action.type: COMMAND` authorizes mutation for that objective.
 
 ## 3. Verified live authority / route
-State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context may precede a later `COMMAND`, and then only within that recovery's scope. The sole exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or that exact Bridge B recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
+State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context or canonical wrong-Issue workspace acquisition under section 12 may precede a later `COMMAND`, and then only within that recovery's scope. The other exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. None authorizes objective mutation. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or an explicitly authorized pre-COMMAND recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
 
 ## 4. Startup / reconstruction instructions
 Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, perform registered CLI Discovery with its declared safe help, and run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
@@ -61,7 +61,7 @@ For every applicable role—`controller`, `read_only_characterization`, `impleme
 If Global MC cannot run repository-local CLI, any implementation recommendation remains conditional on fresh Context returning `next_action.type: COMMAND`; model routing grants no authority.
 
 ## 8. Execution / delegation rules
-Identify one accountable controller and the mutation owner. State permitted bounded delegation, its read-only or mutation effect, and how delegated work stays within this objective. No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, or when every condition of the Bridge B recovery in section 12 is satisfied. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
+Identify one accountable controller and the mutation owner. State permitted bounded delegation, its read-only or mutation effect, and how delegated work stays within this objective. No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery in section 12 is satisfied. Workspace acquisition is limited to the clean, isolated preparation described there and grants no objective-work authority. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
 
 ## 9. Validation requirements
 Discover public commands before use. Run focused regressions and the repository-required validation tier for the changed files; report exact commands and results. Require exact-head CI and independent review when current policy requires them. Do not invent a validation tier or claim checks that were not run.
@@ -131,9 +131,10 @@ appropriate Execution handoff.
 For `FOUNDER_GATE`, do not mutate and return to Founder once for the required
 decision, then stop at the gate. For `STOP`, unsupported state, or evidence
 conflict, do not mutate the authorized objective; stop fail-closed and report
-the exact blocker. Only an exact bounded recovery prescribed by fresh Context
-under section 12 may proceed. Missing, ambiguous, conflicting, or unsupported
-recovery remains STOP. If evidence
+the exact blocker. The only pre-COMMAND exceptions are an exact existing-branch
+recovery prescribed by fresh Context or the canonical wrong-Issue workspace
+acquisition below. Neither exception authorizes objective work. Missing,
+ambiguous, conflicting, or unsupported recovery remains STOP. If evidence
 changes before execution, reconstruct again. Do not pre-authorize
 future objectives; a separate real gate still controls when required. On
 terminal completion, return.
@@ -153,9 +154,107 @@ owned existing Issue branch and live repository evidence identifies exactly one
 candidate, perform only that switch, then immediately rerun registered CLI
 Discovery and fresh Context without a Founder/Global MC relay. Missing, multiple,
 ambiguous, or conflicting candidates remain `STOP`; do not guess. The switch
-grants no synchronization, rebase, reset, merge, implementation, edit, or
-future-objective authority. No general recovery authority or gate waiver is
-implied.
+must remain bound to the canonical repository, queried Issue, source and target
+branch/head identities, exact protected-base branch/SHA, and source durability
+recorded by Context. Recheck that binding immediately before the switch; if any
+evidence changed, stop and reconstruct fresh Context. The switch grants no
+synchronization, rebase, reset, merge, implementation, edit, or future-objective
+authority. No general recovery authority or gate waiver is implied.
+
+An unmerged active PR does not make an unrelated local Issue branch a valid
+workspace for PR-gated work. When the numbered local branch belongs to another
+Issue, the local branch and `HEAD` must match the active PR's exact head branch
+and SHA before any non-terminal active-PR route can apply. If they do not,
+Context remains `STOP`; it may prescribe a switch only when the active PR's
+unique branch is independently verified at the exact live canonical-origin
+head and matching local `origin/<branch>` tracking ref. Bind that recovery to
+the PR number, URL, base branch/SHA, and head branch/SHA as well as the ordinary
+repository, Issue, source, target, and protected-base evidence. If the exact PR
+target is unavailable or conflicting, use the canonical workspace-acquisition
+rule below or stop. A local branch whose name has another Issue number remains
+eligible for ordinary PR routing when its branch and exact `HEAD` match the
+active PR. A valid merged PR remains terminal despite an irrelevant local
+checkout.
+
+### Wrong-Issue workspace acquisition
+
+When a new or resumed Execution session starts in a wrong-Issue workspace, apply
+this order before returning to Founder for Git setup. Context remains read-only;
+this rule authorizes only safe workspace acquisition followed by fresh Context.
+
+1. **Reuse exact existing Issue workspace.** If exactly one clean, durable,
+   canonical workspace/branch owned by the queried Issue, with its exact
+   `origin/<branch>` upstream, is independently proven, use the existing exact
+   bounded recovery path. When fresh Context
+   emits an exact switch recovery, perform only that switch. If the one
+   verified workspace is already available at another known path, use it only
+   when this Execution host can operate from that path. Immediately rerun
+   registered CLI Discovery and fresh Context. Multiple plausible workspaces
+   or branches, a dirty or non-durable target, stale tracking state, conflicting
+   ownership, or an unverified path remains `STOP`.
+
+2. **Provision an isolated canonical workspace when none is usable.** If no
+   usable queried-Issue workspace exists, provision a separate isolated
+   checkout from the exact live approved-base SHA only when the current
+   wrong-Issue checkout is clean, attached, durable, has canonical origin, and
+   tracks its branch at `origin/<branch>`;
+   the live canonical repository, approved-base branch and
+   exact approved-base SHA are uniquely verified from fresh GitHub/Context
+   evidence; and the host has network and filesystem access to a new sibling
+   path that does not already exist. Use the canonical repository URL from
+   that evidence. Clone the approved-base branch into a separate checkout.
+   Provisioning must not mutate, reset, rebase, merge, stash, delete, force, or
+   otherwise alter the currently bound wrong-Issue checkout. If the clone or
+   any verification fails, stop and preserve both the original checkout and
+   any partial clone.
+
+   Before selecting an Issue branch, verify canonical origin, exact live-base
+   SHA, attached/clean state, and absence/conflict status of the queried-Issue
+   topic branch. In particular, verify the new clone's canonical `origin`,
+   attached branch, clean status, `HEAD` equal to the exact live approved-base
+   SHA, and live approved-base ref still equal to that SHA. Inspect the local
+   and live remote queried-Issue branch names. Multiple candidates, an
+   existing but stale or conflicting branch, ambiguous ownership, or an
+   unavailable exact base remains `STOP`. If exactly one existing remote
+   queried-Issue branch is proven, fetch and check out only that branch at its
+   exact live SHA, then verify its canonical upstream and clean/durable state.
+   If the queried-Issue branch does not yet exist, use the topic-branch name
+   already established by the Issue handoff; only when its identity is unique
+   and normal zero-delta bootstrap eligibility is uniquely satisfied may
+   Execution use the canonical durable zero-delta branch bootstrap from the
+   exact approved-base SHA. Follow the ordinary
+   [durable zero-delta bootstrap](../agent-loop/issue-driven-branch-workflow.md#durable-zero-delta-branch-bootstrap)
+   checks, then read back the pushed branch. Never invent ownership or
+   overwrite an existing branch.
+
+   After either checkout path completes, immediately rerun registered CLI
+   Discovery and fresh Context by running
+   `pnpm run bemoat:context <issue-number> --json` in the acquired workspace.
+   Registered
+   CLI Discovery is still required; fresh Context is still required; and
+   source/test/doc edits still require an authorized Context route and the
+   normal one-time first-edit trigger. Do not begin objective work unless that
+   fresh Context authorizes it. Workspace acquisition adds no route, state,
+   evidence vocabulary, implementation authority, or future objective
+   authorization. It introduces no new general scheduler or worktree manager.
+
+3. **Stop only at a real boundary.** Return to the operator when there are
+   multiple plausible Issue workspaces/branches; dirty or non-durable state;
+   wrong/noncanonical repository or origin; a source or target upstream other
+   than the canonical `origin/<branch>`; conflicting/stale live-base evidence;
+   conflicting existing target branch ownership; no unique
+   established branch name; filesystem/network/host capability prevents
+   isolated safe provisioning; or recovery would require destructive change
+   or loss/movement of unrelated Issue work. Do not disguise missing evidence
+   as an implementation or Founder gate.
+
+If the agent can create and verify the isolated sibling checkout but the host
+cannot switch/rebind its effective workspace/root, prepare the workspace
+completely first, report the exact verified path as the single operator action,
+and do not ask the Founder to run Git clone/fetch/checkout commands manually.
+Do not alter the original wrong-Issue checkout. This does not change #571 Bridge
+B, which owns protected-main command-source reachability for evaluating an
+unchanged stale target.
 
 ### Bridge B: stale target predates recovery emission
 
@@ -202,7 +301,7 @@ before its next route can be selected. Every other `STOP`, including a stale Con
 any additional conflict, remains `STOP`.
 
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12 or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.
