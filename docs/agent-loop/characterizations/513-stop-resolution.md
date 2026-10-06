@@ -17,6 +17,27 @@ original PR #514 test asserted the former case; the merged test covers it with
 the current policy's exact legacy blocker identity. This reconciliation keeps
 the original red-story evidence below as history and adds no routing semantics.
 
+## Later narrow recovery contract (Issue #580)
+
+On 2026-10-06, the Founder recorded a bounded decision in Issue #580 for the
+active-PR #578 / PR #579 `VERIFY + STOP` conflict. The approved exception
+applies only when exactly two applicable current-head HANDOFFs contain one
+`VERIFY` and one valid schema-v3 `STOP` with explicit blockers, and both bind
+the same repository, Issue, PR, branch, exact head, and protected base. The
+schema-v3 `STOP` is the routing safety overlay; neither HANDOFF is rewritten,
+and timestamps or comment order select nothing. Every explicit blocker still
+requires its own valid `BLOCKER_RESOLUTION`. Once all blockers are resolved,
+Context recomputes from durable evidence and the pair alone no longer causes
+the original conflict.
+
+This later decision resolves only that pair. `FIX + STOP`, `REVIEW + STOP`,
+`FOUNDER_GATE + STOP`, duplicate or malformed evidence, mismatched identities,
+`VERIFY + VERIFY`, `STOP + STOP`, and three or more applicable records remain
+fail-closed. Existing `REVIEW/VERIFY -> FIX/FOUNDER_GATE` review-lineage
+supersession and the separate blocker-resolution semantics are unchanged. The
+production-shaped regression and bounded negative matrix live in
+`tests/int/context-router.int.spec.ts`.
+
 ## Red story and observed baseline
 
 The new `#509`-shaped router story was first run with an expected `REVIEW`
@@ -73,7 +94,9 @@ human authority without prose matching, handle duplicate or competing records,
 and remove only the resolved blocker before native evidence is re-evaluated.
 Resolution alone must confer no route.
 
-The next action is a Founder/protocol decision defining that record and its
-authority, followed by fresh Context for a separately bounded production
-correction. Do not infer that the #509 Founder decision supplies a general
-resolution-record format for #513.
+The structured `BLOCKER_RESOLUTION` contract now defines blocker identity,
+Founder authority, and per-blocker binding without granting a route. Issue
+#580 separately defines the narrow `VERIFY + STOP` safety overlay above. Other
+competing-HANDOFF shapes remain fail-closed and need their own durable
+authority before any additional recovery behavior is introduced. The #509
+Founder decision does not supply a general resolution-record format.

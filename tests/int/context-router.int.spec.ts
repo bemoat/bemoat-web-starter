@@ -9,7 +9,7 @@ import {
   parseProductionMergeReviewVerdict,
   resolveMergeReviewVerdictBinding,
 } from '../../scripts/context/merge-review-verdict.ts'
-import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { parseHandoffBody, renderHandoffComment, type HandoffEvidence, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 
 const sha = 'a'.repeat(40)
 const headSha = 'b'.repeat(40)
@@ -209,6 +209,145 @@ function noPrStopHandoff(overrides: Partial<HandoffRecord> = {}) {
     next_action: { route: 'STOP', description: 'Resolve the named blocker.' },
     ...overrides,
   })
+}
+
+const competingHandoffStory = {
+  repository: 'boat1994/bemoat-web-starter',
+  issueNumber: '578',
+  prNumber: '579',
+  branch: 'docs/578-execution-response-ux',
+  baseSha: 'd8cf45d21829b6bde78411f07c335031701003a7',
+  headSha: '67b08e3505139da886d22b79a36a0bed31861195',
+}
+
+function competingHandoff(route: HandoffRecord['route'], id: number, overrides: Partial<HandoffRecord> = {}) {
+  const incident = competingHandoffStory
+  const pr = {
+    number: incident.prNumber,
+    url: `https://github.com/${incident.repository}/pull/${incident.prNumber}`,
+    base: 'main',
+    head: incident.branch,
+    head_sha: incident.headSha,
+  }
+  const routeEvidence: HandoffEvidence[] | undefined = route === 'STOP'
+    ? [{ kind: 'stop-blocker', value: 'active-pr-handoff-supersession-protocol-undecided', url: null }]
+    : route === 'VERIFY' || route === 'REVIEW'
+      ? [{ kind: 'focused-tests', value: `${route} record for the exact incident head.`, url: null }]
+      : undefined
+  const handoff = strictHandoff({
+    schema_version: route === 'STOP' ? 3 : 2,
+    repository: incident.repository,
+    issue_number: incident.issueNumber,
+    branch: incident.branch,
+    exact_head: incident.headSha,
+    protected_base: { branch: 'main', sha: incident.baseSha },
+    pr,
+    route,
+    ...(routeEvidence ? { verified_evidence: routeEvidence } : {}),
+    next_action: { route, description: `Follow the ${route} route.` },
+    ...overrides,
+  })
+  return {
+    ...handoff,
+    id,
+    url: `https://github.com/${incident.repository}/issues/${incident.issueNumber}#issuecomment-${id}`,
+    createdAt: route === 'VERIFY' ? '2026-10-06T07:30:00Z' : '2026-10-06T07:20:00Z',
+  }
+}
+
+function routeWithCompetingHandoffs(
+  handoffs: Array<ReturnType<typeof strictHandoff>>,
+  blockerResolutionComments: Array<Record<string, unknown>> = [],
+  nativeReviews: NativeReviewEvidence[] = [],
+) {
+  const incident = competingHandoffStory
+  const parsed = parseRoleEvidence(blockerResolutionComments)
+  return routeContext(baseEvidence({
+    repository: {
+      owner: 'boat1994',
+      name: 'bemoat-web-starter',
+      nameWithOwner: incident.repository,
+      url: `https://github.com/${incident.repository}`,
+    },
+    protectedBase: {
+      branch: 'main',
+      sha: incident.baseSha,
+      source: 'live GitHub ref',
+      url: `https://github.com/${incident.repository}/tree/main`,
+    },
+    policy: {
+      ...baseEvidence().policy,
+      version: '1.4.0',
+      sourceSha: 'ad392ec782b63042261d51cd98939318b22c053d',
+    },
+    issue: {
+      ...baseEvidence().issue,
+      number: incident.issueNumber,
+      title: 'fix(context): recover accidental competing current-head HANDOFF conflicts',
+      url: `https://github.com/${incident.repository}/issues/${incident.issueNumber}`,
+      missionControlMode: 'required',
+    },
+    localGit: {
+      ...baseEvidence().localGit,
+      branch: incident.branch,
+      head: incident.headSha,
+      upstream: `origin/${incident.branch}`,
+    },
+    activePr: prEvidence({
+      number: incident.prNumber,
+      url: `https://github.com/${incident.repository}/pull/${incident.prNumber}`,
+      headBranch: incident.branch,
+      headSha: incident.headSha,
+      baseSha: incident.baseSha,
+    }),
+    currentHeadVerification: verification({
+      exactHead: incident.headSha,
+      checks: { status: 'PENDING', complete: false, failed: false, pending: true, required: true },
+      ...(nativeReviews.length > 0 ? { reviews: {
+        required: false, approved: false, exactHead: false, approvedCount: 0, exactHeadApprovedCount: 0, nativeReviews,
+      } } : {}),
+    }),
+    durableContext: {
+      latestHandoff: handoffs.at(-1) ?? null,
+      handoffs,
+      historicalResults: [],
+      blockerResolutions: parsed.blockerResolutions,
+      invalidBlockerResolutions: parsed.invalidBlockerResolutions,
+    },
+  }))
+}
+
+function competingHandoffBlockerResolution(
+  stop: ReturnType<typeof strictHandoff>,
+  blockerId: string,
+  id: number,
+) {
+  const record: Record<string, unknown> = {
+    schema_version: 1,
+    record_type: 'BLOCKER_RESOLUTION',
+    repository: competingHandoffStory.repository,
+    issue_number: competingHandoffStory.issueNumber,
+    pr_number: competingHandoffStory.prNumber,
+    exact_head: competingHandoffStory.headSha,
+    protected_base: { branch: 'main', sha: competingHandoffStory.baseSha },
+    policy: {
+      path: 'docs/mission-control/mission-control-guide.md',
+      policy_id: 'bemoat-mission-control',
+      version: '1.4.0',
+      source_sha: 'ad392ec782b63042261d51cd98939318b22c053d',
+    },
+    source_stop_handoff: { comment_id: String(stop.id), url: stop.url },
+    blocker_id: blockerId,
+    authority: { role: 'FOUNDER', login: 'boat1994' },
+  }
+  return {
+    id,
+    body: `## BLOCKER_RESOLUTION\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n`,
+    createdAt: '2026-10-06T07:40:00Z',
+    url: `https://github.com/${competingHandoffStory.repository}/issues/${competingHandoffStory.issueNumber}#issuecomment-${id}`,
+    authorLogin: 'boat1994',
+    authorAssociation: 'OWNER',
+  }
 }
 
 function routeWithNoPrStop(
@@ -1086,6 +1225,158 @@ describe('bemoat:context pure routing', () => {
     }
 
     expect(handoffReadyDecision(strictHandoff(), { handoffs: [strictHandoff(), stop] }).route).toBe('STOP')
+  })
+
+  it('uses the #580 VERIFY + schema-v3 STOP pair as an identity-bound safety overlay', () => {
+    // Oracle: Issue #580's Founder-approved contract says that exactly two
+    // same-identity current-head HANDOFFs, VERIFY plus schema-v3 STOP with an
+    // explicit blocker, fold to the STOP and its blockers without ordering precedence.
+    const verify = competingHandoff('VERIFY', 6010840947)
+    const stop = competingHandoff('STOP', 6010924707)
+    const forward = routeWithCompetingHandoffs([verify, stop])
+    const reverse = routeWithCompetingHandoffs([stop, verify])
+
+    expect(forward.route).toBe('STOP')
+    expect(reverse.route).toBe('STOP')
+  })
+
+  it('re-evaluates the #580 pair after every explicit STOP blocker is resolved', () => {
+    // Oracle: Issue #580 says resolved STOP evidence cannot keep the pair in
+    // its original current-head conflict; with checks pending, normal routing is VERIFY.
+    const verify = competingHandoff('VERIFY', 6010840947)
+    const stop = competingHandoff('STOP', 6010924707)
+    const resolution = competingHandoffBlockerResolution(
+      stop,
+      'active-pr-handoff-supersession-protocol-undecided',
+      6012000001,
+    )
+
+    const decision = routeWithCompetingHandoffs([verify, stop], [resolution])
+
+    expect(decision.route).toBe('VERIFY')
+  })
+
+  it('keeps the #580 safety overlay stopped until each explicit blocker has one resolution', () => {
+    const verify = competingHandoff('VERIFY', 6012010001)
+    const stop = competingHandoff('STOP', 6012010002, {
+      verified_evidence: [
+        { kind: 'stop-blocker', value: 'first-blocker', url: null },
+        { kind: 'stop-blocker', value: 'second-blocker', url: null },
+      ],
+    })
+    const firstResolution = competingHandoffBlockerResolution(stop, 'first-blocker', 6012010003)
+    const secondResolution = competingHandoffBlockerResolution(stop, 'second-blocker', 6012010004)
+
+    const partiallyResolved = routeWithCompetingHandoffs([verify, stop], [firstResolution])
+    const fullyResolved = routeWithCompetingHandoffs([verify, stop], [firstResolution, secondResolution])
+
+    expect(partiallyResolved.route).toBe('STOP')
+    expect(fullyResolved.route).toBe('VERIFY')
+  })
+
+  it('fails closed when the #580 candidate pair reuses one native comment identity', () => {
+    // Oracle: Issue #580 excludes duplicate evidence from the narrow overlay.
+    const duplicateId = 6012050001
+    const verify = competingHandoff('VERIFY', duplicateId)
+    const stop = competingHandoff('STOP', duplicateId)
+
+    const decision = routeWithCompetingHandoffs([verify, stop])
+
+    expect(decision.route).toBe('STOP')
+  })
+
+  it.each([
+    ['repository', { repository: 'other/repository' }],
+    ['Issue', { issue_number: '577' }],
+    ['PR', { pr: { number: '580', url: 'https://github.com/boat1994/bemoat-web-starter/pull/580', base: 'main', head: competingHandoffStory.branch, head_sha: competingHandoffStory.headSha } }],
+    ['branch', { branch: 'docs/578-other-branch' }],
+    ['protected-base branch', { protected_base: { branch: 'dev', sha: competingHandoffStory.baseSha } }],
+    ['protected-base SHA', { protected_base: { branch: 'main', sha: 'c'.repeat(40) } }],
+  ] as const)('fails closed when either same-head VERIFY + STOP candidate has a mismatched %s', (_identity, mismatch) => {
+    // Oracle: Issue #580 requires exact repository, Issue, PR, branch, head,
+    // and protected-base identity for the overlay; any same-head mismatch stays STOP.
+    const validVerify = competingHandoff('VERIFY', 6012060001)
+    const validStop = competingHandoff('STOP', 6012060002)
+    const pairs = [
+      [competingHandoff('VERIFY', 6012060003, mismatch), validStop],
+      [validVerify, competingHandoff('STOP', 6012060004, mismatch)],
+    ] as const
+
+    for (const pair of pairs) {
+      expect(routeWithCompetingHandoffs([...pair]).route).toBe('STOP')
+    }
+  })
+
+  it('fails closed when a schema-v3 STOP candidate lacks an explicit blocker', () => {
+    const verify = competingHandoff('VERIFY', 6012070001)
+    const malformedStop = competingHandoff('STOP', 6012070002, {
+      verified_evidence: [{ kind: 'focused-tests', value: 'No explicit blocker.', url: null }],
+    })
+
+    const decision = routeWithCompetingHandoffs([verify, malformedStop])
+
+    expect(decision.route).toBe('STOP')
+  })
+
+  it.each([
+    ['REVIEW + STOP', ['REVIEW', 'STOP']],
+    ['FOUNDER_GATE + STOP', ['FOUNDER_GATE', 'STOP']],
+    ['VERIFY + VERIFY', ['VERIFY', 'VERIFY']],
+    ['STOP + STOP', ['STOP', 'STOP']],
+  ] as const)('keeps unsupported #580 pair %s fail-closed', (_story, routes) => {
+    const pair = routes.map((route, index) => competingHandoff(route, 6012100000 + index))
+
+    expect(routeWithCompetingHandoffs(pair).route).toBe('STOP')
+  })
+
+  it('keeps a valid exact-head FIX + schema-v3 STOP pair unsupported', () => {
+    const reviewId = 6012400001
+    const reviewUrl = `https://github.com/${competingHandoffStory.repository}/pull/${competingHandoffStory.prNumber}#pullrequestreview-${reviewId}`
+    const fix = competingHandoff('FIX', 6012400002, {
+      verified_evidence: [{ kind: 'review-verdict', value: 'Exact-head native blocking review.', url: reviewUrl }],
+    })
+    const stop = competingHandoff('STOP', 6012400003)
+    const review = nativeBlockingReview({
+      id: reviewId,
+      url: reviewUrl,
+      commitId: competingHandoffStory.headSha,
+      body: `## REVIEW_VERDICT
+**Repository:** \`${competingHandoffStory.repository}\`
+**Task / Issue:** #${competingHandoffStory.issueNumber}
+**PR / base / head:** PR #${competingHandoffStory.prNumber} · \`main\` · \`${competingHandoffStory.headSha}\`
+**Verdict:** CORRECTION REQUIRED
+
+### Immutable finding disposition
+\`\`\`json
+{ "schema_version": 1, "mode": "implementation_pr", "reviewed_head": "${competingHandoffStory.headSha}", "findings": [{ "id": "CTX-580", "canonical_summary": "The valid FIX candidate is unsupported beside STOP.", "source_thread": "${reviewUrl}", "required_evidence": ["Exact-head blocking review evidence."] }] }
+\`\`\``,
+    })
+
+    expect(routeWithCompetingHandoffs([fix, stop], [], [review]).route).toBe('STOP')
+  })
+
+  it('keeps three current-head records fail-closed even when the first two form the approved pair', () => {
+    const pair = [
+      competingHandoff('VERIFY', 6012200001),
+      competingHandoff('STOP', 6012200002),
+      competingHandoff('VERIFY', 6012200003),
+    ]
+
+    expect(routeWithCompetingHandoffs(pair).route).toBe('STOP')
+  })
+
+  it('does not let a valid BLOCKER_RESOLUTION bypass an unsupported competing pair', () => {
+    const review = competingHandoff('REVIEW', 6012300001)
+    const stop = competingHandoff('STOP', 6012300002)
+    const resolution = competingHandoffBlockerResolution(
+      stop,
+      'active-pr-handoff-supersession-protocol-undecided',
+      6012300003,
+    )
+
+    const decision = routeWithCompetingHandoffs([review, stop], [resolution])
+
+    expect(decision.route).toBe('STOP')
   })
 
   it('keeps a current FIX and STOP pair fail-closed when FIX lacks valid review lineage', () => {
