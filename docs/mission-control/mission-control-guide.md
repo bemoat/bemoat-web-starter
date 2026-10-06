@@ -175,6 +175,26 @@ select authority. A blocker resolution removes only its named blocker and
 grants no implementation, review, merge, deployment, migration, or
 terminal-completion authority.
 
+For no-PR reconstruction without a `COMPLETE`, exactly one uniquely applicable
+exact-current-head `objective_mode: read_only` `FOUNDER_GATE` HANDOFF may route
+Context to `FOUNDER_GATE`. It must have `pr: null`, canonical durable native
+comment identity, and exact repository, Issue, branch, and topic head. Its
+`protected_base.branch` must still match the live protected branch. Its
+`protected_base.sha` is the immutable snapshot recorded when the HANDOFF was
+canonically published; it need not equal a later live protected-base SHA.
+The gate may coexist only with read-only `IMPLEMENT` HANDOFFs and schema-v3
+STOP HANDOFFs whose blockers are all uniquely resolved. The gate and all such
+compatible current-head history must agree on exactly one recorded
+protected-base SHA. Multiple gates, malformed, stale, or wrong-identity gate
+evidence, mutation-capable `IMPLEMENT`, incompatible FIX or REVIEW, other
+non-recomputable history, unresolved STOPs, and differing recorded base SHAs
+remain STOP. The gate records only the human decision boundary and grants no
+implementation or mutation authority. After the Founder decision is consumed,
+fresh Context against current merged authority is required before a
+mutation-capable objective. Context does not use timestamps or comment order to
+select a gate or resolve competing evidence. A no-PR `COMPLETE` must still bind
+the current live protected-base SHA; a competing gate keeps it at STOP.
+
 Only schema-v2 STOP HANDOFFs identified by `legacy_stop_handoffs` in merged
 protected-base policy retain one legacy blocker derived from immutable
 `next_action.description`. Each entry binds Issue number, native comment ID,

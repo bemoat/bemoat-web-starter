@@ -52,6 +52,23 @@ const ordinaryIdentity: Identity = {
   policyVersion,
 }
 
+const issue582: Identity = {
+  repository: 'bemoat/bemoat-web-starter',
+  issue: '582',
+  branch: 'fix/582-repository-transfer-identity',
+  head: '8889e1898d5d20833143bc568f325175ee46956b',
+  baseBranch: 'main',
+  baseSha: '8889e1898d5d20833143bc568f325175ee46956b',
+  policySha: 'ad392ec782b63042261d51cd98939318b22c053d',
+  policyVersion: '1.4.0',
+}
+
+const issue582AfterMerge: Identity = {
+  ...issue582,
+  baseSha: 'd'.repeat(40),
+  policySha: 'e'.repeat(40),
+}
+
 /**
  * Story authority: protected-main policy at fc543f3 binds STOP resolution to
  * one exact blocker, current policy, and trusted native Founder identity;
@@ -105,6 +122,20 @@ function handoff(
     body: renderHandoffComment(record),
     createdAt: options.createdAt ?? '2026-10-04T18:00:00Z',
     url: `https://github.com/${identity.repository}/issues/${identity.issue}#issuecomment-${options.id}`,
+  }
+}
+
+function mutateHandoff(
+  source: RoleEvidence,
+  mutate: (record: Record<string, unknown>) => void,
+): RoleEvidence {
+  const match = source.body.match(/```json\n([\s\S]+)\n```\n$/)
+  if (!match) throw new Error('Expected canonical HANDOFF JSON envelope')
+  const record = JSON.parse(match[1]!) as Record<string, unknown>
+  mutate(record)
+  return {
+    ...source,
+    body: `## HANDOFF\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\`\n`,
   }
 }
 
@@ -226,6 +257,206 @@ function routeNoPr(
 ) {
   return routeContext(contextFor(identity, handoffs, resolutions, invalidResolutions))
 }
+
+/**
+ * Story authority: Issue #583 and the explicit Founder selection authorize a
+ * unique exact-current-head read-only no-PR FOUNDER_GATE to retain the
+ * protected-base SHA recorded when it was published, even after live main
+ * advances. Its protected branch must still match, and it may coexist only
+ * with recomputable read-only IMPLEMENT and fully resolved schema-v3 STOP
+ * history sharing that same recorded SHA. The gate remains human-owned, while
+ * no-PR COMPLETE continues to bind the live SHA. Ambiguous or
+ * identity-mismatched evidence remains STOP; timestamps and comment order do
+ * not establish precedence.
+ */
+describe('no-PR read-only FOUNDER_GATE reconstruction', () => {
+  it('routes the exact #582 read-only FOUNDER_GATE to the human-only decision boundary', () => {
+    const gate = handoff(issue582, {
+      id: 6014391169,
+      route: 'FOUNDER_GATE',
+      objectiveMode: 'read_only',
+    })
+
+    expect(routeNoPr(issue582, [gate])).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+  })
+
+  it('preserves the exact #582 gate snapshot after protected main advances', () => {
+    const gate = handoff(issue582, {
+      id: 6014391169,
+      route: 'FOUNDER_GATE',
+      objectiveMode: 'read_only',
+    })
+
+    expect(routeNoPr(issue582AfterMerge, [gate])).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+  })
+
+  it('reconstructs one unique gate alongside recomputable IMPLEMENT and resolved STOP history regardless of evidence order', () => {
+    const implement = handoff(issue532, {
+      id: 5982945098,
+      createdAt: '2026-10-04T18:14:00Z',
+    })
+    const stop = handoff(issue532, {
+      id: 5983158918,
+      route: 'STOP',
+      blockerIds: ['no-pr-complete-competes-with-existing-current-head-handoffs'],
+      createdAt: '2026-10-04T18:40:04Z',
+    })
+    const gate = handoff(issue532, {
+      id: 5983158999,
+      route: 'FOUNDER_GATE',
+      objectiveMode: 'read_only',
+      createdAt: '2026-10-04T18:10:00Z',
+    })
+    const stopResolution = resolution(stop, issue532AfterMerge)
+
+    const firstOrder = routeNoPr(issue532AfterMerge, [implement, stop, gate], [stopResolution])
+    const permutedOrder = routeNoPr(issue532AfterMerge, [gate, stop, implement], [stopResolution])
+
+    expect(firstOrder).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+    expect(permutedOrder).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+  })
+
+  it('keeps a unique gate at STOP while schema-v3 STOP history has an unresolved blocker', () => {
+    const stop = handoff(issue532, {
+      id: 5983158918,
+      route: 'STOP',
+      blockerIds: ['unresolved-blocker'],
+    })
+    const gate = handoff(issue532, {
+      id: 5983158999,
+      route: 'FOUNDER_GATE',
+      objectiveMode: 'read_only',
+    })
+
+    expect(routeNoPr(issue532AfterMerge, [gate, stop]).route).toBe('STOP')
+  })
+
+  it('keeps a gate at STOP when recomputable history has conflicting historical base identities', () => {
+    const first = handoff(issue532, { id: 5982945098 })
+    const conflicting = handoff({ ...issue532, baseSha: 'f'.repeat(40) }, { id: 5983056944 })
+    const gate = handoff(issue532AfterMerge, { id: 5983158999, route: 'FOUNDER_GATE' })
+
+    expect(routeNoPr(issue532AfterMerge, [first, conflicting, gate]).route).toBe('STOP')
+  })
+
+  it('keeps a gate at STOP when it and compatible history record different base snapshots', () => {
+    const history = handoff(issue532, { id: 5982945098 })
+    const gate = handoff({ ...issue532, baseSha: 'f'.repeat(40) }, {
+      id: 5983158999,
+      route: 'FOUNDER_GATE',
+    })
+
+    expect(routeNoPr(issue532AfterMerge, [gate, history]).route).toBe('STOP')
+  })
+
+  it('keeps multiple distinct FOUNDER_GATE records fail-closed', () => {
+    const first = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+    const second = handoff(issue582, { id: 6014391170, route: 'FOUNDER_GATE' })
+
+    expect(routeNoPr(issue582, [first, second]).route).toBe('STOP')
+    expect(routeNoPr(issue582, [second, first]).route).toBe('STOP')
+  })
+
+  it.each([
+    ['native comment ID', (source: RoleEvidence) => ({ ...source, id: 6014391170 })],
+    ['native comment URL', (source: RoleEvidence) => ({
+      ...source,
+      url: 'https://github.com/bemoat/bemoat-web-starter/issues/582#issuecomment-6014391170',
+    })],
+  ])('keeps a gate at STOP when its %s does not identify the exact HANDOFF record', (_field, mismatch) => {
+    const gate = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+
+    expect(routeNoPr(issue582, [mismatch(gate)]).route).toBe('STOP')
+  })
+
+  it('keeps a gate at STOP when it competes with mutation-capable or incompatible nonterminal history', () => {
+    const gate = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+
+    for (const [index, route] of (['IMPLEMENT', 'FIX', 'REVIEW'] as const).entries()) {
+      const competing = handoff(issue582, {
+        id: 6014391170 + index,
+        route,
+        objectiveMode: route === 'IMPLEMENT' ? 'implementation' : 'read_only',
+      })
+      expect(routeNoPr(issue582, [gate, competing]).route).toBe('STOP')
+    }
+  })
+
+  it.each([
+    ['repository', (record: Record<string, unknown>) => { record.repository = 'other/repository' }],
+    ['Issue', (record: Record<string, unknown>) => { record.issue_number = '999' }],
+    ['branch', (record: Record<string, unknown>) => { record.branch = 'fix/582-other' }],
+    ['head', (record: Record<string, unknown>) => { record.exact_head = 'f'.repeat(40) }],
+    ['protected-base branch', (record: Record<string, unknown>) => {
+      (record.protected_base as Record<string, unknown>).branch = 'dev'
+    }],
+    ['read-only mode', (record: Record<string, unknown>) => { record.objective_mode = 'implementation' }],
+    ['durability', (record: Record<string, unknown>) => {
+      record.local_durability = { required: true, durable: false, reason: 'The gate was not pushed.' }
+    }],
+    ['schema', (record: Record<string, unknown>) => { record.verified_evidence = [] }],
+  ])('keeps a FOUNDER_GATE at STOP when its %s evidence is invalid', (_field, mutate) => {
+    const gate = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+    const invalid = mutateHandoff(gate, mutate)
+
+    expect(routeNoPr(issue582, [invalid]).route).toBe('STOP')
+  })
+
+  it('keeps a malformed FOUNDER_GATE JSON envelope at STOP', () => {
+    const gate = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+    const malformed = {
+      ...gate,
+      body: gate.body.replace('"verified_evidence": [', '"verified_evidence": ??? ['),
+    }
+
+    expect(routeNoPr(issue582, [malformed]).route).toBe('STOP')
+  })
+
+  it('keeps a FOUNDER_GATE with a missing JSON fence terminator at STOP', () => {
+    const gate = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+    const malformed = { ...gate, body: gate.body.replace(/```\n$/, '') }
+
+    expect(routeNoPr(issue582, [malformed]).route).toBe('STOP')
+  })
+
+  it('keeps a FOUNDER_GATE with a missing JSON fence opener at STOP', () => {
+    const gate = handoff(issue582, { id: 6014391169, route: 'FOUNDER_GATE' })
+    const malformed = { ...gate, body: gate.body.replace('```json\n', '') }
+
+    expect(routeNoPr(issue582, [malformed]).route).toBe('STOP')
+  })
+
+  it('preserves read-only no-change IMPLEMENT reconstruction when no Founder gate is present', () => {
+    const readOnly = handoff(issue582, {
+      id: 6014391168,
+      route: 'IMPLEMENT',
+      objectiveMode: 'read_only',
+    })
+
+    expect(routeNoPr(issue582, [readOnly])).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: { type: 'COMMAND', command: null },
+    })
+  })
+
+  it('keeps no-PR COMPLETE at STOP when it records a pre-advance protected-base SHA', () => {
+    const complete = handoff(issue532, { id: 5983158999, route: 'COMPLETE' })
+
+    expect(routeNoPr(issue532AfterMerge, [complete]).route).toBe('STOP')
+  })
+})
 
 describe('no-PR schema-v3 STOP resolution and terminal folding', () => {
   it('reconstructs the durable #532 STOP lifecycle without rewriting its two prior IMPLEMENT HANDOFFs', () => {
