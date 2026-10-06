@@ -29,12 +29,7 @@ policy; chat, caches, and handoffs cannot override it.
   label a different profile value advisory baseline only. Else follow Section
   7. After a
   human gate or implementation trigger, make Next action operator-executable.
-  If Next action requires another session/runtime, include its copy-ready transfer
-  in the same response; never require a second prompt request. Load
-  `docs/mission-control/execution-handoff-contract.md`: compact only for the same
-  valid Execution session/workspace/authority; full for new/changed execution;
-  recovery stays exact/narrow. Act directly when possible. `FOUNDER_GATE` is
-  decision-first; transfer only after the decision. `COMMAND` continues.
+  Only when cross-session operator action is actually needed: existing Execution/IDE session, send `continue` for already-authorized objective. Cross-runtime Next action puts copy-ready in same response; no second ask. Active Execution controller `COMMAND`: Next action says no additional Founder/operator action is required; continue automatically. Do not use authorization-only wording: `proceed`, `begin implementation`, `continue` without saying where and how.
 - Global MC verifies live GitHub repository/base/Issue/PR/head, merged loader
   and merged policy. Global MC does not run repository-local Bemoat CLI and
   does not guess Context routes. Context is the canonical routing authority.

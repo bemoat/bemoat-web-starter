@@ -191,7 +191,7 @@ describe('Mission Control delegation and execution model policy', () => {
 
     it('emits a compact copy-ready continuation in the same response after REVIEW when the same Execution destination remains valid', () => {
       expect(contract).toMatch(/after REVIEW or another durable result.*same valid Execution session, workspace, and authority.*compact continuation in that same response/i)
-      expect(loader).toMatch(/compact only.*same valid Execution session\/workspace\/authority/i)
+      expect(loader).toMatch(/existing Execution\/IDE session.*send `continue`.*already-authorized/i)
     })
 
     it('emits the complete canonical handoff in the same response for a new Execution session', () => {
@@ -202,28 +202,28 @@ describe('Mission Control delegation and execution model policy', () => {
     it('keeps prepared wrong-workspace host rebind to the exact verified path instead of inventing Founder Git commands', () => {
       expect(contract).toMatch(/workspace-acquisition rule.*prepared and verified a sibling workspace.*exact verified path and exact operator rebind\/open action/i)
       expect(contract).toMatch(/do not ask the Founder to run Git clone\/fetch\/checkout commands/i)
-      expect(loader).toMatch(/recovery stays exact\/narrow/i)
+      expect(contract).toMatch(/canonical recovery actions remain narrower than objective handoffs/i)
     })
 
     it('keeps FOUNDER_GATE decision-first instead of fabricating a continuation', () => {
       expect(contract).toMatch(/FOUNDER_GATE.*decision-first.*ask for the actual Founder decision.*do not emit a mutation-capable continuation that assumes the answer/i)
-      expect(loader).toMatch(/`FOUNDER_GATE` is decision-first/i)
+      expect(loader).toMatch(/`FOUNDER_GATE` means no mutation and return to Founder once for the required decision/i)
     })
 
     it('emits the appropriate continuation in the same response after a Founder decision when another runtime must act', () => {
       expect(contract).toMatch(/after the Founder decision exists.*another session or runtime must carry it out.*copy-ready continuation in that same response/i)
-      expect(loader).toMatch(/transfer only after the decision/i)
+      expect(contract).toMatch(/after the Founder decision exists.*another session or runtime must carry it out.*same response/i)
     })
 
     it('prefers direct execution when the current agent can perform the authorized action', () => {
       expect(contract).toMatch(/current agent\/runtime can execute the authorized next action directly.*perform it directly instead.*do not manufacture a handoff/i)
-      expect(loader).toMatch(/Act directly when possible/i)
+      expect(contract).toMatch(/current agent\/runtime can execute the authorized next action directly.*perform it directly instead/i)
     })
 
     it('rejects transfer prose without the required copy-ready artifact', () => {
       expect(contract).toMatch(/selected next action requires another session or runtime to act.*current response MUST contain.*copy-ready operator artifact itself/i)
       expect(contract).toMatch(/continue there.*without that artifact is incomplete.*do not make the Founder ask a second time/i)
-      expect(loader).toMatch(/Next action requires another session\/runtime.*copy-ready transfer.*same response.*second prompt request/i)
+      expect(loader).toMatch(/Cross-runtime Next action puts copy-ready in same response.*no second ask/i)
     })
 
     it('keeps repository, Issue, and exact next action inside the transfer artifact rather than surrounding prose', () => {
