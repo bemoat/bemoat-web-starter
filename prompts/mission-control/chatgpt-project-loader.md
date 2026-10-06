@@ -8,7 +8,7 @@ policy; chat, caches, and handoffs cannot override it.
 
 - Protocol: `bemoat:context` → one bounded objective →
   `bemoat:handoff` → fresh reconstruction.
-- Resolve live repo/base; read merged policy and applicable child overrides.
+- Resolve live repo/base; read merged policy and child overrides.
 - Ordinary responses report repository, protected base, policy
   ref and policy source commit SHA, and guide version; put this exact concise
   operator block before any long artifact:
@@ -29,13 +29,7 @@ policy; chat, caches, and handoffs cannot override it.
   label a different profile value advisory baseline only. Else follow Section
   7. After a
   human gate or implementation trigger, make Next action operator-executable.
-  Only when cross-session operator action is actually needed, say to return to
-  the existing Execution/IDE session and send `continue` for the already-authorized
-  objective. If the
-  active Execution controller has `COMMAND`, Next action must say no additional
-  Founder/operator action is required and continue automatically. Do not use authorization-only
-  wording (`proceed`, `begin implementation`, `continue`) without saying where
-  and how.
+  Only when cross-session operator action is actually needed: existing Execution/IDE session, send `continue` for already-authorized objective; this response's copy-ready artifact names repository, Issue, and exact next action. Active Execution controller `COMMAND`: Next action says no additional Founder/operator action is required; continue automatically. Do not use authorization-only wording: `proceed`, `begin implementation`, `continue` without saying where and how.
 - Global MC verifies live GitHub repository/base/Issue/PR/head, merged loader
   and merged policy. Global MC does not run repository-local Bemoat CLI and
   does not guess Context routes. Context is the canonical routing authority.
