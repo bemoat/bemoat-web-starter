@@ -82,11 +82,13 @@ Classify the destination session before choosing a cross-session action:
   prose for that artifact. The same full artifact is required when objective
   execution is transferred to a changed workspace or changed authority context.
 - **Existing active Execution/IDE session for the same Issue:** when the session,
-  workspace, and authority are still valid and a cross-session operator action
-  is actually required, MUST use the smallest canonical compact operator action,
-  such as `continue`, in the same response. MUST NOT use this compact
-  continuation form to start a new Issue, a new Execution session, a changed
-  execution workspace, or a changed authority context. Emitting the full
+  workspace, and authority are still valid, live authority says a cross-session
+  operator action is actually required, and the already-authorized
+  objective/session remains the valid continuation target, MUST use the smallest
+  canonical compact operator action, such as `continue`, in the same response.
+  MUST NOT use this compact continuation form to start a new Issue or a new
+  Execution session, or for a changed execution workspace or changed authority
+  context. Emitting the full
   15-section handoff for this valid same-session case is avoidable operator
   overhead and MUST NOT be used when the compact continuation is sufficient.
 - **New Global MC reconstruction:** a bare Issue number remains sufficient
