@@ -67,6 +67,21 @@ function bootstrapRunner(overrides: Record<string, string> = {}) {
   return { run, calls }
 }
 
+function detachedSourceWorktrees(targetBranch = 'refs/heads/fix/568-stale-base-sync-conflict-continuation') {
+  const targetEntry = targetBranch === 'detached'
+    ? `worktree /target\nHEAD ${targetHead}\ndetached\n`
+    : `worktree /target\nHEAD ${targetHead}\nbranch ${targetBranch}\n`
+  return `worktree /protected\nHEAD ${protectedHead}\ndetached\n\n${targetEntry}`
+}
+
+function detachedSourceRunner(overrides: Record<string, string> = {}) {
+  return bootstrapRunner({
+    branchSource: '',
+    worktrees: detachedSourceWorktrees(),
+    ...overrides,
+  })
+}
+
 describe('protected-main read-only Context bootstrap characterization', () => {
   // Authority: Issue #569 Goal, Scope, and Acceptance Criteria require one
   // registered read-only Context path from exact current protected main against
@@ -194,6 +209,118 @@ describe('protected-main read-only Context bootstrap characterization', () => {
     expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
     expect(calls.some((call) => call.includes('worktree list --porcelain @ /protected'))).toBe(true)
     expect(calls.some((call) => call.includes('ls-remote --heads origin fix/568-stale-base-sync-conflict-continuation @ /target'))).toBe(true)
+  })
+
+  // Authority: Issue #571's Founder-approved Option A selects the detached
+  // source case. The protected-main stale-branch bootstrap design's
+  // Source-command identity section requires exact live-base SHA, clean state,
+  // and canonical repository identity, and explicitly permits a detached
+  // source because it is not the mutation target. The target still must pass
+  // the independent attached, exact-identity, and durability checks below.
+  it('accepts a clean canonical detached source at the exact live protected SHA with a valid attached target', () => {
+    const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
+    const { run, calls } = detachedSourceRunner()
+
+    expect(verifyContextBootstrap({ roots, evidence: bootstrapEvidence(), run })).toEqual([])
+    expect(calls.some((call) => call.includes('worktree list --porcelain @ /protected'))).toBe(true)
+    expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
+  })
+
+  // Authority: Issue #571 execution handoff §9 and the recorded live Issue
+  // #582 reproduction bind this production-shaped fixture to canonical
+  // repository bemoat/bemoat-web-starter, detached source main@933cc28, and
+  // the durable attached target fix/582-repository-transfer-identity@8889e18.
+  // The fixture exercises verification only and does not mutate Issue #582.
+  it('accepts the verified #582 target from a detached exact-live-main source without Git mutation', () => {
+    const issueBranch = 'fix/582-repository-transfer-identity'
+    const protectedSha = '933cc285923174279c9dedee1c4074ea860f89c1'
+    const issueHead = '8889e1898d5d20833143bc568f325175ee46956b'
+    const issueRepo = 'bemoat/bemoat-web-starter'
+    const evidence = bootstrapEvidence()
+    evidence.repository = {
+      owner: 'bemoat',
+      name: 'bemoat-web-starter',
+      nameWithOwner: issueRepo,
+      url: `https://github.com/${issueRepo}`,
+    }
+    evidence.protectedBase = {
+      ...evidence.protectedBase,
+      sha: protectedSha,
+      url: `https://github.com/${issueRepo}/tree/main`,
+    }
+    evidence.issue = {
+      ...evidence.issue,
+      number: '582',
+      title: 'Repository transfer identity',
+      url: `https://github.com/${issueRepo}/issues/582`,
+    }
+    evidence.localGit = {
+      ...evidence.localGit,
+      branch: issueBranch,
+      head: issueHead,
+      upstream: `origin/${issueBranch}`,
+      originRepository: issueRepo,
+    }
+    const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
+    const { run, calls } = bootstrapRunner({
+      '/protected': protectedSha,
+      '/target': issueHead,
+      branchSource: '',
+      branchTarget: issueBranch,
+      sourceOrigin: `https://github.com/${issueRepo}.git`,
+      targetOrigin: `https://github.com/${issueRepo}.git`,
+      upstreamOrigin: `https://github.com/${issueRepo}.git`,
+      upstream: `origin/${issueBranch}`,
+      remote: `${issueHead}\trefs/heads/${issueBranch}\n`,
+      worktrees: `worktree /protected\nHEAD ${protectedSha}\ndetached\n\nworktree /target\nHEAD ${issueHead}\nbranch refs/heads/${issueBranch}\n`,
+    })
+    const targetHeadBefore = run('git', ['rev-parse', 'HEAD'], { cwd: roots.targetCwd }).stdout
+
+    expect(verifyContextBootstrap({ roots, evidence, run })).toEqual([])
+    expect(targetHeadBefore).toBe(issueHead)
+    expect(run('git', ['rev-parse', 'HEAD'], { cwd: roots.targetCwd }).stdout).toBe(targetHeadBefore)
+    expect(calls.some((call) => call.includes('worktree list --porcelain @ /protected'))).toBe(true)
+    expect(calls.some((call) => call.includes(`ls-remote --heads origin ${issueBranch} @ /target`))).toBe(true)
+    expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
+  })
+
+  // Authority: the same source-command identity contract keeps the live base
+  // SHA, clean source, and canonical origin as required proof even after
+  // Founder approval of detached exact-SHA sources.
+  it.each([
+    ['wrong detached source SHA', { '/protected': 'f'.repeat(40) }, 'source HEAD does not match the live protected base'],
+    ['dirty detached source', { sourceStatus: ' M scripts/agent-context.ts\n' }, 'source is not clean'],
+    ['noncanonical detached source origin', { sourceOrigin: 'https://github.com/other/repository.git' }, 'source is not the canonical target repository'],
+  ])('fails closed for %s', (_story, overrides, expectedReason) => {
+    const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
+    const { run } = detachedSourceRunner(overrides)
+
+    expect(verifyContextBootstrap({ roots, evidence: bootstrapEvidence(), run }).join('\n')).toContain(expectedReason)
+  })
+
+  // Authority: Issue #571 Option A changes source attachment eligibility only.
+  // The existing explicit-target contract still requires an attached target
+  // whose live repository/head/durability evidence matches Context.
+  it.each([
+    ['wrong target HEAD', { '/target': 'f'.repeat(40) }, 'target HEAD differs from independently collected Context evidence'],
+    ['wrong target branch and Issue', {
+      branchTarget: 'fix/999-unrelated',
+      upstream: 'origin/fix/999-unrelated',
+      remote: `${targetHead}\trefs/heads/fix/999-unrelated\n`,
+    }, 'target branch is not a numbered topic branch bound to Issue 568'],
+    ['dirty target', { targetStatus: ' M docs/agent-loop/README.md\n' }, 'target worktree is dirty or unavailable'],
+    ['wrong target repository', { targetOrigin: 'https://github.com/other/repository.git' }, 'target origin does not match the canonical repository'],
+    ['wrong target upstream', { upstream: 'origin/fix/999-unrelated' }, 'target upstream is missing or does not match its branch'],
+    ['unpushed target', { remote: `${'f'.repeat(40)}\trefs/heads/fix/568-stale-base-sync-conflict-continuation\n` }, 'target HEAD is not proven pushed'],
+    ['detached target', { branchTarget: '', worktrees: detachedSourceWorktrees('detached') }, 'target branch differs from independently collected Context evidence or is detached'],
+    ['unattached target', { worktrees: 'worktree /protected\nHEAD 378b2aa90ecad6d76f4ddae5958077fdad58d045\ndetached\n' }, 'target is not an attached worktree of the protected-main command source'],
+  ])('keeps a detached source fail-closed when the target has %s', (_story, overrides, expectedReason) => {
+    const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
+    const { run } = detachedSourceRunner(overrides)
+    const reasons = verifyContextBootstrap({ roots, evidence: bootstrapEvidence(), run })
+
+    expect(reasons.join('\n')).toContain(expectedReason)
+    expect(reasons.some((reason) => /^EVIDENCE_CONFLICT: protected-main command source/i.test(reason))).toBe(false)
   })
 
   // Authority: exact #568 source STOP comment 5994221307 and Founder resolutions
