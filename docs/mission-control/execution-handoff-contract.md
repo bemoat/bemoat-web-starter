@@ -79,12 +79,16 @@ Classify the destination session before choosing a cross-session action:
 - **New Execution/IDE session:** MUST emit the complete canonical Ready-to-paste
   Execution artifact with all 15 ordered sections inside the artifact itself.
   MUST NOT substitute a short bootstrap, `continue`, summary, or surrounding
-  prose for that artifact.
-- **Existing active Execution/IDE session for the same Issue:** MAY use a
-  compact operator action such as `continue` only when live authority says a
-  cross-session operator action is actually required and the already-authorized
-  objective/session remains the valid continuation target. MUST NOT use this
-  compact continuation form to start a new Issue or a new Execution session.
+  prose for that artifact. The same full artifact is required when objective
+  execution is transferred to a changed workspace or changed authority context.
+- **Existing active Execution/IDE session for the same Issue:** when the session,
+  workspace, and authority are still valid and a cross-session operator action
+  is actually required, MUST use the smallest canonical compact operator action,
+  such as `continue`, in the same response. MUST NOT use this compact
+  continuation form to start a new Issue, a new Execution session, a changed
+  execution workspace, or a changed authority context. Emitting the full
+  15-section handoff for this valid same-session case is avoidable operator
+  overhead and MUST NOT be used when the compact continuation is sufficient.
 - **New Global MC reconstruction:** a bare Issue number remains sufficient
   because Global MC reconstructs live GitHub, loader, and policy state itself.
   This bare-Issue shortcut does not apply to a new Execution/IDE handoff.
@@ -92,6 +96,47 @@ Classify the destination session before choosing a cross-session action:
   is a new Execution session or an existing valid same-Issue session, it MUST
   NOT choose the shortened form. Fail closed toward the full canonical
   Execution artifact or resolve the session identity first.
+
+### Same-response transfer invariant
+
+Whenever the selected next action requires another session or runtime to act,
+the current response MUST contain the required self-contained copy-ready
+operator artifact itself. Status, explanation, or wording such as "continue
+there" without that artifact is incomplete; do not make the Founder ask a
+second time for the prompt. The artifact itself MUST identify the repository,
+Issue, and exact next action needed by the destination so it remains usable
+without substantive surrounding prose.
+
+After REVIEW or another durable result, if the same valid Execution session,
+workspace, and authority remain the destination and operator transfer is
+actually required, emit the compact continuation in that same response. If the
+current agent/runtime can execute the authorized next action directly, perform
+it directly instead; do not manufacture a handoff merely to relay deterministic
+work.
+
+When the next action is objective execution in a new session, changed execution
+workspace, or changed authority context, emit the complete canonical
+15-section handoff in that same response. A compact continuation in any of
+those cases is invalid.
+
+Canonical recovery actions remain narrower than objective handoffs. When the
+wrong-Issue workspace-acquisition rule has already prepared and verified a
+sibling workspace but the host cannot rebind itself, the same response must
+give the exact verified path and exact operator rebind/open action. Do not ask
+the Founder to run Git clone/fetch/checkout commands, and do not manufacture
+objective authority or a full Execution handoff before fresh Context permits
+objective execution.
+
+`FOUNDER_GATE` is decision-first: ask for the actual Founder decision and do
+not emit a mutation-capable continuation that assumes the answer. After the
+Founder decision exists, if another session or runtime must carry it out, emit
+the appropriate copy-ready continuation in that same response.
+
+A transfer response that omits its required artifact, splits repository/Issue/
+next-action identity into surrounding prose, uses a compact continuation for a
+new or changed execution destination, or emits the full canonical handoff when
+the valid same-session compact continuation is sufficient violates this
+response contract.
 
 Progressive disclosure means load the full Execution contract when the
 Execution-handoff phase is triggered; it does not mean omitting the triggered

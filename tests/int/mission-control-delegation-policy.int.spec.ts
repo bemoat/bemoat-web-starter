@@ -184,6 +184,64 @@ describe('Mission Control delegation and execution model policy', () => {
     })
   })
 
+  describe('Ready-to-paste continuation UX', () => {
+    const contract = read('docs/mission-control/execution-handoff-contract.md')
+    const loader = read('prompts/mission-control/chatgpt-project-loader.md')
+    const continuation = artifactSection('Continuation rule')
+
+    it('emits a compact copy-ready continuation in the same response after REVIEW when the same Execution destination remains valid', () => {
+      expect(contract).toMatch(/after REVIEW or another durable result.*same valid Execution session, workspace, and authority.*compact continuation in that same response/i)
+      expect(loader).toMatch(/same valid Execution session, workspace, and authority.*smallest canonical compact continuation.*operator transfer.*required/i)
+    })
+
+    it('emits the complete canonical handoff in the same response for a new Execution session', () => {
+      expect(continuation).toMatch(/new Execution\/IDE session.*MUST emit.*complete canonical Ready-to-paste.*all 15 ordered sections/i)
+      expect(contract).toMatch(/new session, changed execution workspace, or changed authority context.*complete canonical 15-section handoff in that same response/i)
+    })
+
+    it('keeps prepared wrong-workspace host rebind to the exact verified path instead of inventing Founder Git commands', () => {
+      expect(contract).toMatch(/workspace-acquisition rule.*prepared and verified a sibling workspace.*exact verified path and exact operator rebind\/open action/i)
+      expect(contract).toMatch(/do not ask the Founder to run Git clone\/fetch\/checkout commands/i)
+      expect(loader).toMatch(/prepared workspace only requires host rebind.*exact verified path\/action.*do not invent Git commands/i)
+    })
+
+    it('keeps FOUNDER_GATE decision-first instead of fabricating a continuation', () => {
+      expect(contract).toMatch(/FOUNDER_GATE.*decision-first.*ask for the actual Founder decision.*do not emit a mutation-capable continuation that assumes the answer/i)
+      expect(loader).toMatch(/At `FOUNDER_GATE`.*ask for the actual Founder decision first/i)
+    })
+
+    it('emits the appropriate continuation in the same response after a Founder decision when another runtime must act', () => {
+      expect(contract).toMatch(/after the Founder decision exists.*another session or runtime must carry it out.*copy-ready continuation in that same response/i)
+      expect(loader).toMatch(/only after that decision exists.*another session\/runtime must act.*copy-ready continuation in that same response/i)
+    })
+
+    it('prefers direct execution when the current agent can perform the authorized action', () => {
+      expect(contract).toMatch(/current agent\/runtime can execute the authorized next action directly.*perform it directly instead.*do not manufacture a handoff/i)
+      expect(loader).toMatch(/current agent\/runtime can perform the authorized next action directly.*perform it instead of manufacturing a handoff/i)
+    })
+
+    it('rejects transfer prose without the required copy-ready artifact', () => {
+      expect(contract).toMatch(/selected next action requires another session or runtime to act.*current response MUST contain.*copy-ready operator artifact itself/i)
+      expect(contract).toMatch(/continue there.*without that artifact is incomplete.*do not make the Founder ask a second time/i)
+      expect(loader).toMatch(/same response MUST include.*copy-ready operator artifact.*do not end with status\/explanation.*second request for the prompt/i)
+    })
+
+    it('keeps repository, Issue, and exact next action inside the transfer artifact rather than surrounding prose', () => {
+      expect(contract).toMatch(/artifact itself MUST identify the repository, Issue, and exact next action.*without substantive surrounding prose/i)
+      expect(contract).toMatch(/splits repository\/Issue\/ next-action identity into surrounding prose/i)
+    })
+
+    it('rejects compact continuation for a new session, changed workspace, or changed authority', () => {
+      expect(continuation).toMatch(/MUST NOT use this compact continuation form to start a new Issue, a new Execution session, a changed execution workspace, or a changed authority context/i)
+      expect(contract).toMatch(/compact continuation in any of those cases is invalid/i)
+    })
+
+    it('rejects the full handoff as avoidable overhead when a valid same-session compact continuation is sufficient', () => {
+      expect(continuation).toMatch(/full 15-section handoff.*valid same-session case.*avoidable operator overhead.*MUST NOT be used.*compact continuation is sufficient/i)
+      expect(contract).toMatch(/emits the full canonical handoff when the valid same-session compact continuation is sufficient violates this response contract/i)
+    })
+  })
+
   it('keeps all applicable model roles and escalation inside the artifact', () => {
     const artifact = artifactSection('Model routing')
     for (const role of [
