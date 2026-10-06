@@ -101,6 +101,7 @@ export function repositoryEvidence(repo: string): RepositoryEvidence {
 export interface HandoffResolution {
   applicable: HandoffCandidate[]
   malformedCurrent: RoleEvidence[]
+  staleCurrentSafetyOverlay: boolean
   invalidCurrentFix: HandoffCandidate | null
   superseding: HandoffCandidate | null
 }
@@ -149,6 +150,12 @@ export function currentHandoffConflict(
         command: null,
         description: 'Resolve the malformed current-head HANDOFF evidence before continuing.',
       },
+    }
+  }
+  if (resolution.staleCurrentSafetyOverlay && resolution.applicable.length > 0) {
+    return {
+      reason: `EVIDENCE_CONFLICT: stale or wrong-identity current-head HANDOFF records at ${head}.`,
+      nextAction: { type: 'STOP', command: null, description: 'Resolve stale or wrong-identity current-head HANDOFF evidence before continuing.' },
     }
   }
   if (resolution.invalidCurrentFix) {
@@ -266,7 +273,20 @@ function resolveSupersedingHandoff(
   activePr: ActivePullRequestEvidence,
   allowPublicationEraReviewRecovery = false,
 ): HandoffCandidate | null {
-  if (applicable.length !== 2 || !applicable.some(({ record }) => record.route === 'REVIEW' || record.route === 'VERIFY')) return null
+  if (applicable.length !== 2) return null
+
+  const verifying = applicable.filter(({ record }) => record.route === 'VERIFY')
+  const safetyStops = applicable.filter(({ record }) => record.route === 'STOP')
+  if (verifying.length === 1 && safetyStops.length === 1) {
+    const verify = verifying[0]!
+    const safetyStop = safetyStops[0]!
+    const explicitStopBlockers = safetyStop.record.verified_evidence.filter(({ kind }) => kind === 'stop-blocker')
+    const uniqueNativeComments = String(verify.evidence.id) !== String(safetyStop.evidence.id) && verify.evidence.url !== safetyStop.evidence.url &&
+      isExactIssueCommentUrl(verify.evidence.url, verify.evidence, evidence) && isExactIssueCommentUrl(safetyStop.evidence.url, safetyStop.evidence, evidence)
+    if (safetyStop.record.schema_version === 3 && explicitStopBlockers.length > 0 && uniqueNativeComments) return safetyStop
+  }
+
+  if (!applicable.some(({ record }) => record.route === 'REVIEW' || record.route === 'VERIFY')) return null
   return applicable.find(({ record }) => record.route === 'FIX'
     ? hasBlockingHandoffReview(record, evidence, activePr, allowPublicationEraReviewRecovery)
     : record.route === 'FOUNDER_GATE' && hasEligibleFounderHandoffReview(record, evidence, activePr)) ?? null
@@ -281,6 +301,7 @@ export function resolveApplicableHandoffs(
     (evidence.durableContext.latestHandoff ? [evidence.durableContext.latestHandoff] : [])
   const applicable: HandoffResolution['applicable'] = []
   const malformedCurrent: RoleEvidence[] = []
+  let staleCurrentSafetyOverlay = false
 
   for (const candidate of candidates) {
     const payload = extractHandoffPayload(candidate.body)
@@ -289,7 +310,14 @@ export function resolveApplicableHandoffs(
       malformedCurrent.push(candidate)
       continue
     }
-    if (status !== 'current') continue
+    if (status !== 'current') {
+      if (status === 'stale' && isRecord(payload) && typeof payload.exact_head === 'string' &&
+          payload.exact_head.toLowerCase() === activePr.headSha.toLowerCase() &&
+          (payload.route === 'VERIFY' || payload.route === 'STOP')) {
+        staleCurrentSafetyOverlay = true
+      }
+      continue
+    }
 
     let handoff: HandoffRecord | null = null
     try {
@@ -323,6 +351,7 @@ export function resolveApplicableHandoffs(
   return {
     applicable,
     malformedCurrent,
+    staleCurrentSafetyOverlay,
     invalidCurrentFix,
     superseding: resolveSupersedingHandoff(applicable, evidence, activePr, allowPublicationEraReviewRecovery),
   }
