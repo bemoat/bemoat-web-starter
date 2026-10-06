@@ -6,6 +6,48 @@ import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 type ApplicableNoPrHandoff = { source: RoleEvidence; record: HandoffRecord }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function hasFounderGateRouteMarker(body: string): boolean {
+  return /"route"\s*:\s*"FOUNDER_GATE"/.test(body)
+}
+
+function isExactCurrentNoPrFounderGate(
+  source: RoleEvidence,
+  record: HandoffRecord,
+  evidence: NormalizedContextEvidence,
+): boolean {
+  return record.route === 'FOUNDER_GATE' &&
+    record.objective_mode === 'read_only' && record.pr === null &&
+    record.repository === evidence.repository.nameWithOwner && record.issue_number === evidence.issue.number &&
+    record.branch === evidence.localGit.branch && record.exact_head === evidence.localGit.head &&
+    record.protected_base.branch === evidence.protectedBase.branch &&
+    record.local_durability.durable && renderHandoffComment(record) === source.body &&
+    isExactIssueCommentUrl(source.url, source, evidence)
+}
+
+function hasInvalidNoPrFounderGateEvidence(evidence: NormalizedContextEvidence): boolean {
+  const candidates = evidence.durableContext.handoffs ??
+    (evidence.durableContext.latestHandoff ? [evidence.durableContext.latestHandoff] : [])
+
+  return candidates.some((source) => {
+    const payload = extractHandoffPayload(source.body)
+    const gateMarker = (isRecord(payload) && payload.route === 'FOUNDER_GATE') ||
+      hasFounderGateRouteMarker(source.body)
+    if (!gateMarker) return false
+    if (!isRecord(payload)) return true
+
+    try {
+      const record = parseHandoffBody(JSON.stringify(payload))
+      return !isExactCurrentNoPrFounderGate(source, record, evidence)
+    } catch {
+      return true
+    }
+  })
+}
+
 function applicableNoPrHandoffs(evidence: NormalizedContextEvidence): ApplicableNoPrHandoff[] {
   const head = evidence.localGit.head
   if (!head) return []
@@ -154,6 +196,13 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     )
   }
 
+  if (hasInvalidNoPrFounderGateEvidence(evidence)) {
+    return stop(
+      `EVIDENCE_CONFLICT: no-PR FOUNDER_GATE HANDOFF evidence is malformed, stale, or bound to a different identity at ${evidence.localGit.head}.`,
+      'Resolve malformed or mismatched current-head no-PR FOUNDER_GATE evidence before continuing.',
+    )
+  }
+
   const handoffs = applicableNoPrHandoffs(evidence)
 
   const commentIds = handoffs.map(({ source }) => String(source.id))
@@ -239,6 +288,39 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
         type: 'COMPLETE',
         command: null,
         description: 'No further implementation action is permitted for this bounded objective.',
+      },
+    }
+  }
+
+  const founderGates = handoffs.filter(({ record }) => record.route === 'FOUNDER_GATE')
+  if (founderGates.length > 1) {
+    return stop(
+      `EVIDENCE_CONFLICT: multiple applicable current-head FOUNDER_GATE HANDOFF records at ${evidence.localGit.head}.`,
+      'Resolve competing current-head FOUNDER_GATE records before continuing.',
+    )
+  }
+
+  if (founderGates.length === 1) {
+    const gate = founderGates[0]!
+    const history = handoffs.filter(({ source }) => String(source.id) !== String(gate.source.id))
+    const onlyRecomputableHistory = history.every(({ record }) =>
+      (record.route === 'IMPLEMENT' && record.objective_mode === 'read_only') ||
+      (record.route === 'STOP' && record.schema_version === 3),
+    )
+    if (!onlyRecomputableHistory || !hasConsistentHistoricalBase(handoffs)) {
+      return stop(
+        `EVIDENCE_CONFLICT: current-head no-PR FOUNDER_GATE competes with HANDOFF history that cannot be uniquely recomputed at ${evidence.localGit.head}.`,
+        'Resolve competing current-head HANDOFF evidence and historical protected-base identities before continuing.',
+      )
+    }
+
+    return {
+      route: 'FOUNDER_GATE',
+      reasons: [`Current-head no-PR read-only FOUNDER_GATE is applicable at ${evidence.localGit.head}.`],
+      nextAction: {
+        type: 'FOUNDER_GATE',
+        command: null,
+        description: 'Founder authorization is required before the next objective action.',
       },
     }
   }

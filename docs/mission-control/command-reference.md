@@ -122,6 +122,21 @@ current-head HANDOFFs must likewise agree on one protected-base SHA. A
 resolution grants no implementation, review, merge, deployment, migration, or
 terminal-completion authority.
 
+Without a `COMPLETE`, exactly one uniquely applicable exact-current-head
+read-only `FOUNDER_GATE` may reconstruct to the human decision boundary. Its
+protected-base branch must still match the live protected branch, while its
+SHA remains the immutable snapshot recorded when the HANDOFF was canonically
+published; later advancement of protected main does not stale that snapshot.
+The gate may coexist only with recomputable read-only `IMPLEMENT` and fully
+resolved schema-v3 STOP history, and the gate plus all such history must agree
+on exactly one recorded protected-base SHA. Malformed, stale, wrong-identity,
+duplicate, mutation-capable, or otherwise ambiguous gate evidence remains
+STOP. The gate records a human decision boundary only and grants no mutation
+authority; after the decision is consumed, fresh Context against current
+merged authority is required before a mutation-capable objective. A competing
+gate keeps a `COMPLETE` at STOP. A no-PR `COMPLETE` must still bind the current
+live protected-base SHA. Context never selects by timestamp or comment order.
+
 Before an authorized Founder publishes one, use the canonical
 [BLOCKER_RESOLUTION template](blocker-resolution-template.md). The example is
 validated against the production parser; replace its sample values only with
