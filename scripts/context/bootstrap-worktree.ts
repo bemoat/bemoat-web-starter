@@ -73,7 +73,9 @@ export function verifyContextBootstrap({
 }): string[] {
   const reasons = [...verifyContextSyncSource({ sourceCwd: roots.sourceCwd, evidence, run })]
   const sourceBranch = output(run('git', ['branch', '--show-current'], { cwd: roots.sourceCwd }))
-  if (sourceBranch !== evidence.protectedBase.branch) reasons.push('EVIDENCE_CONFLICT: protected-main command source is not checked out on the live protected branch')
+  if (sourceBranch !== evidence.protectedBase.branch && sourceBranch !== '') {
+    reasons.push('EVIDENCE_CONFLICT: protected-main command source must use the live protected branch or a detached exact-live-base checkout')
+  }
   const target = roots.targetCwd
   const topLevel = output(run('git', ['rev-parse', '--show-toplevel'], { cwd: target }))
   const head = output(run('git', ['rev-parse', 'HEAD'], { cwd: target }))
