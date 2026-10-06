@@ -114,16 +114,42 @@ describe('Global Mission Control progressive-disclosure router', () => {
   })
 
   // Oracle: Founder comment 5976454479 says generic handoff caution cannot
-  // neutralize fresh Context's exact recovery; when exactly one correctly
-  // owned branch exists, only switching is allowed, followed immediately by
-  // Discovery + Context without a Founder/Global MC relay.
+  // neutralize fresh Context's exact recovery; Founder direction #573 comment
+  // 6008320328 additionally authorizes only the canonical pre-COMMAND
+  // wrong-Issue acquisition path in section 12.
   it('routes exact fresh-Context recovery without adding a Founder relay', () => {
-    expect(normalizedExecutionHandoff).toMatch(/only an exact deterministic recovery prescribed by that Context may precede a later `COMMAND`, and then only within that recovery's scope/i)
-    expect(normalizedExecutionHandoff).toMatch(/no controller or worker may mutate the authorized objective before fresh Context.*next_action.type: COMMAND.*a pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes/i)
+    expect(normalizedExecutionHandoff).toMatch(/only an exact deterministic recovery prescribed by that Context or canonical wrong-Issue workspace acquisition under section 12 may precede a later `COMMAND`.*within that recovery's scope/i)
+    expect(normalizedExecutionHandoff).toMatch(/no controller or worker may mutate the authorized objective before fresh Context.*next_action.type: COMMAND.*a pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery/i)
     expect(normalizedExecutionHandoff).toMatch(/generic handoff caution cannot override an exact deterministic recovery prescribed by fresh Context/i)
     expect(normalizedExecutionHandoff).toMatch(/if Context prescribes switching to the correctly owned existing Issue branch and live repository evidence identifies exactly one candidate, perform only that switch/i)
     expect(normalizedExecutionHandoff).toMatch(/immediately rerun registered CLI Discovery and fresh Context without a Founder\/Global MC relay/i)
     expect(normalizedExecutionHandoff).toMatch(/switch grants no synchronization, rebase, reset, merge, implementation, edit, or future.objective authority/i)
+  })
+
+  // Oracle: Founder direction #573 comment 6008320328 requires reusable
+  // workspace acquisition in this order: prefer one uniquely proven existing
+  // Issue workspace; otherwise provision a separate canonical exact-live-base
+  // checkout without changing the currently bound wrong-Issue checkout; stop
+  // at ambiguity, unsafe state, or host capability boundaries. Acquisition
+  // never grants implementation authority and is followed by Discovery and
+  // fresh Context.
+  it('prefers the exact Issue workspace, then permits only isolated canonical-base provisioning', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+
+    expect(continuationContract).toMatch(/reuse exact existing Issue workspace/i)
+    expect(continuationContract).toMatch(/if exactly one clean, durable, canonical workspace\/branch owned by the queried Issue.*use the existing exact bounded recovery path/i)
+    expect(continuationContract).toMatch(/if no usable queried-Issue workspace exists.*provision a separate isolated checkout.*exact live approved-base SHA/i)
+    expect(continuationContract).toMatch(/must not mutate, reset, rebase, merge, stash, delete, force, or otherwise alter the currently bound wrong-Issue checkout/i)
+    expect(continuationContract).toMatch(/verify canonical origin, exact live-base SHA, attached\/clean state, and absence\/conflict status of the queried-Issue topic branch/i)
+    expect(continuationContract).toMatch(/if the queried-Issue branch does not yet exist.*normal zero-delta bootstrap eligibility.*canonical durable zero-delta branch bootstrap/i)
+    expect(continuationContract).toMatch(/after either checkout path completes, immediately rerun registered CLI Discovery and fresh Context/i)
+    expect(continuationContract).toMatch(/an unmerged active PR does not make an unrelated local Issue branch a valid workspace.*local branch and `HEAD` must match the active PR's exact head branch and SHA before any non-terminal active-PR route can apply.*Context remains `STOP`.*bind that recovery to the PR number, URL, base branch\/SHA, and head branch\/SHA/i)
+    expect(continuationContract).toMatch(/registered CLI Discovery is still required.*fresh Context is still required.*source\/test\/doc edits still require an authorized Context route and the normal one-time first-edit trigger/i)
+    expect(continuationContract).toMatch(/multiple plausible Issue workspaces\/branches.*dirty or non-durable state.*wrong\/noncanonical repository or origin.*conflicting\/stale live-base evidence.*conflicting existing target branch ownership.*filesystem\/network\/host capability prevents isolated safe provisioning/i)
+    expect(continuationContract).toMatch(/if the agent can create and verify the isolated sibling checkout but the host cannot switch\/rebind its effective workspace\/root.*prepare the workspace completely first.*report the exact verified path as the single operator action.*do not ask the Founder to run Git clone\/fetch\/checkout commands manually/i)
+    expect(continuationContract).toMatch(/no new general scheduler or worktree manager/i)
   })
 
   // Oracle: Founder decision #565 comment 5991707507 and the Context Story
@@ -151,12 +177,13 @@ describe('Global Mission Control progressive-disclosure router', () => {
   })
 
   // Oracle: Founder comment 5976454479 explicitly requires fail-closed STOP
-  // when the Issue-owned branch candidate is missing, multiple, ambiguous, or
-  // conflicting; no branch may be guessed or switched in those cases.
+  // for missing, multiple, ambiguous, or conflicting branch candidates;
+  // Founder direction #573 comment 6008320328 permits isolated setup only
+  // under the exact canonical acquisition conditions in section 12.
   it('keeps missing or ambiguous Issue-owned branch candidates at STOP', () => {
     expect(normalizedExecutionHandoff).toMatch(/missing, multiple, ambiguous, or conflicting candidates remain `STOP`; do not guess/i)
     expect(normalizedLoader).toMatch(/absent, conflicting, or unsupported recovery.*stop/i)
-    expect(normalizedExecutionHandoff).toMatch(/at `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12 or the fully qualified Bridge B recovery in section 12/i)
+    expect(normalizedExecutionHandoff).toMatch(/at `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12/i)
     expect(normalizedExecutionHandoff).toMatch(/at `FOUNDER_GATE`, include no mutation.capable instructions or delegated mutation/i)
   })
 

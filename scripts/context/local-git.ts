@@ -1,4 +1,4 @@
-import type { LocalGitEvidence } from './model.ts'
+import type { IssueBranchRecoveryCandidateEvidence, LocalGitEvidence } from './model.ts'
 import { normalizeOriginRepository, output, type ContextCommandRunner } from './runtime.ts'
 
 export function readLocalGitEvidence({ cwd, run }: { cwd: string; run: ContextCommandRunner }): LocalGitEvidence {
@@ -42,4 +42,111 @@ export function readLocalGitEvidence({ cwd, run }: { cwd: string; run: ContextCo
     durable: reasons.length === 0,
     reasons,
   }
+}
+
+function readGitOutput(run: ContextCommandRunner, cwd: string, args: string[]): string | null {
+  const result = run('git', args, { cwd })
+  if (result.status !== 0 || result.error) return null
+  return result.stdout.trim()
+}
+
+function readRef(run: ContextCommandRunner, cwd: string, ref: string): { sha: string | null; valid: boolean } {
+  const result = run('git', ['rev-parse', '--verify', '--quiet', ref], { cwd })
+  if (result.error) return { sha: null, valid: false }
+  if (result.status === 1) return { sha: null, valid: true }
+  if (result.status !== 0) return { sha: null, valid: false }
+  const sha = result.stdout.trim()
+  return /^[0-9a-f]{40}$/i.test(sha)
+    ? { sha: sha.toLowerCase(), valid: true }
+    : { sha: null, valid: false }
+}
+
+/**
+ * Read only the evidence needed to consider an exact branch switch after a
+ * numbered wrong-Issue mismatch. This never changes refs or the worktree.
+ */
+export function readIssueBranchRecoveryCandidates({
+  cwd,
+  run,
+  issueNumber,
+  repository,
+  localGit,
+  preferredTarget,
+}: {
+  cwd: string
+  run: ContextCommandRunner
+  issueNumber: string
+  repository: string
+  localGit: LocalGitEvidence
+  preferredTarget?: { branch: string; head: string }
+}): IssueBranchRecoveryCandidateEvidence[] {
+  const sourceIssue = localGit.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
+  if (
+    !/^[1-9]\d*$/.test(issueNumber) ||
+    !sourceIssue ||
+    sourceIssue === issueNumber ||
+    !localGit.clean ||
+    localGit.detached ||
+    !localGit.pushed ||
+    !localGit.durable ||
+    !localGit.head ||
+    localGit.upstream !== `origin/${localGit.branch}` ||
+    localGit.originRepository !== repository
+  ) return []
+
+  const remoteResult = run('git', ['ls-remote', '--heads', 'origin'], { cwd })
+  if (remoteResult.status !== 0 || remoteResult.error) return []
+
+  const remoteLines = remoteResult.stdout.trim() ? remoteResult.stdout.trim().split(/\r?\n/) : []
+  const liveCandidates: Array<{ branch: string; liveHead: string }> = []
+  for (const line of remoteLines) {
+    const match = line.match(/^([0-9a-f]{40})\s+refs\/heads\/([^\s]+)$/i)
+    if (!match) return []
+    const branch = match[2]!
+    const ownerIssue = branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
+    const liveHead = match[1]!.toLowerCase()
+    if (preferredTarget
+      ? branch === preferredTarget.branch && liveHead === preferredTarget.head.toLowerCase()
+      : ownerIssue === issueNumber) {
+      liveCandidates.push({ branch, liveHead })
+    }
+  }
+  if (liveCandidates.length === 0) return []
+
+  const worktreeOutput = readGitOutput(run, cwd, ['worktree', 'list', '--porcelain'])
+  if (worktreeOutput === null) {
+    return liveCandidates.map<IssueBranchRecoveryCandidateEvidence>(({ branch, liveHead }) => ({
+      branch,
+      liveHead,
+      localHead: null,
+      remoteTrackingHead: null,
+      upstream: null,
+      checkedOutElsewhere: true,
+      eligible: false,
+    }))
+  }
+  const checkedOutBranches = new Set(
+    [...worktreeOutput.matchAll(/^branch refs\/heads\/(.+)$/gm)].map((match) => match[1]!),
+  )
+
+  return liveCandidates.map<IssueBranchRecoveryCandidateEvidence>(({ branch, liveHead }) => {
+    const localRef = readRef(run, cwd, `refs/heads/${branch}`)
+    const trackingRef = readRef(run, cwd, `refs/remotes/origin/${branch}`)
+    const upstream = localRef.sha
+      ? readGitOutput(run, cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`])
+      : null
+    const checkedOutElsewhere = checkedOutBranches.has(branch)
+    const eligible = localRef.valid && trackingRef.valid && !checkedOutElsewhere &&
+      trackingRef.sha === liveHead &&
+      (localRef.sha === null || (localRef.sha === liveHead && upstream === `origin/${branch}`))
+    return {
+      branch,
+      liveHead,
+      localHead: localRef.sha,
+      remoteTrackingHead: trackingRef.sha,
+      upstream,
+      checkedOutElsewhere,
+      eligible,
+    }
+  })
 }

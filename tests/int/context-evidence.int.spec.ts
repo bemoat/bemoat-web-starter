@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { createContextOutput } from '../../scripts/agent-context.ts'
 import {
   collectContextEvidence,
   readGithubEvidence,
@@ -32,7 +33,19 @@ const contextRepo = 'boat1994/bemoat-web-starter'
 const contextPolicy = '---\npolicy_id: bemoat-mission-control\nversion: 1.3.0\ncanonical_repository: boat1994/bemoat-web-starter\n---\n\n# Mission Control\n'
 const contextIssueBody = '## Goal\n\nCharacterize branch ownership.\n\n## Scope\n\nRead-only characterization.\n\n## Acceptance Criteria\n- Wrong issue branch must not route IMPLEMENT.\n\nTask size: small\nMission Control mode: optional\n'
 
-function setupContextRepo(branch: string, detached = false, withUpstream = true) {
+interface RemoteBranchFixture {
+  branch: string
+  sha?: string
+}
+
+function setupContextRepo(
+  branch: string,
+  detached = false,
+  withUpstream = true,
+  remoteTrackingBranches: RemoteBranchFixture[] = [],
+  localBranches: Array<RemoteBranchFixture & { upstream?: string | null }> = [],
+  sourceUpstreamRemote = 'origin',
+) {
   const cwd = mkdtempSync(join(tmpdir(), 'bemoat-context-branch-ownership-'))
   const git = (args: string[]) => {
     const result = runContextCommand('git', args, { cwd })
@@ -49,9 +62,34 @@ function setupContextRepo(branch: string, detached = false, withUpstream = true)
   if (branch !== 'main') git(['switch', '-c', branch])
   git(['remote', 'add', 'origin', `git@github.com:${contextRepo}.git`])
   if (!detached && withUpstream) {
-    git(['config', `branch.${branch}.remote`, 'origin'])
+    git(['config', `branch.${branch}.remote`, sourceUpstreamRemote])
     git(['config', `branch.${branch}.merge`, `refs/heads/${branch}`])
     git(['update-ref', `refs/remotes/origin/${branch}`, git(['rev-parse', 'HEAD'])])
+    if (sourceUpstreamRemote !== 'origin') {
+      git(['remote', 'add', sourceUpstreamRemote, `git@github.com:${contextRepo}.git`])
+      git(['update-ref', `refs/remotes/${sourceUpstreamRemote}/${branch}`, git(['rev-parse', 'HEAD'])])
+    }
+  }
+  const sourceHead = git(['rev-parse', 'HEAD'])
+  for (const remoteBranch of remoteTrackingBranches) {
+    const trackingHead = remoteBranch.sha === 'stale'
+      ? git(['commit-tree', git(['rev-parse', 'HEAD^{tree}']), '-p', sourceHead, '-m', `stale ${remoteBranch.branch}`])
+      : remoteBranch.sha ?? sourceHead
+    git(['update-ref', `refs/remotes/origin/${remoteBranch.branch}`, trackingHead])
+  }
+  for (const localBranch of localBranches) {
+    const localHead = localBranch.sha === 'stale'
+      ? git(['commit-tree', git(['rev-parse', 'HEAD^{tree}']), '-p', sourceHead, '-m', `stale local ${localBranch.branch}`])
+      : localBranch.sha ?? sourceHead
+    git(['update-ref', `refs/heads/${localBranch.branch}`, localHead])
+    if (localBranch.upstream !== null) {
+      const upstream = localBranch.upstream ?? `origin/${localBranch.branch}`
+      const remoteSeparator = upstream.indexOf('/')
+      const remote = upstream.slice(0, remoteSeparator)
+      const remoteBranch = upstream.slice(remoteSeparator + 1)
+      git(['config', `branch.${localBranch.branch}.remote`, remote!])
+      git(['config', `branch.${localBranch.branch}.merge`, `refs/heads/${remoteBranch!}`])
+    }
   }
   if (detached) git(['checkout', '--detach'])
 
@@ -65,7 +103,12 @@ function contextStoryRunner({
   durable,
   issueNumber,
   activePr,
+  prHeadBranch,
+  prHeadSha,
   merged,
+  remoteBranches = [],
+  dirty = false,
+  worktreeBranches = [],
 }: {
   cwd: string
   head: string
@@ -73,15 +116,36 @@ function contextStoryRunner({
   durable: boolean
   issueNumber: string
   activePr?: boolean
+  prHeadBranch?: string
+  prHeadSha?: string
   merged?: boolean
+  remoteBranches?: RemoteBranchFixture[]
+  dirty?: boolean
+  worktreeBranches?: string[]
 }): ContextCommandRunner {
   return (command, args, options = {}) => {
     const key = args.join(' ')
     if (command === 'git') {
       if (args[0] === 'ls-remote') {
         if (!durable) return response('')
-        return response(`${head}\trefs/heads/${branch}\n`)
+        const refs = [{ branch, sha: head }, ...remoteBranches.map((remoteBranch) => ({
+          branch: remoteBranch.branch,
+          sha: remoteBranch.sha ?? head,
+        }))]
+        const requestedBranch = args.length > 3 ? args[args.length - 1] : null
+        return response(refs
+          .filter((ref) => requestedBranch === null || ref.branch === requestedBranch)
+          .map((ref) => `${ref.sha}\trefs/heads/${ref.branch}\n`)
+          .join(''))
       }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        const current = `worktree ${cwd}\nHEAD ${head}\nbranch refs/heads/${branch}\n`
+        const others = worktreeBranches.map((otherBranch, index) =>
+          `\nworktree /other/worktree-${index}\nHEAD ${head}\nbranch refs/heads/${otherBranch}\n`,
+        ).join('')
+        return response(`${current}${others}`)
+      }
+      if (dirty && key === 'status --short') return response(' M unrelated.txt\n')
       return runContextCommand(command, args, { ...options, cwd })
     }
     if (command !== 'gh') return response('')
@@ -107,7 +171,7 @@ function contextStoryRunner({
       return response(JSON.stringify([{
         number: 526,
         url: `https://github.com/${contextRepo}/pull/526`,
-        headRefName: branch,
+        headRefName: prHeadBranch ?? branch,
         closingIssuesReferences: [{ number: Number(issueNumber) }],
       }]))
     }
@@ -120,8 +184,8 @@ function contextStoryRunner({
         url: `https://github.com/${contextRepo}/pull/526`,
         baseRefName: 'main',
         baseRefOid: 'a'.repeat(40),
-        headRefName: branch,
-        headRefOid: head,
+        headRefName: prHeadBranch ?? branch,
+        headRefOid: prHeadSha ?? head,
         mergeCommit: isMerged ? { oid: 'e'.repeat(40) } : null,
         statusCheckRollup: [],
       }))
@@ -138,9 +202,24 @@ function routeContextStory(story: {
   detached?: boolean
   withUpstream?: boolean
   activePr?: boolean
+  prHeadBranch?: string
+  prHeadSha?: string
   merged?: boolean
+  remoteBranches?: RemoteBranchFixture[]
+  remoteTrackingBranches?: RemoteBranchFixture[]
+  localBranches?: Array<RemoteBranchFixture & { upstream?: string | null }>
+  sourceUpstreamRemote?: string
+  dirty?: boolean
+  worktreeBranches?: string[]
 }) {
-  const { cwd, head } = setupContextRepo(story.branch, story.detached, story.withUpstream)
+  const { cwd, head } = setupContextRepo(
+    story.branch,
+    story.detached,
+    story.withUpstream,
+    story.remoteTrackingBranches,
+    story.localBranches,
+    story.sourceUpstreamRemote,
+  )
   try {
     const evidence = collectContextEvidence({
       cwd,
@@ -153,7 +232,12 @@ function routeContextStory(story: {
         durable: story.durable ?? true,
         issueNumber: story.issueNumber,
         activePr: story.activePr,
+        prHeadBranch: story.prHeadBranch,
+        prHeadSha: story.prHeadSha,
         merged: story.merged,
+        remoteBranches: story.remoteBranches,
+        dirty: story.dirty,
+        worktreeBranches: story.worktreeBranches,
       }),
     })
     return { evidence, decision: routeContext(evidence) }
@@ -224,6 +308,238 @@ describe('bemoat:context neutral evidence adapters', () => {
       expect(decision.route, story.branch).toBe('STOP')
       expect(decision.reasons.join('\n'), story.branch).toMatch(/LOCAL_STATE_NOT_DURABLE/)
     }
+  })
+
+  // Oracle: Issue #573 requires one exact recovery for a uniquely safe wrong-Issue
+  // workspace, while merged docs/agent-loop/context-story-matrix.md records Issue
+  // #525's invariant that an explicitly numbered wrong-Issue branch remains STOP.
+  // Merged docs/mission-control/execution-handoff-contract.md §12 permits only a
+  // switch to the correctly owned existing Issue branch when live repository
+  // evidence identifies exactly one candidate; ambiguous or conflicting evidence
+  // remains STOP. The recovery below is uniquely determined by the sole live
+  // target branch plus its matching local origin tracking ref. Issue #573 also
+  // requires the recovery to retain the exact protected-base binding. The
+  // canonical branch bootstrap readback requires upstream `origin/<branch>`;
+  // a durable alias is not the repository's canonical workspace identity.
+  describe('unique wrong-Issue workspace recovery', () => {
+    it('keeps STOP and prescribes the exact switch for the #508 wrong-Issue reproduction', () => {
+      const targetBranch = 'feat/508-model-routing-profile-v1'
+      const sourceBranch = 'fix/512-preflight-handoff'
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '508',
+        branch: sourceBranch,
+        remoteBranches: [{ branch: targetBranch }],
+        remoteTrackingBranches: [{ branch: targetBranch }],
+      })
+      const output = createContextOutput(evidence, decision, '508')
+
+      expect(decision.route).toBe('STOP')
+      expect(decision.nextAction.type).toBe('STOP')
+      expect(decision.nextAction.command).toBeNull()
+      expect(output).toMatchObject({
+        route: 'STOP',
+        recovery: {
+          type: 'SWITCH_BRANCH',
+          command: 'git',
+          args: ['switch', '--track', `origin/${targetBranch}`],
+          display_command: `git switch --track 'origin/${targetBranch}'`,
+          binding: {
+            repository: contextRepo,
+            issue_number: '508',
+            protected_base: {
+              branch: evidence.protectedBase.branch,
+              sha: evidence.protectedBase.sha,
+            },
+            source: {
+              branch: sourceBranch,
+              head: evidence.localGit.head,
+              upstream: `origin/${sourceBranch}`,
+              clean: true,
+              detached: false,
+              pushed: true,
+              durable: true,
+            },
+            target: { branch: targetBranch, head: evidence.localGit.head },
+          },
+        },
+      })
+      expect(output.next_action.type).toBe('STOP')
+      expect(output.next_action.reason).toContain(`git switch --track 'origin/${targetBranch}'`)
+      expect(output.next_action.reason).toMatch(/immediately rerun.*CLI Discovery.*Context/i)
+      expect(output.next_action.reason).toMatch(/No Founder.*return/i)
+    })
+
+    it('uses the exact local Issue branch when its head and origin upstream match live evidence', () => {
+      const targetBranch = 'feat/508-local-target'
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '508',
+        branch: 'fix/512-preflight-handoff',
+        remoteBranches: [{ branch: targetBranch }],
+        remoteTrackingBranches: [{ branch: targetBranch }],
+        localBranches: [{ branch: targetBranch }],
+      })
+      const output = createContextOutput(evidence, decision, '508')
+
+      expect(decision.route).toBe('STOP')
+      expect('recovery' in output ? output.recovery : undefined).toMatchObject({
+        type: 'SWITCH_BRANCH',
+        args: ['switch', '--', targetBranch],
+        display_command: `git switch -- '${targetBranch}'`,
+        binding: { target: { branch: targetBranch, head: evidence.localGit.head } },
+      })
+      expect(output.next_action.type).toBe('STOP')
+    })
+
+    // Oracle: Issue #573 says wrong-Issue workspace acquisition precedes
+    // objective work even in a resumed session. The active-PR contract still
+    // requires the local target to match the exact PR branch/head; a unique
+    // durable PR head is canonical GitHub evidence for the queried Issue's
+    // existing workspace. Issue #410 keeps exact PR head identity authoritative.
+    it('recovers to the exact active PR branch before any PR-gated objective action', () => {
+      const targetBranch = 'fix/508-active-pr-target'
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '508',
+        branch: 'fix/512-preflight-handoff',
+        activePr: true,
+        prHeadBranch: targetBranch,
+        remoteBranches: [{ branch: targetBranch }],
+        remoteTrackingBranches: [{ branch: targetBranch }],
+      })
+      const output = createContextOutput(evidence, decision, '508')
+      const activePr = Array.isArray(evidence.activePr) ? null : evidence.activePr
+
+      expect(decision.route).toBe('STOP')
+      expect(decision.nextAction.type).toBe('STOP')
+      expect('recovery' in output ? output.recovery : undefined).toMatchObject({
+        type: 'SWITCH_BRANCH',
+        args: ['switch', '--track', `origin/${targetBranch}`],
+        binding: {
+          issue_number: '508',
+          target: { branch: targetBranch, head: activePr?.headSha },
+          active_pr: {
+            number: '526',
+            url: `https://github.com/${contextRepo}/pull/526`,
+            base_branch: 'main',
+            base_sha: 'a'.repeat(40),
+            head_branch: targetBranch,
+            head: activePr?.headSha,
+          },
+        },
+      })
+      expect(output.next_action.reason).toContain(`git switch --track 'origin/${targetBranch}'`)
+    })
+
+    it('stays STOP when an active PR target is not uniquely present at its live head', () => {
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '508',
+        branch: 'fix/512-preflight-handoff',
+        activePr: true,
+        prHeadBranch: 'fix/508-unavailable-pr-target',
+      })
+      const output = createContextOutput(evidence, decision, '508')
+
+      expect(decision.route).toBe('STOP')
+      expect(decision.nextAction.type).toBe('STOP')
+      expect(output).not.toHaveProperty('recovery')
+    })
+
+    it('stays STOP when the active PR branch has stale local origin tracking evidence', () => {
+      const targetBranch = 'fix/508-stale-pr-target'
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '508',
+        branch: 'fix/512-preflight-handoff',
+        activePr: true,
+        prHeadBranch: targetBranch,
+        remoteBranches: [{ branch: targetBranch }],
+        remoteTrackingBranches: [{ branch: targetBranch, sha: 'stale' }],
+      })
+      const output = createContextOutput(evidence, decision, '508')
+
+      expect(decision.route).toBe('STOP')
+      expect(output).not.toHaveProperty('recovery')
+    })
+
+    it.each([
+      ['multiple live target branches', {
+        remoteBranches: [
+          { branch: 'fix/573-first-candidate' },
+          { branch: 'feature/573-second-candidate' },
+        ],
+        remoteTrackingBranches: [
+          { branch: 'fix/573-first-candidate' },
+          { branch: 'feature/573-second-candidate' },
+        ],
+      }],
+      ['stale local tracking head', {
+        remoteBranches: [{ branch: 'fix/573-stale-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-stale-candidate', sha: 'stale' }],
+      }],
+      ['stale local target branch head', {
+        remoteBranches: [{ branch: 'fix/573-stale-local-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-stale-local-candidate' }],
+        localBranches: [{ branch: 'fix/573-stale-local-candidate', sha: 'stale' }],
+      }],
+      ['local target branch with wrong upstream', {
+        remoteBranches: [{ branch: 'fix/573-wrong-upstream-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-wrong-upstream-candidate' }],
+        localBranches: [{ branch: 'fix/573-wrong-upstream-candidate', upstream: 'origin/main' }],
+      }],
+      ['dirty source worktree', {
+        remoteBranches: [{ branch: 'fix/573-dirty-source-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-dirty-source-candidate' }],
+        dirty: true,
+      }],
+      ['non-durable source branch', {
+        remoteBranches: [{ branch: 'fix/573-nondurable-source-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-nondurable-source-candidate' }],
+        durable: false,
+      }],
+      ['target branch checked out in another worktree', {
+        remoteBranches: [{ branch: 'fix/573-occupied-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-occupied-candidate' }],
+        worktreeBranches: ['fix/573-occupied-candidate'],
+      }],
+    ])('does not prescribe recovery for %s', (_story, overrides) => {
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '573',
+        branch: 'fix/512-preflight-handoff',
+        ...overrides,
+      })
+      const output = createContextOutput(evidence, decision, '573')
+
+      expect(decision.route).toBe('STOP')
+      expect(output).not.toHaveProperty('recovery')
+    })
+
+    it('does not recover from a clean durable source branch tracking another remote', () => {
+      const { evidence, decision } = routeContextStory({
+        issueNumber: '573',
+        branch: 'fix/512-preflight-handoff',
+        sourceUpstreamRemote: 'fork',
+        remoteBranches: [{ branch: 'fix/573-noncanonical-upstream-candidate' }],
+        remoteTrackingBranches: [{ branch: 'fix/573-noncanonical-upstream-candidate' }],
+      })
+      const output = createContextOutput(evidence, decision, '573')
+
+      expect(evidence.localGit).toMatchObject({
+        clean: true,
+        pushed: true,
+        durable: true,
+        upstream: 'fork/fix/512-preflight-handoff',
+      })
+      expect(decision.route).toBe('STOP')
+      expect(output).not.toHaveProperty('recovery')
+    })
+
+    it('does not manufacture a transfer step for a same-Issue branch', () => {
+      const { evidence, decision } = routeContextStory({ issueNumber: '573', branch: 'fix/573-same-issue' })
+      const output = createContextOutput(evidence, decision, '573')
+
+      expect(decision.route).toBe('IMPLEMENT')
+      expect(output).not.toHaveProperty('recovery')
+      expect(output.next_action.reason).not.toMatch(/switch.*branch/i)
+      expect(output.next_action.reason).toContain('Implement the bounded Issue objective')
+    })
   })
 
   it('keeps PR-owned branch and merged terminal routing ahead of no-PR branch ownership', () => {

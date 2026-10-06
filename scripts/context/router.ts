@@ -8,7 +8,7 @@ import { parseProductionMergeReviewVerdict, classifyMergeReviewVerdict, resolveM
 import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './semantic-review-evidence.ts'
 import { hasStrictCrossHeadNativeReviewPredecessor } from './native-review-lineage.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
-import { routeNoPrContext } from './no-pr-routing.ts'
+import { routeNoPrContext, routeWrongIssueActivePrContext } from './no-pr-routing.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
@@ -29,11 +29,13 @@ function decision(
   route: ContextDecision['route'],
   reasons: string[],
   nextAction: ContextDecision['nextAction'],
+  recovery?: ContextDecision['recovery'],
 ): ContextDecision {
   return {
     route,
     reasons: [...new Set(reasons)],
     nextAction,
+    ...(recovery ? { recovery } : {}),
     evidenceUrls: evidenceUrls(evidence),
   }
 }
@@ -134,6 +136,8 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
     })
   }
 
+  const wrongIssuePrWorkspace = routeWrongIssueActivePrContext(evidence)
+  if (wrongIssuePrWorkspace) return decision(evidence, wrongIssuePrWorkspace.route, wrongIssuePrWorkspace.reasons, wrongIssuePrWorkspace.nextAction, wrongIssuePrWorkspace.recovery)
   if (!mergedPr && isProtectedOrIntegrationBranch(evidence.localGit.branch)) {
     return decision(evidence, 'STOP', [
       'EVIDENCE_CONFLICT: protected or integration branch cannot route IMPLEMENT',
@@ -147,7 +151,7 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
   const activePr = evidence.activePr as ActivePullRequestEvidence | null
   if (!activePr) {
     const noPrDecision = routeNoPrContext(evidence)
-    return decision(evidence, noPrDecision.route, noPrDecision.reasons, noPrDecision.nextAction)
+    return decision(evidence, noPrDecision.route, noPrDecision.reasons, noPrDecision.nextAction, noPrDecision.recovery)
   }
 
   if (activePr.merged || activePr.state === 'MERGED') {

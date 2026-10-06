@@ -59,6 +59,47 @@ export interface LocalGitEvidence {
   reasons: string[]
 }
 
+/** Internal candidate evidence for one exact wrong-Issue branch switch. */
+export interface IssueBranchRecoveryCandidateEvidence {
+  branch: string
+  liveHead: string
+  localHead: string | null
+  remoteTrackingHead: string | null
+  upstream: string | null
+  checkedOutElsewhere: boolean
+  eligible: boolean
+}
+
+export interface ContextBranchRecovery {
+  type: 'SWITCH_BRANCH'
+  command: 'git'
+  args: string[]
+  display_command: string
+  binding: {
+    repository: string
+    issue_number: string
+    protected_base: { branch: string; sha: string }
+    source: {
+      branch: string
+      head: string
+      upstream: string | null
+      clean: boolean
+      detached: boolean
+      pushed: boolean
+      durable: boolean
+    }
+    target: { branch: string; head: string }
+    active_pr?: {
+      number: string
+      url: string
+      base_branch: string
+      base_sha: string
+      head_branch: string
+      head: string
+    }
+  }
+}
+
 export interface ActivePullRequestEvidence {
   number: string
   state: string
@@ -164,6 +205,8 @@ export interface NormalizedContextEvidence {
   activePr: ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
   currentHeadVerification: HeadVerificationEvidence | null
   durableContext: DurableContextEvidence
+  /** Internal evidence; createContextOutput intentionally omits this field. */
+  issueBranchRecoveryCandidates?: IssueBranchRecoveryCandidateEvidence[]
   historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
   evidenceErrors: string[]
 }
@@ -176,6 +219,7 @@ export interface ContextDecision {
     command: string | null
     description: string
   }
+  recovery?: ContextBranchRecovery
   evidenceUrls: string[]
 }
 
