@@ -175,6 +175,8 @@ export interface DurableContextEvidence {
   historicalResults: RoleEvidence[]
   blockerResolutions?: RoleEvidence[]
   invalidBlockerResolutions?: RoleEvidence[]
+  founderDecisions?: RoleEvidence[]
+  invalidFounderDecisions?: RoleEvidence[]
 }
 
 export interface HistoricalBlockerResolutionProof {

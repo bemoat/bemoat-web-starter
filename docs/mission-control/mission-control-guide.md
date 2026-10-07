@@ -1,10 +1,10 @@
 ---
 policy_id: bemoat-mission-control
-version: 1.4.0
-trusted_founder_login: boat1994
+version: 1.5.0
+trusted_founder_login: bemoat
 legacy_stop_handoffs: 513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7,509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2
 scope: repository-development
-canonical_repository: boat1994/bemoat-web-starter
+canonical_repository: bemoat/bemoat-web-starter
 max_review_cycles: 3
 ---
 
@@ -193,7 +193,39 @@ implementation or mutation authority. After the Founder decision is consumed,
 fresh Context against current merged authority is required before a
 mutation-capable objective. Context does not use timestamps or comment order to
 select a gate or resolve competing evidence. A no-PR `COMPLETE` must still bind
-the current live protected-base SHA; a competing gate keeps it at STOP.
+the current live protected-base SHA; an unconsumed competing gate keeps it at
+STOP.
+
+No existing record safely captures this decision. `BLOCKER_RESOLUTION` remains
+specific to named STOP blockers and cannot be repurposed without changing its
+meaning. HANDOFF and review records describe workflow state, not this Founder
+choice, and later prose is not an authority source. The protocol therefore
+uses one dedicated strict record with exact gate, current identity, and native
+Founder bindings.
+
+An authorized Founder may consume one no-PR gate with one strict schema-v1
+`FOUNDER_DECISION` comment. It must be bound to the exact source gate comment
+ID and URL, live repository, Issue, `pr_number: null`, topic branch and head,
+current protected-base branch and SHA, and current merged policy path, ID,
+version, and source blob SHA. The record's declared `FOUNDER` login and the
+native GitHub comment author must both match `trusted_founder_login`; owner
+association and role prose are not authority. Only `decision: "PROCEED"` is
+supported. The canonical JSON body and field set are strict; malformed,
+stale, duplicate, conflicting, wrong-gate, wrong-identity, or wrong-author
+decisions keep Context at STOP. A missing trusted Founder identity also fails
+closed.
+
+Exactly one valid decision filters only its bound source gate from no-PR route
+folding. Both native comments remain immutable. Context recomputes from all
+remaining current evidence, so unresolved STOPs, incompatible HANDOFFs,
+protected-base conflicts, and normal COMPLETE requirements still apply. This
+decision does not create generic mutation authority, resolve STOP blockers,
+change active-PR Founder gates, or select evidence by timestamps, comment
+order, or association.
+
+Use the canonical [FOUNDER_DECISION template](founder-decision-template.md)
+only with exact values from the live gate, current protected base, and merged
+policy. Never publish the sample values.
 
 Only schema-v2 STOP HANDOFFs identified by `legacy_stop_handoffs` in merged
 protected-base policy retain one legacy blocker derived from immutable

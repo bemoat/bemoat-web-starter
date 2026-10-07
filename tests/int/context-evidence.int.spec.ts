@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,6 +14,7 @@ import {
 } from '../../scripts/context/evidence.ts'
 import { routeContext } from '../../scripts/context/router.ts'
 import { runContextCommand } from '../../scripts/context/runtime.ts'
+import { parseProtectedPolicyContent } from '../../scripts/context/policy.ts'
 
 function response(stdout: string): ContextCommandResult {
   return { status: 0, stdout, stderr: '', error: null }
@@ -697,6 +698,18 @@ describe('bemoat:context neutral evidence adapters', () => {
       return response('')
     }
     expect(readProtectedPolicy({ repo: 'boat1994/child-project', baseBranch: 'main', run }).policy?.trustedFounderLogin).toBeNull()
+  })
+
+  it('resolves the current starter Founder identity only for the canonical live repository', () => {
+    const content = readFileSync(join(process.cwd(), 'docs/mission-control/mission-control-guide.md'), 'utf8')
+    const args = { branch: 'main', sha: 'a'.repeat(40), content }
+
+    expect(parseProtectedPolicyContent({ repo: 'bemoat/bemoat-web-starter', ...args })).toMatchObject({
+      policyId: 'bemoat-mission-control',
+      version: '1.5.0',
+      trustedFounderLogin: 'bemoat',
+    })
+    expect(parseProtectedPolicyContent({ repo: 'bemoat/child-project', ...args })?.trustedFounderLogin).toBeNull()
   })
 
   it('binds the Issue, one active PR, and exact-head verification', () => {
