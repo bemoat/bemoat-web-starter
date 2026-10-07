@@ -32,6 +32,13 @@
       "migration_status": "migrated"
     },
     {
+      "path": "scripts/agent-validate-blocker-resolution.ts",
+      "facade_disposition": "composition_root",
+      "internal_destination": "scripts/context/",
+      "owning_slice": 7,
+      "migration_status": "migrated"
+    },
+    {
       "path": "scripts/bemoat-typecheck.ts",
       "facade_disposition": "tooling_entrypoint",
       "internal_destination": "scripts/tooling/bemoat-typecheck.ts",

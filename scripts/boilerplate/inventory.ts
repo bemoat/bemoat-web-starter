@@ -26,7 +26,7 @@ export const managedPaths = [
   'scripts/deploy-smoke-test.ts', 'scripts/guards/repo-safety.ts', 'scripts/guards/types.ts',
   'scripts/guard-harness-contract.ts', 'scripts/harness-contract',
   'scripts/guards/build-script-contract.ts', 'scripts/build.ts',
-  'scripts/agent-context.ts', 'scripts/agent-context-sync-base.ts', 'scripts/agent-context-recover-setup.ts', 'scripts/context', 'scripts/context/blocker-resolution-history.ts', 'scripts/agent-handoff.ts', 'scripts/handoff',
+  'scripts/agent-context.ts', 'scripts/agent-context-sync-base.ts', 'scripts/agent-context-recover-setup.ts', 'scripts/context', 'scripts/context/blocker-resolution-history.ts', 'scripts/agent-handoff.ts', 'scripts/agent-validate-blocker-resolution.ts', 'scripts/handoff',
   'scripts/adapters/command-runner.ts',
   'scripts/cli',
   'scripts/guard-cloudflare-env.ts', 'scripts/guards/cloudflare-env.ts', 'scripts/guard-pack.ts', 'scripts/guards/pack.ts', 'scripts/guards/planning-contract-runtime.ts', 'scripts/guards/planning-contract-live.ts', 'scripts/guards/legacy-managed-state.ts',
@@ -54,6 +54,7 @@ export const managedPaths = [
   'tests/int/build-script-contract-guard.int.spec.ts', 'tests/int/build-wrapper.int.spec.ts',
   'tests/int/branch-safety.int.spec.ts',
   'tests/int/context-no-pr-blocker-resolution.int.spec.ts', 'tests/int/context-no-pr-founder-decision.int.spec.ts',
+  'tests/int/blocker-resolution-validation-cli.int.spec.ts', 'tests/int/blocker-resolution-validation-canonical-body.int.spec.ts',
   'tests/int/context-parser.int.spec.ts', 'tests/int/context-router.int.spec.ts', 'tests/int/context-stale-base.int.spec.ts', 'tests/int/context-evidence.int.spec.ts', 'tests/int/native-review-lineage.int.spec.ts', 'tests/int/context-acquisition.int.spec.ts', 'tests/int/approved-base.int.spec.ts', 'tests/int/context-cli.int.spec.ts', 'tests/int/context-skill.int.spec.ts', 'tests/int/context-sync.int.spec.ts', 'tests/int/context-bootstrap.int.spec.ts', 'tests/int/context-corrections.int.spec.ts', 'tests/int/context-setup-recovery.int.spec.ts', 'tests/int/context-setup-recovery-target.int.spec.ts', 'tests/int/issue-branch-bootstrap.int.spec.ts', 'tests/int/mission-control-publication-templates.int.spec.ts',
   'tests/int/mission-control-loader-router.int.spec.ts',
   'tests/int/handoff-schema.int.spec.ts', 'tests/int/handoff-transport.int.spec.ts', 'tests/int/handoff-validation-proof.int.spec.ts', 'tests/int/handoff-cli.int.spec.ts', 'tests/int/handoff-skill.int.spec.ts',
@@ -97,7 +98,7 @@ export const packageSyncProposalPath = '.bemoat/package-sync-proposal.md'
 
 /** Namespaced scripts safe to add when missing during sync. Never overwrite existing entries. */
 export const managedPackageScripts = [
-  'bemoat:context', 'bemoat:context:sync-base', 'bemoat:context:recover-setup', 'bemoat:handoff',
+  'bemoat:context', 'bemoat:context:sync-base', 'bemoat:context:recover-setup', 'bemoat:handoff', 'bemoat:blocker-resolution:validate',
   'bemoat:branch:check', 'bemoat:guard:safety', 'bemoat:guard:pack',
   'bemoat:guard:harness-contract',
   'bemoat:guard:cloudflare-env', 'bemoat:test:int', 'bemoat:typecheck', 'bemoat:check',
