@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 
 import type { NormalizedContextEvidence, RoleEvidence } from '../../scripts/context/model.ts'
+import { parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
 import { routeContext } from '../../scripts/context/router.ts'
 import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 
@@ -506,5 +508,174 @@ describe('exact no-PR FOUNDER_GATE decision consumption', () => {
       route: 'COMPLETE',
       nextAction: { type: 'COMPLETE', command: null },
     })
+  })
+})
+
+/**
+ * Oracle: Issue #602's acceptance criteria and the human-approved dedicated
+ * FOUNDER_DECISION_REPAIR contract authorize exactly one trusted-Founder repair
+ * of exactly one malformed immutable predecessor, bound to the current identity
+ * and exact gate. Merged policy §Safety and durability supplies the ordinary
+ * decision bindings, strict body, uniqueness, native Founder, immutable evidence,
+ * and recomputation rules. No timestamp/order authority or generic permission
+ * follows from a repair. These tests catch ignoring repair evidence, trusting a
+ * malformed predecessor, bypassing any binding, or skipping remaining history.
+ */
+describe('immutable no-PR FOUNDER_DECISION_REPAIR lifecycle (#602)', () => {
+  const liveIdentity = {
+    ...currentIdentity,
+    baseSha: '5722b6b8bc6782d1edfea67b7648687700e42659',
+    policySha: '3d7b2403b081d7b744c8b2bfecb25adae29632ce',
+  }
+  const gate = handoff(gateIdentity, { id: 6014391169 })
+
+  function malformedDecision(): RoleEvidence {
+    const valid = founderDecision(liveIdentity, gate, { id: 6037687449 })
+    // Exact #582 defect: only envelope line breaks are literal backslash-n;
+    // the enclosed pretty-printed JSON retains its real line breaks.
+    return {
+      ...valid,
+      body: valid.body.replace('## FOUNDER_DECISION\n\n```json\n', '## FOUNDER_DECISION\\n\\n```json\\n')
+        .replace('\n```\n', '\\n```\\n'),
+    }
+  }
+
+  function repair(predecessor: RoleEvidence, mutate?: (record: Record<string, unknown>) => void): RoleEvidence {
+    const valid = founderDecision(liveIdentity, gate, { id: 6040000001 })
+    const json = JSON.parse(valid.body.slice(valid.body.indexOf('{'), valid.body.lastIndexOf('}') + 1))
+    json.record_type = 'FOUNDER_DECISION_REPAIR'
+    json.source_founder_decision = {
+      comment_id: String(predecessor.id),
+      url: predecessor.url,
+      body_sha256: createHash('sha256').update(predecessor.body, 'utf8').digest('hex'),
+    }
+    mutate?.(json)
+    return { ...valid, body: '## FOUNDER_DECISION_REPAIR\n\n```json\n' + JSON.stringify(json, null, 2) + '\n```\n' }
+  }
+
+  function route(comments: RoleEvidence[], extraHandoffs: RoleEvidence[] = []) {
+    const evidence = contextFor(liveIdentity, [gate, ...extraHandoffs])
+    Object.assign(evidence.durableContext, parseRoleEvidence([gate, ...extraHandoffs, ...comments]))
+    return routeContext(evidence)
+  }
+
+  it('keeps the exact literal-newline malformed #582 predecessor at STOP', () => {
+    expect(route([malformedDecision()]).route).toBe('STOP')
+  })
+
+  it('consumes one exact bound repair and recomputes without changing immutable evidence', () => {
+    const predecessor = malformedDecision()
+    const correction = repair(predecessor)
+    const before = structuredClone([gate, predecessor, correction])
+    const result = route([predecessor, correction])
+    expect(result).toMatchObject({ route: 'IMPLEMENT', nextAction: { type: 'COMMAND', command: null } })
+    expect(route([correction, predecessor])).toEqual(result)
+    expect([gate, predecessor, correction]).toEqual(before)
+  })
+
+  it.each([
+    ['repository', (r: Record<string, unknown>) => { r.repository = 'other/repository' }],
+    ['Issue', (r: Record<string, unknown>) => { r.issue_number = '508' }],
+    ['PR', (r: Record<string, unknown>) => { r.pr_number = '603' }],
+    ['branch', (r: Record<string, unknown>) => { r.branch = 'fix/582-other' }],
+    ['head', (r: Record<string, unknown>) => { r.exact_head = 'f'.repeat(40) }],
+    ['base branch', (r: Record<string, unknown>) => { (r.protected_base as Record<string, unknown>).branch = 'dev' }],
+    ['base SHA', (r: Record<string, unknown>) => { (r.protected_base as Record<string, unknown>).sha = 'f'.repeat(40) }],
+    ['policy path', (r: Record<string, unknown>) => { (r.policy as Record<string, unknown>).path = 'other.md' }],
+    ['policy ID', (r: Record<string, unknown>) => { (r.policy as Record<string, unknown>).policy_id = 'other' }],
+    ['policy version', (r: Record<string, unknown>) => { (r.policy as Record<string, unknown>).version = '1.4.0' }],
+    ['policy SHA', (r: Record<string, unknown>) => { (r.policy as Record<string, unknown>).source_sha = 'f'.repeat(40) }],
+    ['gate ID', (r: Record<string, unknown>) => { (r.source_founder_gate as Record<string, unknown>).comment_id = '6014391170' }],
+    ['gate URL', (r: Record<string, unknown>) => { (r.source_founder_gate as Record<string, unknown>).url += '/wrong' }],
+    ['predecessor ID', (r: Record<string, unknown>) => { (r.source_founder_decision as Record<string, unknown>).comment_id = '6037687450' }],
+    ['predecessor URL', (r: Record<string, unknown>) => { (r.source_founder_decision as Record<string, unknown>).url += '/wrong' }],
+    ['predecessor digest', (r: Record<string, unknown>) => { (r.source_founder_decision as Record<string, unknown>).body_sha256 = 'f'.repeat(64) }],
+    ['declared Founder', (r: Record<string, unknown>) => { (r.authority as Record<string, unknown>).login = 'other' }],
+    ['declared role', (r: Record<string, unknown>) => { (r.authority as Record<string, unknown>).role = 'OWNER' }],
+    ['decision', (r: Record<string, unknown>) => { r.decision = 'DECLINE' }],
+    ['schema', (r: Record<string, unknown>) => { r.schema_version = 2 }],
+    ['extra key', (r: Record<string, unknown>) => { r.ignore_conflict = true }],
+  ])('keeps wrong %s repair evidence at STOP', (_label, mutate) => {
+    const predecessor = malformedDecision()
+    expect(route([predecessor, repair(predecessor, mutate)]).route).toBe('STOP')
+  })
+
+  it.each(['repair', 'predecessor'] as const)('requires trusted native Founder and exact native identity on the %s', (target) => {
+    const invalidCases: Array<Partial<RoleEvidence> & { author?: { login: string } }> = [
+      { authorLogin: 'other', authorAssociation: 'OWNER' },
+      { authorLogin: null },
+      { author: { login: 'other' } },
+      { url: 'https://github.com/other/repository/issues/582#issuecomment-6037687449' },
+      { id: '' },
+    ]
+    for (const invalid of invalidCases) {
+      const predecessor = malformedDecision()
+      const correction = repair(predecessor)
+      const comments = target === 'repair'
+        ? [predecessor, { ...correction, ...invalid }]
+        : [{ ...predecessor, ...invalid }, correction]
+      expect(route(comments).route).toBe('STOP')
+    }
+  })
+
+  it('does not accept a changed predecessor body, even if still malformed', () => {
+    const predecessor = malformedDecision()
+    expect(route([{ ...predecessor, body: predecessor.body + 'changed' }, repair(predecessor)]).route).toBe('STOP')
+  })
+
+  it('does not repair syntactically valid ordinary decisions, including stale ones', () => {
+    const valid = founderDecision(liveIdentity, gate)
+    const stale = founderDecision(gateIdentity, gate)
+    for (const predecessor of [valid, stale]) {
+      expect(route([predecessor, repair(predecessor)]).route).toBe('STOP')
+    }
+  })
+
+  it('keeps orphan, duplicate, and competing repairs/decisions at STOP regardless of order or time', () => {
+    const predecessor = malformedDecision()
+    const correction = repair(predecessor)
+    const duplicate = { ...correction, id: 6040000002, url: correction.url.replace('6040000001', '6040000002'), createdAt: '2100-01-01' }
+    const otherPredecessor = { ...predecessor, id: 6037687450, url: predecessor.url.replace('6037687449', '6037687450') }
+    for (const comments of [
+      [correction], [predecessor, correction, duplicate], [duplicate, correction, predecessor],
+      [predecessor, otherPredecessor, correction],
+      [predecessor, founderDecision(liveIdentity, gate), correction],
+      [predecessor, founderDecision(liveIdentity, gate)],
+    ]) expect(route(comments).route).toBe('STOP')
+  })
+
+  it.each([
+    '## FOUNDER_DECISION_REPAIR\n\nFounder says proceed.\n',
+    '## FOUNDER_DECISION_REPAIR\\n\\n```json\\n{}\\n```\\n',
+  ])('retains malformed repair evidence as a blocker, even without a predecessor (%s)', (body) => {
+    const malformed = { ...repair(malformedDecision()), body }
+    expect(route([malformed]).route).toBe('STOP')
+  })
+
+  it('does not let a repair bypass unresolved STOP or incompatible history, or choose a gate', () => {
+    const predecessor = malformedDecision()
+    const correction = repair(predecessor)
+    const stopped = handoff(liveIdentity, { id: 6040000010, route: 'STOP' })
+    const record = JSON.parse(stopped.body.slice(stopped.body.indexOf('{'), stopped.body.lastIndexOf('}') + 1))
+    record.verified_evidence = [{ kind: 'stop-blocker', value: 'still-blocked', url: null }]
+    stopped.body = renderHandoffComment(record)
+    for (const extra of [
+      stopped,
+      handoff(liveIdentity, { id: 6040000011, route: 'REVIEW' }),
+      handoff(gateIdentity, { id: 6040000012 }),
+    ]) expect(route([predecessor, correction], [extra]).route).toBe('STOP')
+  })
+
+  it('allows only ordinary terminal recomputation when a bound COMPLETE also exists', () => {
+    const predecessor = malformedDecision()
+    expect(route([predecessor, repair(predecessor)], [handoff(liveIdentity, { id: 6040000013, route: 'COMPLETE' })]))
+      .toMatchObject({ route: 'COMPLETE', nextAction: { type: 'COMPLETE' } })
+  })
+
+  it('retains child repository isolation when copied starter policy supplies no trusted Founder', () => {
+    const predecessor = malformedDecision()
+    const evidence = contextFor({ ...liveIdentity, repository: 'child/project' }, [])
+    Object.assign(evidence.durableContext, parseRoleEvidence([predecessor, repair(predecessor)]))
+    expect(routeContext(evidence).route).toBe('STOP')
   })
 })

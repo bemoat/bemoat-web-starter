@@ -706,7 +706,7 @@ describe('bemoat:context neutral evidence adapters', () => {
 
     expect(parseProtectedPolicyContent({ repo: 'bemoat/bemoat-web-starter', ...args })).toMatchObject({
       policyId: 'bemoat-mission-control',
-      version: '1.5.0',
+      version: '1.6.0',
       trustedFounderLogin: 'bemoat',
     })
     expect(parseProtectedPolicyContent({ repo: 'bemoat/child-project', ...args })?.trustedFounderLogin).toBeNull()

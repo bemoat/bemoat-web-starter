@@ -198,6 +198,8 @@ export interface DurableContextEvidence {
   invalidBlockerResolutions?: RoleEvidence[]
   founderDecisions?: RoleEvidence[]
   invalidFounderDecisions?: RoleEvidence[]
+  founderDecisionRepairs?: RoleEvidence[]
+  invalidFounderDecisionRepairs?: RoleEvidence[]
 }
 
 export interface HistoricalBlockerResolutionProof {

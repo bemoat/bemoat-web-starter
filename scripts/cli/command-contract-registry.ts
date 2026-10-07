@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { blockerResolutionValidationCommands } from './blocker-resolution-validation-command-metadata.ts'
+import { founderDecisionRepairValidationCommands } from './founder-decision-repair-validation-command-metadata.ts'
 import { reviewVerdictValidationCommands } from './review-verdict-validation-command-metadata.ts'
 import { handoffCommands } from './handoff-command-metadata.ts'
 import { handoffRoutes } from './handoff-routing-policy.ts'
@@ -522,6 +523,7 @@ const commandMetadataDependencies: any = { contract: contract as unknown as <T e
 const protocolCommands = handoffCommands(commandMetadataDependencies)
 const validationCommands = {
   ...blockerResolutionValidationCommands(commandMetadataDependencies),
+  ...founderDecisionRepairValidationCommands(commandMetadataDependencies),
   ...reviewVerdictValidationCommands(commandMetadataDependencies),
 }
 

@@ -1,6 +1,6 @@
 ---
 policy_id: bemoat-mission-control
-version: 1.5.0
+version: 1.6.0
 trusted_founder_login: bemoat
 legacy_stop_handoffs: 513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7,509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2
 scope: repository-development
@@ -267,6 +267,34 @@ order, or association.
 Use the canonical [FOUNDER_DECISION template](founder-decision-template.md)
 only with exact values from the live gate, current protected base, and merged
 policy. Never publish the sample values.
+
+The only malformed-decision recovery is one strict schema-v1
+`FOUNDER_DECISION_REPAIR`, authored by the trusted Founder. It requires exactly
+one syntactically malformed ordinary `FOUNDER_DECISION` with valid native
+Issue-comment identity and trusted native Founder author, exactly one repair,
+and exactly one applicable no-PR gate. The repair supplies its own complete
+`PROCEED` decision with every ordinary decision's current repository, Issue,
+null PR, branch, head, live protected-base, merged-policy, source-gate, and
+native/declared Founder binding. Its `source_founder_decision` binds the
+predecessor's exact native comment ID, URL, and SHA-256 digest of the untouched
+UTF-8 body. Gate, predecessor, and repair must be distinct native comments.
+The malformed body supplies no decision authority and is never normalized or
+parsed permissively. This cannot supersede a syntactically valid ordinary
+decision, including one rejected for staleness or wrong identity.
+
+All three comments remain immutable. A valid repair removes only its bound
+gate from no-PR folding, and the malformed predecessor ceases to block only
+through that unique bound repair. Context recomputes every remaining STOP,
+HANDOFF, historical-base, and COMPLETE requirement. Missing, malformed,
+orphan, duplicate, competing, stale, wrong-identity, changed-body, or
+wrong-author repair evidence remains STOP. Multiple ordinary decisions remain
+STOP even when a repair exists. No time, comment ordering, prose, or OWNER
+association selects authority. The repair provides no generic authority to
+implement, merge, resolve blockers, complete an objective, deploy, or migrate,
+and has no active-PR gate effect. Copied starter policy cannot authorize a
+Founder in a different repository. Use the
+[repair template and syntax validator](founder-decision-repair-template.md)
+with fresh current evidence before Founder publication.
 
 Only schema-v2 STOP HANDOFFs identified by `legacy_stop_handoffs` in merged
 protected-base policy retain one legacy blocker derived from immutable

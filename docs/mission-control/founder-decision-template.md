@@ -48,3 +48,9 @@ The native comment ID and URL must identify the decision comment itself; the
 record's `source_founder_gate` must identify the separate exact gate comment.
 Only `PROCEED` is supported. The decision removes only that exact gate from
 Context's no-PR recomputation and grants no generic mutation authority.
+
+If one immutable decision comment is syntactically malformed, do not edit or
+delete it or publish a second ordinary decision. Follow the dedicated
+[FOUNDER_DECISION_REPAIR contract](founder-decision-repair-template.md) using
+fresh current bindings. A valid but stale or wrong-identity decision cannot
+use that recovery.

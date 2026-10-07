@@ -20,6 +20,8 @@ interface RoleEvidenceResult {
   invalidBlockerResolutions: RoleEvidence[]
   founderDecisions: RoleEvidence[]
   invalidFounderDecisions: RoleEvidence[]
+  founderDecisionRepairs: RoleEvidence[]
+  invalidFounderDecisionRepairs: RoleEvidence[]
 }
 
 function sections(body: string): Map<string, string[]> {
@@ -85,6 +87,8 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
   const invalidBlockerResolutions: RoleEvidence[] = []
   const founderDecisions: RoleEvidence[] = []
   const invalidFounderDecisions: RoleEvidence[] = []
+  const founderDecisionRepairs: RoleEvidence[] = []
+  const invalidFounderDecisionRepairs: RoleEvidence[] = []
 
   for (const value of comments) {
     if (!value || typeof value !== 'object') continue
@@ -95,7 +99,7 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
     const explicitAuthorLogin = typeof comment.authorLogin === 'string' ? comment.authorLogin : null
     const nestedAuthorLogin = typeof author?.login === 'string' ? author.login : null
     const body = typeof comment.body === 'string' ? comment.body : ''
-    const marker = body.match(/^##\s+(HANDOFF|RESULT|REVIEW_VERDICT|BLOCKER_RESOLUTION|FOUNDER_DECISION)\b/i)?.[1]?.toUpperCase()
+    const marker = body.match(/^##\s+(HANDOFF|RESULT|REVIEW_VERDICT|BLOCKER_RESOLUTION|FOUNDER_DECISION_REPAIR|FOUNDER_DECISION)\b/i)?.[1]?.toUpperCase()
     if (!marker) continue
 
     const normalized: RoleEvidence = {
@@ -103,7 +107,7 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
       body,
       createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
       url: typeof comment.url === 'string' ? comment.url : '',
-      ...(marker === 'BLOCKER_RESOLUTION' || marker === 'FOUNDER_DECISION' ? {
+      ...(marker === 'BLOCKER_RESOLUTION' || marker === 'FOUNDER_DECISION' || marker === 'FOUNDER_DECISION_REPAIR' ? {
         authorLogin: explicitAuthorLogin ?? nestedAuthorLogin,
         authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,
         authorIdentityConflict: explicitAuthorLogin !== null && nestedAuthorLogin !== null &&
@@ -123,6 +127,12 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
       // Decisions are selected by exact binding and uniqueness, never by time.
       if (normalized.id === '' || !normalized.url) invalidFounderDecisions.push(normalized)
       else founderDecisions.push(normalized)
+      continue
+    }
+
+    if (marker === 'FOUNDER_DECISION_REPAIR') {
+      if (normalized.id === '' || !normalized.url) invalidFounderDecisionRepairs.push(normalized)
+      else founderDecisionRepairs.push(normalized)
       continue
     }
 
@@ -147,5 +157,7 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
     invalidBlockerResolutions,
     founderDecisions,
     invalidFounderDecisions,
+    founderDecisionRepairs,
+    invalidFounderDecisionRepairs,
   }
 }
