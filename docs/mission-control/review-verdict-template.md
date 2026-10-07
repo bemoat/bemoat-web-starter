@@ -24,7 +24,9 @@ this format does not grant approval or merge authority.
 - Do not add alternate, duplicate, partial, or prose-bearing identity fields.
 
 The examples are parser-tested. Their sample identities are for syntax only;
-replace all values from fresh evidence before publication.
+replace all values from fresh evidence before publication. Validate a complete
+candidate with `pnpm run bemoat:review-verdict:validate -- --body-file
+./review-verdict.md --json`. PASS establishes syntax and shape only.
 
 ## ELIGIBLE FOR FOUNDER REVIEW
 
