@@ -150,6 +150,20 @@ recomputes all remaining STOP, HANDOFF, and COMPLETE rules. No timestamp or
 comment order is consulted, and the decision grants no generic mutation or
 blocker-resolution authority. Active-PR Founder gates are unchanged.
 
+Current policy frontmatter explicitly controls historical carry-forward with
+`allow_historical_no_pr_founder_gate_replay: true`; the default is false. When
+enabled, Context may exclude one already-consumed immutable gate at historical
+head A only after replaying its exact decision or canonical repair under the
+historical policy/protected-base snapshot, binding the same repository, Issue,
+and canonical branch, and proving durable strict A-to-B ancestry plus
+compatible historical-to-current protected-base ancestry. Missing, divergent,
+rewritten, ambiguous, malformed, duplicate, conflicting, wrong-author,
+wrong-identity, or unconsumed evidence remains STOP. Other current gates and
+STOP/HANDOFF/COMPLETE conflicts remain in ordinary routing. This narrow
+exclusion neither satisfies a current human gate nor grants authority at B;
+Context recomputes from all remaining current evidence. Timestamp and comment
+order are never used.
+
 Before an authorized Founder publishes one, use the canonical
 [FOUNDER_DECISION template](founder-decision-template.md). Replace every
 sample value with exact current evidence and preserve the strict body format.

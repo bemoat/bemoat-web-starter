@@ -7,6 +7,7 @@ import { isFullSha, repositoryEvidence, runContextCommand } from './runtime.ts'
 import type { ContextCommandResult, ContextCommandRunner } from './runtime.ts'
 import { normalizeContextEvidence, type NormalizedContextEvidence, type SetupBaseRecoveryEvidence } from './model.ts'
 import { readHistoricalBlockerResolutionProofs } from './blocker-resolution-history.ts'
+import { readHistoricalNoPrFounderGateReplayProofs } from './founder-gate-history.ts'
 
 function readSetupBaseRecoveryEvidence({
   cwd,
@@ -163,7 +164,7 @@ export function collectContextEvidence({
     })
     : []
 
-  return normalizeContextEvidence({
+  const normalized = normalizeContextEvidence({
     repository,
     protectedBase: {
       branch: resolvedBranch,
@@ -201,4 +202,10 @@ export function collectContextEvidence({
         : ['BLOCKED_EXTERNAL: Issue evidence is unavailable']),
     ])],
   })
+  const historicalNoPrFounderGateReplayProofs = policyResult.policy && resolvedBranch && resolvedSha
+    ? readHistoricalNoPrFounderGateReplayProofs({ evidence: normalized, run, cwd, env })
+    : []
+  return historicalNoPrFounderGateReplayProofs.length > 0
+    ? { ...normalized, historicalNoPrFounderGateReplayProofs }
+    : normalized
 }

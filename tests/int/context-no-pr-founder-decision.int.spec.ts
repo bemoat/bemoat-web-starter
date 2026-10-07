@@ -529,8 +529,8 @@ describe('immutable no-PR FOUNDER_DECISION_REPAIR lifecycle (#602)', () => {
   }
   const gate = handoff(gateIdentity, { id: 6014391169 })
 
-  function malformedDecision(): RoleEvidence {
-    const valid = founderDecision(liveIdentity, gate, { id: 6037687449 })
+  function malformedDecision(identity: Identity = liveIdentity): RoleEvidence {
+    const valid = founderDecision(identity, gate, { id: 6037687449 })
     // Exact #582 defect: only envelope line breaks are literal backslash-n;
     // the enclosed pretty-printed JSON retains its real line breaks.
     return {
@@ -540,8 +540,13 @@ describe('immutable no-PR FOUNDER_DECISION_REPAIR lifecycle (#602)', () => {
     }
   }
 
-  function repair(predecessor: RoleEvidence, mutate?: (record: Record<string, unknown>) => void): RoleEvidence {
-    const valid = founderDecision(liveIdentity, gate, { id: 6040000001 })
+  function repair(
+    predecessor: RoleEvidence,
+    mutate?: (record: Record<string, unknown>) => void,
+    commentId = 6040000001,
+    identity: Identity = liveIdentity,
+  ): RoleEvidence {
+    const valid = founderDecision(identity, gate, { id: commentId })
     const json = JSON.parse(valid.body.slice(valid.body.indexOf('{'), valid.body.lastIndexOf('}') + 1))
     json.record_type = 'FOUNDER_DECISION_REPAIR'
     json.source_founder_decision = {
@@ -677,5 +682,247 @@ describe('immutable no-PR FOUNDER_DECISION_REPAIR lifecycle (#602)', () => {
     const evidence = contextFor({ ...liveIdentity, repository: 'child/project' }, [])
     Object.assign(evidence.durableContext, parseRoleEvidence([predecessor, repair(predecessor)]))
     expect(routeContext(evidence).route).toBe('STOP')
+  })
+
+  /**
+   * Oracle: Issue #606's Founder-approved historical replay protocol §§1–7.
+   * It permits only a uniquely consumed immutable gate after replay at A,
+   * exact repository/Issue/branch identity, strict A→B ancestry, compatible
+   * protected-base ancestry, and current-policy permission. Conflicts and
+   * absent proof remain STOP; successful replay removes only that gate and
+   * recomputes the ordinary current route. These fixtures model candidate
+   * current-policy permission and freshly collected ancestry facts without
+   * changing the protected-baseline production evidence contract.
+   */
+  describe('historical replay of the exact #582 consumed gate at an advanced head (#606)', () => {
+    const headB = '963b2e9a91bf3c5b9b1d3e641e42233ba1b4d0f2'
+    const repairIdentity: Identity = {
+      ...liveIdentity,
+      baseSha: '46fe5363697cb24f0db5a6d4338a5540665bb697',
+    }
+    const currentBase = 'f'.repeat(40)
+    const currentPolicySha = 'e'.repeat(40)
+    const candidatePermission = 'allowHistoricalNoPrFounderGateReplay'
+
+    function historicalReplayEvidence(options: {
+      permission?: boolean
+      includeDecision?: boolean
+      includeRepair?: boolean
+      predecessor?: RoleEvidence
+      sourceRepair?: RoleEvidence
+      gate?: RoleEvidence
+      gateBase?: string
+      gateDurable?: boolean
+      extraHandoffs?: RoleEvidence[]
+      extraDecisions?: RoleEvidence[]
+      extraRepairs?: RoleEvidence[]
+      currentRepository?: string
+      currentIssue?: string
+      currentBranch?: string
+      headAncestry?: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number } | null
+      baseAncestry?: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number } | null
+      gateBaseAncestry?: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number } | null
+      historicalBase?: string
+      currentBase?: string
+    } = {}) {
+      let sourceGate = options.gate ?? gate
+      if (options.gateBase || options.gateDurable !== undefined) {
+        const start = sourceGate.body.indexOf('{')
+        const end = sourceGate.body.lastIndexOf('}')
+        const record = JSON.parse(sourceGate.body.slice(start, end + 1)) as Record<string, unknown>
+        if (options.gateBase) (record.protected_base as Record<string, unknown>).sha = options.gateBase
+        if (options.gateDurable !== undefined) {
+          (record.local_durability as Record<string, unknown>).durable = options.gateDurable
+        }
+        sourceGate = { ...sourceGate, body: renderHandoffComment(record as unknown as HandoffRecord) }
+      }
+      const predecessor = options.predecessor ?? malformedDecision(repairIdentity)
+      const correction = options.sourceRepair ?? repair(predecessor, undefined, 6039589978, repairIdentity)
+      const currentIdentity = {
+        ...repairIdentity,
+        repository: options.currentRepository ?? repairIdentity.repository,
+        issue: options.currentIssue ?? repairIdentity.issue,
+        branch: options.currentBranch ?? repairIdentity.branch,
+        head: headB,
+        baseSha: options.currentBase ?? currentBase,
+        policySha: currentPolicySha,
+        policyVersion: '1.6.0',
+      }
+      const evidence = contextFor(currentIdentity, [sourceGate, ...(options.extraHandoffs ?? [])])
+      const comments = [sourceGate, ...(options.extraHandoffs ?? []),
+        ...(options.includeDecision === false ? [] : [predecessor]),
+        ...(options.includeRepair === false ? [] : [correction]),
+        ...(options.extraDecisions ?? []), ...(options.extraRepairs ?? []),
+      ]
+      Object.assign(evidence.durableContext, parseRoleEvidence(comments))
+
+      // Candidate policy snapshot marker: enabled in the positive fixture;
+      // disabled is an independent STOP case. Implementer may rename this
+      // narrow property while preserving both behaviors.
+      Object.assign(evidence.policy, { [candidatePermission]: options.permission ?? true })
+
+      // Candidate transient proof shape records historical replay inputs and
+      // exact ancestry readbacks. It deliberately carries no route authority.
+      Object.assign(evidence, {
+        historicalNoPrFounderGateReplayProofs: [{
+          repository: repairIdentity.repository,
+          issue_number: repairIdentity.issue,
+          branch: repairIdentity.branch,
+          source_gate: { comment_id: String(sourceGate.id), url: sourceGate.url },
+          source_decision: { comment_id: String(predecessor.id), url: predecessor.url,
+            body_sha256: createHash('sha256').update(predecessor.body, 'utf8').digest('hex') },
+          source_repair: { comment_id: String(correction.id), url: correction.url,
+            body_sha256: createHash('sha256').update(correction.body, 'utf8').digest('hex') },
+          historical_head: repairIdentity.head,
+          current_head: headB,
+          ...(options.headAncestry === null ? {} : { head_ancestry: options.headAncestry ?? {
+            status: 'ahead', mergeBaseSha: repairIdentity.head, aheadBy: 2, behindBy: 0,
+          } }),
+          historical_protected_base: { branch: repairIdentity.baseBranch, sha: options.historicalBase ?? repairIdentity.baseSha },
+          historical_gate_protected_base: { branch: gateIdentity.baseBranch, sha: options.gateBase ?? gateIdentity.baseSha },
+          current_protected_base: { branch: currentIdentity.baseBranch, sha: currentIdentity.baseSha },
+          ...(options.baseAncestry === null ? {} : { protected_base_ancestry: options.baseAncestry ?? {
+            status: 'ahead', mergeBaseSha: options.historicalBase ?? repairIdentity.baseSha,
+            aheadBy: 1, behindBy: 0,
+          } }),
+          ...(options.gateBaseAncestry === null ? {} : { gate_base_ancestry: options.gateBaseAncestry ?? {
+            status: 'ahead', mergeBaseSha: options.gateBase ?? gateIdentity.baseSha,
+            aheadBy: 1, behindBy: 0,
+          } }),
+          historical_policy: {
+            path: policyPath, policy_id: policyId, version: repairIdentity.policyVersion,
+            source_sha: repairIdentity.policySha,
+          },
+          current_policy: {
+            path: policyPath, policy_id: policyId, version: currentIdentity.policyVersion,
+            source_sha: currentIdentity.policySha,
+          },
+        }],
+      })
+      return routeContext(evidence)
+    }
+
+    it('replays the exact immutable #582 gate, malformed predecessor, and repair from A and recomputes at B', () => {
+      const sourceGate = handoff(gateIdentity, { id: 6014391169 })
+      const predecessor = malformedDecision(repairIdentity)
+      const correction = repair(predecessor, undefined, 6039589978, repairIdentity)
+      const before = structuredClone([sourceGate, predecessor, correction])
+      const result = historicalReplayEvidence({ gate: sourceGate, predecessor, sourceRepair: correction })
+
+      // Authority fixes the exclusion (the old gate/decision/repair must not
+      // block or re-open a human gate); it leaves the ordinary route to fresh
+      // current evidence rather than selecting a fallback here.
+      expect(result.route, JSON.stringify(result)).not.toBe('STOP')
+      expect(result.route).not.toBe('FOUNDER_GATE')
+      expect([sourceGate, predecessor, correction]).toEqual(before)
+    })
+
+    it('does not let the consumed gate base conflict with the remaining authorized IMPLEMENT handoff at A', () => {
+      const remainingImplementation = handoff(repairIdentity, { id: 6060000003, route: 'IMPLEMENT' })
+      const result = historicalReplayEvidence({ extraHandoffs: [remainingImplementation] })
+
+      // #606 §§1 and 7 require replay of A's ordinary authorized continuation,
+      // then removal of only the consumed gate before current routing is recomputed.
+      // The gate's older compatible base is historical metadata, not a competing
+      // base claim for the remaining IMPLEMENT handoff after gate consumption.
+      expect(result.route, JSON.stringify(result)).not.toBe('STOP')
+      expect(result.route).not.toBe('FOUNDER_GATE')
+    })
+
+    it('keeps an unconsumed stale gate and incomplete or malformed repair replay at STOP', () => {
+      expect(historicalReplayEvidence({ includeDecision: false, includeRepair: false }).route).toBe('STOP')
+      expect(historicalReplayEvidence({ includeRepair: false }).route).toBe('STOP')
+      const predecessor = malformedDecision(repairIdentity)
+      const correction = repair(predecessor, undefined, 6039589978, repairIdentity)
+      expect(historicalReplayEvidence({
+        predecessor: { ...predecessor, body: predecessor.body + 'tampered' },
+        sourceRepair: correction,
+      }).route).toBe('STOP')
+      expect(historicalReplayEvidence({ gate: { ...gate, body: gate.body.replace('"exact_head":', '"exact_head_invalid":') } }).route)
+        .toBe('STOP')
+    })
+
+    it('requires full historical Context at A to authorize replay', () => {
+      const unresolvedStop = handoff(gateIdentity, { id: 6060000002, route: 'STOP' })
+      const record = JSON.parse(unresolvedStop.body.slice(unresolvedStop.body.indexOf('{'), unresolvedStop.body.lastIndexOf('}') + 1))
+      record.verified_evidence = [{ kind: 'stop-blocker', value: 'still-blocked-at-A', url: null }]
+      const source = { ...unresolvedStop, body: renderHandoffComment(record) }
+
+      expect(historicalReplayEvidence({ extraHandoffs: [source] }).route).toBe('STOP')
+    })
+
+    it('requires the source gate approved-base snapshot to be compatible with the repair and current base', () => {
+      expect(historicalReplayEvidence({
+        gateBase: 'c'.repeat(40),
+        gateBaseAncestry: { status: 'diverged', mergeBaseSha: 'd'.repeat(40), aheadBy: 1, behindBy: 1 },
+      }).route).toBe('STOP')
+    })
+
+    it('requires the source gate to be durably published', () => {
+      expect(historicalReplayEvidence({ gateDurable: false }).route).toBe('STOP')
+    })
+
+    it('accepts an unchanged approved base when the source gate base is its proven ancestor', () => {
+      const result = historicalReplayEvidence({
+        currentBase: repairIdentity.baseSha,
+        baseAncestry: { status: 'identical', mergeBaseSha: repairIdentity.baseSha, aheadBy: 0, behindBy: 0 },
+        gateBaseAncestry: { status: 'ahead', mergeBaseSha: gateIdentity.baseSha, aheadBy: 1, behindBy: 0 },
+      })
+
+      expect(result.route).not.toBe('STOP')
+      expect(result.route).not.toBe('FOUNDER_GATE')
+    })
+
+    it('does not let historical consumption satisfy an exact current-head Founder gate', () => {
+      const currentGateIdentity = {
+        ...liveIdentity,
+        head: headB,
+        baseSha: currentBase,
+        policySha: currentPolicySha,
+        policyVersion: '1.6.0',
+      }
+      const currentGate = handoff(currentGateIdentity, { id: 6060000001 })
+      expect(historicalReplayEvidence({ extraHandoffs: [currentGate] }).route).toBe('FOUNDER_GATE')
+    })
+
+    it.each([
+      ['repository', { currentRepository: 'other/repository' }],
+      ['Issue', { currentIssue: '583' }],
+      ['branch', { currentBranch: 'fix/583-other-branch' }],
+    ] as const)('does not carry a consumed gate across wrong %s identity', (_label, options) => {
+      expect(historicalReplayEvidence(options).route).toBe('STOP')
+    })
+
+    it.each([
+      ['non-ancestral', { status: 'diverged', mergeBaseSha: 'a'.repeat(40), aheadBy: 2, behindBy: 1 }],
+      ['wrong merge base', { status: 'ahead', mergeBaseSha: 'a'.repeat(40), aheadBy: 2, behindBy: 0 }],
+      ['same head', { status: 'ahead', mergeBaseSha: liveIdentity.head, aheadBy: 0, behindBy: 0 }],
+      ['missing proof', null],
+    ])('keeps %s branch history at STOP', (_label, headAncestry) => {
+      expect(historicalReplayEvidence({ headAncestry }).route).toBe('STOP')
+    })
+
+    it.each([
+      ['divergent', { status: 'diverged', mergeBaseSha: 'b'.repeat(40), aheadBy: 1, behindBy: 1 }],
+      ['wrong merge base', { status: 'ahead', mergeBaseSha: 'b'.repeat(40), aheadBy: 1, behindBy: 0 }],
+      ['missing proof', null],
+    ])('keeps %s protected-base lineage at STOP', (_label, baseAncestry) => {
+      expect(historicalReplayEvidence({ baseAncestry }).route).toBe('STOP')
+    })
+
+    it('requires explicit permission in the current merged policy', () => {
+      expect(historicalReplayEvidence({ permission: false }).route).toBe('STOP')
+    })
+
+    it('keeps duplicate gate/decision/repair evidence at STOP', () => {
+      const predecessor = malformedDecision()
+      const correction = repair(predecessor, undefined, 6039589978)
+      const duplicateGate = { ...gate, id: 6014391170, url: gate.url.replace('6014391169', '6014391170') }
+      const duplicateDecision = { ...predecessor, id: 6037687450, url: predecessor.url.replace('6037687449', '6037687450') }
+      const duplicateRepair = { ...correction, id: 6039589980, url: correction.url.replace(String(correction.id), '6039589980') }
+      expect(historicalReplayEvidence({ extraHandoffs: [duplicateGate] }).route).toBe('STOP')
+      expect(historicalReplayEvidence({ extraDecisions: [duplicateDecision] }).route).toBe('STOP')
+      expect(historicalReplayEvidence({ extraRepairs: [duplicateRepair] }).route).toBe('STOP')
+    })
   })
 })

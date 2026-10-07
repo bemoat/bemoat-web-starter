@@ -4,6 +4,7 @@ import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../h
 import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-decision-folding.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
+import { consumedHistoricalNoPrFounderGate } from './founder-gate-history.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -28,11 +29,12 @@ function isExactCurrentNoPrFounderGate(
     isExactIssueCommentUrl(source.url, source, evidence)
 }
 
-function hasInvalidNoPrFounderGateEvidence(evidence: NormalizedContextEvidence): boolean {
+function hasInvalidNoPrFounderGateEvidence(evidence: NormalizedContextEvidence, consumed?: RoleEvidence): boolean {
   const candidates = evidence.durableContext.handoffs ??
     (evidence.durableContext.latestHandoff ? [evidence.durableContext.latestHandoff] : [])
 
   return candidates.some((source) => {
+    if (source === consumed) return false
     const payload = extractHandoffPayload(source.body)
     const gateMarker = (isRecord(payload) && payload.route === 'FOUNDER_GATE') ||
       hasFounderGateRouteMarker(source.body)
@@ -189,6 +191,19 @@ export function routeWrongIssueActivePrContext(evidence: NormalizedContextEviden
 }
 
 export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecision {
+  const consumedHistoricalGate = consumedHistoricalNoPrFounderGate(evidence)
+  const routingEvidence = consumedHistoricalGate
+    ? {
+      ...evidence,
+      durableContext: {
+        ...evidence.durableContext,
+        handoffs: (evidence.durableContext.handoffs ?? []).filter((source) => source !== consumedHistoricalGate.gate),
+        founderDecisions: (evidence.durableContext.founderDecisions ?? []).filter((source) => source !== consumedHistoricalGate.decision),
+        founderDecisionRepairs: (evidence.durableContext.founderDecisionRepairs ?? []).filter((source) => source !== consumedHistoricalGate.repair),
+      },
+    }
+    : evidence
+
   if (hasMalformedNoPrBlockerResolutionEvidence(evidence)) {
     return stop(
       `EVIDENCE_CONFLICT: malformed no-PR BLOCKER_RESOLUTION evidence at ${evidence.localGit.head}.`,
@@ -210,14 +225,14 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     )
   }
 
-  if (hasInvalidNoPrFounderGateEvidence(evidence)) {
+  if (hasInvalidNoPrFounderGateEvidence(evidence, consumedHistoricalGate?.gate)) {
     return stop(
       `EVIDENCE_CONFLICT: no-PR FOUNDER_GATE HANDOFF evidence is malformed, stale, or bound to a different identity at ${evidence.localGit.head}.`,
       'Resolve malformed or mismatched current-head no-PR FOUNDER_GATE evidence before continuing.',
     )
   }
 
-  let handoffs = applicableNoPrHandoffs(evidence)
+  let handoffs = applicableNoPrHandoffs(routingEvidence)
 
   const commentIds = handoffs.map(({ source }) => String(source.id))
   const commentUrls = handoffs.map(({ source }) => source.url)
@@ -228,13 +243,13 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     )
   }
 
-  const folded = foldNoPrFounderDecision(evidence, handoffs)
+  const folded = foldNoPrFounderDecision(routingEvidence, handoffs)
   if (folded.conflict) return stop(folded.conflict.reason, folded.conflict.description)
   handoffs = folded.handoffs
 
   const stops = handoffs.filter(({ record }) => record.route === 'STOP')
   for (const { source, record } of stops) {
-    const resolution = resolveStopBlockers({ record, source, evidence, activePr: null })
+    const resolution = resolveStopBlockers({ record, source, evidence: routingEvidence, activePr: null })
     if (resolution !== 'resolved') {
       return stop(
         resolution === 'conflict'

@@ -30,6 +30,7 @@ export interface PolicyEvidence {
   sourceSha: string
   trustedFounderLogin?: string | null
   legacyStopHandoffs?: string[]
+  allowHistoricalNoPrFounderGateReplay?: boolean
   url: string
 }
 
@@ -221,6 +222,25 @@ export interface HistoricalBlockerResolutionProof {
   }
 }
 
+export interface HistoricalNoPrFounderGateReplayProof {
+  repository: string
+  issue_number: string
+  branch: string
+  source_gate: { comment_id: string; url: string }
+  source_decision: { comment_id: string; url: string; body_sha256: string }
+  source_repair?: { comment_id: string; url: string; body_sha256: string }
+  historical_head: string
+  current_head: string
+  head_ancestry: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number }
+  historical_protected_base: { branch: string; sha: string }
+  historical_gate_protected_base: { branch: string; sha: string }
+  current_protected_base: { branch: string; sha: string }
+  protected_base_ancestry: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number }
+  gate_base_ancestry: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number }
+  historical_policy: { path: string; policy_id: string; version: string; source_sha: string }
+  current_policy: { path: string; policy_id: string; version: string; source_sha: string }
+}
+
 export interface NormalizedContextEvidence {
   repository: RepositoryEvidence
   protectedBase: ProtectedBaseEvidence
@@ -235,6 +255,8 @@ export interface NormalizedContextEvidence {
   /** Internal exact-ref/ancestry proof for stale protected-base setup recovery. */
   setupBaseRecovery?: SetupBaseRecoveryEvidence | null
   historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
+  /** Read-only proof for one uniquely consumed old no-PR Founder gate. */
+  historicalNoPrFounderGateReplayProofs?: HistoricalNoPrFounderGateReplayProof[]
   evidenceErrors: string[]
 }
 
