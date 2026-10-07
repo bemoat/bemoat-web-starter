@@ -332,7 +332,128 @@ describe('Mission Control delegation and execution model policy', () => {
     expect(guide).toMatch(/independent review.*remains? independent/i)
     expect(guide).toMatch(/agnostic to provider and model identity/i)
     expect(guide).not.toMatch(/keep one capable worker through deterministic internal steps/i)
-    expect(guide).toMatch(/when useful.*same capable worker through a coherent inspect\/implement\/focused-check\/correction chain.*authorized delivery steps/i)
+    expect(guide).not.toMatch(/when useful.*same capable worker through a coherent inspect\/implement\/focused-check\/correction chain/i)
+  })
+
+  // Canonical oracle: Issue #556 acceptance criteria and Founder direction
+  // comment 6031772209 require objective execution to be worker-owned, with
+  // one accountable controller and separate characterization, implementation,
+  // verification, and independent-review identities. Comment 6021295065
+  // defines the bounded pre-#582 topology bridge. These assertions protect
+  // exclusions and role separation; they do not invent a no-worker route.
+  describe('orchestration-only controller topology', () => {
+    const guide = () => read('docs/mission-control/mission-control-guide.md')
+    const delegation = () => artifactSection('Execution / delegation rules')
+
+    it('requires a single accountable orchestration-only controller and worker-owned objective execution', () => {
+      expect(guide()).toMatch(/one accountable controller per bounded objective/i)
+      expect(guide()).toMatch(/controller is orchestration.only/i)
+      expect(guide()).toMatch(/must not perform substantive objective execution/i)
+      expect(guide()).toMatch(/characterization worker.*substantive inspection/i)
+      expect(guide()).toMatch(/worker.owned deterministic verification/i)
+      expect(delegation()).toMatch(/controller.*orchestration.only/i)
+      expect(delegation()).toMatch(/characterization.*worker.owned/i)
+      expect(delegation()).toMatch(/implementation worker is a distinct identity from the controller/i)
+      expect(delegation()).toMatch(/verification.*worker.owned/i)
+    })
+
+    it('assigns exactly one separate implementation worker as bounded mutation owner', () => {
+      expect(guide()).toMatch(/exactly one implementation worker.*sole mutation owner.*bounded mutation scope/i)
+      expect(guide()).toMatch(/controller.*never becomes an objective execution or mutation fallback/i)
+      expect(delegation()).toMatch(/exactly one.*implementation worker.*sole.*mutation owner/i)
+      expect(delegation()).toMatch(/implementation worker is a distinct identity from the controller/i)
+      expect(delegation()).toMatch(/controller.*must not.*implement|implement.*controller.*prohibited/i)
+    })
+
+    it('requires generated Execution handoffs to carry the topology instead of discretionary delegation', () => {
+      const loader = read('prompts/mission-control/chatgpt-project-loader.md')
+      expect(loader).toMatch(/worker.capable Execution handoffs require Section 8's mandatory worker roles/i)
+      expect(loader).toMatch(/no discretionary delegation or controller takeover/i)
+      expect(delegation()).toMatch(/worker.owned roles for substantive read.only characterization.*implementation.*deterministic verification/i)
+    })
+
+    it('keeps characterization and verification separate from controller objective work', () => {
+      expect(guide()).toMatch(/read.only characterization worker.*substantive inspection/i)
+      expect(guide()).toMatch(/worker.owned test\/oracle work.*when applicable/i)
+      expect(guide()).toMatch(/worker.owned deterministic verification/i)
+      expect(delegation()).toMatch(/worker.owned roles for substantive read.only characterization/i)
+      expect(delegation()).toMatch(/worker.owned test\/oracle work when applicable/i)
+      expect(delegation()).toMatch(/worker.owned roles for.*deterministic verification/i)
+    })
+
+    it('requires independent review to differ from controller and implementer', () => {
+      expect(delegation()).toMatch(/independent semantic.*reviewer.*distinct from both/i)
+      expect(artifactSection('Model routing')).toMatch(/independent semantic.*reviewer.*remain separate from.*actual controller and implementer/i)
+    })
+
+    it('forbids silent controller takeover and nested accountable controllers', () => {
+      expect(guide()).toMatch(/worker.*fails?.*retry|reassign.*or.*STOP/i)
+      expect(guide()).toMatch(/controller.*must not silently take over/i)
+      expect(guide()).toMatch(/controller role is non.delegable.*nest.*recursively instantiate/i)
+      expect(delegation()).toMatch(/worker cannot be created or fails.*retry or reassign.*or STOP/i)
+      expect(delegation()).toMatch(/controller.*must not silently take over/i)
+      expect(delegation()).toMatch(/controller role cannot be transferred, shadowed, nested, or recursively instantiated/i)
+    })
+
+    it('keeps topology invariant under model substitution and does not invent a no-worker route', () => {
+      expect(guide()).toMatch(/provider or model identity never grants authority or changes routing/i)
+      expect(guide()).toMatch(/model substitution.*does not change.*topology/i)
+      expect(guide()).toMatch(/where the host truly lacks worker capability.*state that compatibility limitation/i)
+      expect(guide()).toMatch(/policy defines no alternative execution route/i)
+      expect(delegation()).toMatch(/model\/provider substitution does not change these roles/i)
+      expect(delegation()).toMatch(/host genuinely lacks worker capability.*state that compatibility limitation/i)
+      expect(delegation()).toMatch(/contract defines no alternative execution route/i)
+    })
+
+    it('preserves setup-only pre-COMMAND recovery without authorizing objective execution', () => {
+      expect(delegation()).toMatch(/canonical pre.COMMAND workspace acquisition and zero.delta branch bootstrap are setup authority only/i)
+      expect(delegation()).toMatch(/grants no objective.work authority/i)
+      expect(delegation()).toMatch(/authorized objective or recovery mutation remains worker.owned/i)
+    })
+
+    it('keeps gate behavior and advisory model-routing authority unchanged', () => {
+      expect(read('prompts/mission-control/chatgpt-project-loader.md')).toMatch(/`FOUNDER_GATE` means no mutation and return to Founder once.*`STOP`, unsupported state, or evidence conflict means stop fail-closed/i)
+      expect(read('docs/mission-control/model-routing-profile.md')).toMatch(/advisory_only/i)
+      expect(delegation()).toMatch(/model routing remains advisory/i)
+    })
+
+    // Canonical oracle: Founder/OWNER comment 5988702521 allows the topology
+    // human -> transport-only outer shell -> one accountable controller, and
+    // forbids the shell from exercising control-plane decisions before spawn.
+    it('allows only a transport-only outer shell before one accountable controller', () => {
+      const policy = guide()
+      const contract = delegation()
+
+      expect(policy).toMatch(/outer .*pure transport\/relay shell/i)
+      expect(policy).toMatch(/outer .*acting as a controller and cannot spawn another controller/i)
+      expect(policy).toMatch(/one accountable controller per bounded objective/i)
+      expect(contract).toMatch(/outer .*pure transport\/relay shell/i)
+      expect(contract).toMatch(/outer .*acting as a controller and cannot spawn another controller/i)
+      expect(contract).toMatch(/exactly one accountable controller/i)
+    })
+
+    it('forbids outer-shell control-plane decisions and objective work before spawning', () => {
+      const policy = guide()
+      const contract = delegation()
+
+      expect(policy).toMatch(/before.*spawning.*accountable controller/i)
+      expect(policy).toMatch(/before spawning.*must not interpret Context/i)
+      expect(policy).toMatch(/before spawning.*must not.*select.*objective/i)
+      expect(policy).toMatch(/before spawning.*must not.*worker roles/i)
+      expect(policy).toMatch(/before spawning.*must not.*STOP.*FOUNDER_GATE.*COMPLETE/i)
+      expect(policy).toMatch(/before spawning.*must not.*synthesize.*evidence.*authority/i)
+      expect(policy).toMatch(/before spawning.*must not.*mutate repository state/i)
+      expect(policy).toMatch(/before spawning.*must not.*implementation.*verification.*semantic review/i)
+
+      expect(contract).toMatch(/outer .*pure transport\/relay shell/i)
+      expect(contract).toMatch(/before spawning.*must not interpret Context/i)
+      expect(contract).toMatch(/before spawning.*must not.*select.*objective/i)
+      expect(contract).toMatch(/before spawning.*must not.*worker roles/i)
+      expect(contract).toMatch(/before spawning.*must not.*STOP.*FOUNDER_GATE.*COMPLETE/i)
+      expect(contract).toMatch(/before spawning.*must not.*synthesize.*evidence.*authority/i)
+      expect(contract).toMatch(/before spawning.*must not.*mutate repository state/i)
+      expect(contract).toMatch(/before spawning.*must not.*implementation.*verification.*semantic review/i)
+    })
   })
 
   describe('explicit execution controller and advisory baseline', () => {

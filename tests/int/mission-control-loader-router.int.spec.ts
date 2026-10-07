@@ -14,7 +14,8 @@ const normalizedCommandReference = commandReference.replace(/\s+/g, ' ')
 
 describe('Global Mission Control progressive-disclosure router', () => {
   it('keeps only the always-required authority and routing in the loader', () => {
-    expect(loader.length).toBeLessThanOrEqual(5000)
+    // Allow the mandatory Section 8 reminder while keeping the progressive loader compact.
+    expect(loader.length).toBeLessThanOrEqual(5150)
 
     for (const invariant of [
       /authoritative protected-base policy/i,
