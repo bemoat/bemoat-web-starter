@@ -219,6 +219,18 @@ describe('Context evidence acquisition at the process boundary', () => {
     expect(result).toMatchObject({ branch, head, upstream: null, durable: false })
   })
 
+  // Authority: the #585 setup-recovery contract requires a provably clean
+  // checkout before fetch; a failed status read is unavailable evidence, not
+  // proof that the worktree is clean.
+  it('fails closed when git status cannot establish worktree cleanliness', () => {
+    const result = readLocalGitEvidence({ cwd, run: localRunner({
+      'status --short': failed('permission denied'),
+    }) })
+
+    expect(result).toMatchObject({ clean: false, durable: false })
+    expect(result.reasons.join(' ')).toMatch(/status.*failed.*cleanliness.*unavailable/i)
+  })
+
   it('E: GitHub failure does not erase independently successful local Git identity', () => {
     const evidence = collectContextEvidence({ cwd, issueNumber: '7', run: localRunner(), env: { ...process.env, GH_REPO: undefined } })
     expect(evidence.localGit).toMatchObject({ branch, head, originRepository: repo, durable: true })

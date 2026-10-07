@@ -3,10 +3,54 @@ import { readGithubEvidence } from './github.ts'
 import { readIssueBranchRecoveryCandidates, readLocalGitEvidence } from './local-git.ts'
 import { readProtectedPolicy } from './policy.ts'
 import { resolveApprovedBase } from './approved-base.ts'
-import { repositoryEvidence, runContextCommand } from './runtime.ts'
+import { isFullSha, repositoryEvidence, runContextCommand } from './runtime.ts'
 import type { ContextCommandResult, ContextCommandRunner } from './runtime.ts'
-import { normalizeContextEvidence, type NormalizedContextEvidence } from './model.ts'
+import { normalizeContextEvidence, type NormalizedContextEvidence, type SetupBaseRecoveryEvidence } from './model.ts'
 import { readHistoricalBlockerResolutionProofs } from './blocker-resolution-history.ts'
+
+function readSetupBaseRecoveryEvidence({
+  cwd,
+  run,
+  localGit,
+  repository,
+  protectedBase,
+}: {
+  cwd: string
+  run: ContextCommandRunner
+  localGit: ReturnType<typeof readLocalGitEvidence>
+  repository: string | null
+  protectedBase: { branch: string | null; sha: string | null }
+}): SetupBaseRecoveryEvidence | null {
+  const baseBranch = protectedBase.branch
+  const baseSha = protectedBase.sha?.toLowerCase()
+  if (
+    !repository || !baseBranch || !isFullSha(baseSha) ||
+    localGit.originRepository !== repository || localGit.branch !== baseBranch ||
+    localGit.upstream !== `origin/${baseBranch}` || !localGit.clean || localGit.detached ||
+    !isFullSha(localGit.head) || localGit.head!.toLowerCase() === baseSha
+  ) return null
+
+  const tracking = run('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${baseBranch}`], { cwd })
+  if (tracking.status !== 0 || tracking.error || tracking.stdout.trim().toLowerCase() !== localGit.head!.toLowerCase()) return null
+
+  const live = run('git', ['ls-remote', '--heads', 'origin', `refs/heads/${baseBranch}`], { cwd })
+  if (live.status !== 0 || live.error) return null
+  const lines = live.stdout.trim().split(/\r?\n/).filter(Boolean)
+  if (lines.length !== 1) return null
+  const match = lines[0]!.match(/^([0-9a-f]{40})\s+refs\/heads\/([^\s]+)$/i)
+  if (!match || match[2] !== baseBranch || match[1]!.toLowerCase() !== baseSha) return null
+
+  const ancestry = run('git', ['merge-base', '--is-ancestor', 'HEAD', match[1]!], { cwd })
+  return {
+    liveUpstreamHead: match[1]!.toLowerCase(),
+    localUpstreamHead: tracking.stdout.trim().toLowerCase(),
+    ancestry: ancestry.error || (ancestry.status !== 0 && ancestry.status !== 1)
+      ? 'UNPROVEN_UNTIL_FETCH'
+      : ancestry.status === 0
+        ? 'STRICT_ANCESTOR'
+        : 'NOT_ANCESTOR',
+  }
+}
 
 export { readGithubEvidence, readLocalGitEvidence, readProtectedPolicy, runContextCommand }
 export type { ContextCommandResult, ContextCommandRunner }
@@ -95,6 +139,13 @@ export function collectContextEvidence({
 
   const resolvedSha = policyResult.sha ?? approvedBase.sha ?? ''
   const resolvedBranch = approvedBase.branch ?? ''
+  const setupBaseRecovery = readSetupBaseRecoveryEvidence({
+    cwd,
+    run,
+    localGit,
+    repository: repo,
+    protectedBase: { branch: resolvedBranch || null, sha: resolvedSha || null },
+  })
   const historicalBlockerResolutionProofs = github.activePrs.length === 1 && policyResult.policy && resolvedBranch && resolvedSha
     ? readHistoricalBlockerResolutionProofs({
       repo: repo ?? 'unknown/unknown',
@@ -126,6 +177,7 @@ export function collectContextEvidence({
     activePr,
     currentHeadVerification: github.activePrs.length === 1 ? github.exactHead : null,
     ...(issueBranchRecoveryCandidates.length > 0 ? { issueBranchRecoveryCandidates } : {}),
+    ...(setupBaseRecovery ? { setupBaseRecovery } : {}),
     durableContext: {
       latestHandoff: roleEvidence.latestHandoff,
       handoffs: roleEvidence.handoffs,

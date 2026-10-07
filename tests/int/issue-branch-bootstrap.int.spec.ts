@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -167,6 +169,19 @@ describe('Issue #465 durable zero-delta branch bootstrap stories', () => {
     expect(normalized).toMatch(/remote topic branch must be absent.*do not guess.*overwrite/i)
     expect(workflow).toContain('git switch -c <topic-branch> <exact-base-sha>')
     expect(workflow).toContain('git push -u origin HEAD:refs/heads/<topic-branch>')
+    // Authority: #585 requires the local topic and remote topic to be absent
+    // before creation, then the exact pushed SHA to be verified. A present
+    // matching tracking ref is reused; an absent one is created with a
+    // create-only CAS after FETCH_HEAD readback.
+    expect(workflow).toContain('git show-ref --verify --quiet refs/remotes/origin/<topic-branch>')
+    expect(workflow).toContain('git config --get-all remote.origin.fetch')
+    expect(workflow).toContain('git remote set-branches --add origin <topic-branch>')
+    expect(workflow).toContain('git fetch --no-tags --no-recurse-submodules --refmap= origin refs/heads/<topic-branch>:')
+    expect(workflow).toContain('git update-ref refs/remotes/origin/<topic-branch> <exact-live-topic-sha> 0000000000000000000000000000000000000000')
+    expect(workflow).toContain('git rev-parse refs/remotes/origin/<topic-branch>')
+    expect(workflow).toContain('git rev-parse FETCH_HEAD')
+    expect(normalized).toMatch(/only when the current fetch mapping does not cover this topic.*set-branches/i)
+    expect(normalized).toMatch(/tracking ref had to be absent before bootstrap.*After the push, read the exact live topic SHA.*present tracking ref is reused read.only only when it exactly equals the live topic SHA.*absent, create it with create.only compare.and.swap after rechecking absence/i)
     expect(normalized).toMatch(/base line.*match.*local HEAD/i)
     expect(normalized).toMatch(/topic line.*absent/i)
     expect(normalized).toMatch(/local topic branch.*must be absent/i)
@@ -177,4 +192,71 @@ describe('Issue #465 durable zero-delta branch bootstrap stories', () => {
     expect(normalized).toMatch(/failure.*ambiguity.*STOP.*no file edit/i)
     expect(agents).toMatch(/durable zero-delta branch bootstrap/i)
   })
+
+  // Authority: #585's accepted setup sequence plus observed Git behavior in
+  // ordinary and single-branch clones require exact FETCH_HEAD verification,
+  // reuse of a matching tracking ref, and create-only CAS only when absent.
+  it.each([['ordinary', false], ['single-branch', true]] as const)(
+    'handles exact pushed tracking-ref readback in a %s clone', (_kind, singleBranch) => {
+    const sandbox = mkdtempSync(join(tmpdir(), 'bemoat-585-single-branch-'))
+    const bare = join(sandbox, 'origin.git')
+    const seed = join(sandbox, 'seed')
+    const clone = join(sandbox, 'clone')
+    const git = (args: string[], cwd?: string) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim()
+    const topic = 'fix/585-single-branch-bootstrap'
+
+    try {
+      git(['init', '--bare', '--initial-branch=main', bare])
+      git(['init', '--initial-branch=main', seed])
+      git(['config', 'user.name', 'Bootstrap Test'], seed)
+      git(['config', 'user.email', 'bootstrap-test@example.invalid'], seed)
+      writeFileSync(join(seed, 'README.md'), 'bootstrap fixture\n')
+      git(['add', 'README.md'], seed)
+      git(['commit', '-m', 'seed main'], seed)
+      git(['remote', 'add', 'origin', bare], seed)
+      git(['push', '-u', 'origin', 'main'], seed)
+
+      git(singleBranch
+        ? ['clone', '--single-branch', '--branch', 'main', bare, clone]
+        : ['clone', '--branch', 'main', bare, clone])
+      git(['config', 'user.name', 'Bootstrap Test'], clone)
+      git(['config', 'user.email', 'bootstrap-test@example.invalid'], clone)
+      const trackingRef = `refs/remotes/origin/${topic}`
+      // The candidate topic tracking ref must be absent before branch creation.
+      expect(() => git(['show-ref', '--verify', '--quiet', trackingRef], clone)).toThrow()
+      expect(() => git(['rev-parse', '--verify', trackingRef], clone)).toThrow()
+      git(['switch', '-c', topic], clone)
+      git(['push', '-u', 'origin', `HEAD:refs/heads/${topic}`], clone)
+
+      // In a default clone, push -u already creates the exact tracking ref.
+      // A single-branch clone has no mapping for the topic and leaves it absent.
+      if (singleBranch) {
+        expect(() => git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], clone)).toThrow()
+        git(['remote', 'set-branches', '--add', 'origin', topic], clone)
+        expect(git(['config', '--get-all', 'remote.origin.fetch'], clone)).toContain(`+refs/heads/${topic}:refs/remotes/origin/${topic}`)
+        expect(() => git(['show-ref', '--verify', '--quiet', trackingRef], clone)).toThrow()
+      } else {
+        expect(git(['config', '--get-all', 'remote.origin.fetch'], clone)).toContain('+refs/heads/*:refs/remotes/origin/*')
+        expect(git(['rev-parse', trackingRef], clone)).toBe(git(['rev-parse', 'HEAD'], clone))
+      }
+      git(['fetch', '--no-tags', '--no-recurse-submodules', '--refmap=', 'origin', `refs/heads/${topic}:`], clone)
+
+      const head = git(['rev-parse', 'HEAD'], clone)
+      expect(git(['rev-parse', 'FETCH_HEAD'], clone)).toBe(head)
+      if (singleBranch) {
+        expect(() => git(['show-ref', '--verify', '--quiet', trackingRef], clone)).toThrow()
+        git(['update-ref', trackingRef, head, '0000000000000000000000000000000000000000'], clone)
+      } else {
+        // FETCH_HEAD-only fetch leaves the exact push-created ref untouched;
+        // it is therefore reused read-only and needs no update-ref.
+        expect(git(['rev-parse', trackingRef], clone)).toBe(head)
+      }
+      expect(git(['rev-parse', trackingRef], clone)).toBe(head)
+      expect(git(['rev-parse', 'FETCH_HEAD'], clone)).toBe(head)
+      expect(git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], clone)).toBe(`origin/${topic}`)
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true })
+    }
+    },
+  )
 })

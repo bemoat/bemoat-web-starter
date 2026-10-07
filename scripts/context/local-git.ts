@@ -4,7 +4,8 @@ import { normalizeOriginRepository, output, type ContextCommandRunner } from './
 export function readLocalGitEvidence({ cwd, run }: { cwd: string; run: ContextCommandRunner }): LocalGitEvidence {
   const branch = output(run('git', ['branch', '--show-current'], { cwd })) ?? ''
   const head = output(run('git', ['rev-parse', 'HEAD'], { cwd }))
-  const status = output(run('git', ['status', '--short'], { cwd })) ?? ''
+  const statusResult = run('git', ['status', '--short'], { cwd })
+  const status = statusResult.status === 0 && !statusResult.error ? statusResult.stdout.trim() : null
   const upstream = output(run('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], { cwd }))
   const origin = output(run('git', ['remote', 'get-url', 'origin'], { cwd }))
   const upstreamRemote = upstream?.split('/', 1)[0] ?? null
@@ -17,7 +18,7 @@ export function readLocalGitEvidence({ cwd, run }: { cwd: string; run: ContextCo
   const liveRemoteHead = /^[0-9a-f]{40}(?:\s|$)/i.test(liveRemoteLine)
     ? liveRemoteLine.split(/\s+/, 1)[0]
     : null
-  const clean = status === ''
+  const clean = status !== null && status === ''
   const detached = branch === ''
   const upstreamBranch = upstream?.replace(/^[^/]+\//, '') ?? null
   const upstreamMatchesBranch = Boolean(branch && upstreamBranch === branch)
@@ -25,6 +26,7 @@ export function readLocalGitEvidence({ cwd, run }: { cwd: string; run: ContextCo
   const reasons: string[] = []
   if (detached) reasons.push('LOCAL_STATE_NOT_DURABLE: repository is detached')
   if (!clean) reasons.push('LOCAL_STATE_NOT_DURABLE: working tree is dirty or has untracked files')
+  if (status === null) reasons.push('EVIDENCE_CONFLICT: git status --short failed; working-tree cleanliness is unavailable')
   if (!upstream) reasons.push('LOCAL_STATE_NOT_DURABLE: current branch has no upstream')
   if (upstream && !upstreamMatchesBranch) reasons.push('LOCAL_STATE_NOT_DURABLE: upstream branch does not match the current branch')
   if (!liveRemoteHead) reasons.push('LOCAL_STATE_NOT_DURABLE: live remote branch identity is unavailable')

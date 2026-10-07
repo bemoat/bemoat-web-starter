@@ -227,6 +227,34 @@ eligible for ordinary PR routing when its branch and exact `HEAD` match the
 active PR. A valid merged PR remains terminal despite an irrelevant local
 checkout.
 
+### Clean stale protected-base setup recovery
+
+When fresh Context finds an open Issue with no active PR in a clean, attached
+canonical checkout of the approved protected branch tracking
+`origin/<base>`, and local `HEAD` equals its local tracking ref while the
+unique exact live GitHub and `git ls-remote` base agree, Context may return
+`route: STOP` with `next_action.type: COMMAND` for the registered
+`bemoat:context:recover-setup` command. Context remains read-only. The command
+must re-collect and bind the Issue, canonical repository, protected-base
+branch, local branch, and exact `HEAD`. Before fetch, after fetch, and
+immediately before merge, fresh full Context must still return the same bound
+recovery command. Fetch only `refs/heads/<base>` into `FETCH_HEAD` with tags
+disabled and remote ref mapping suppressed (`--refmap=`); do not write the
+tracking ref during fetch. Prove `FETCH_HEAD` equals the bound exact live base
+and local `HEAD` is its strict ancestor with no local-only commits. Bind
+ancestry and the fast-forward target to that exact verified base SHA, running
+only `git merge --ff-only <exact-verified-base-sha>`. Re-read GitHub and the
+exact live origin ref immediately before the fast-forward. After success,
+advance `refs/remotes/origin/<base>` from the original local tracking SHA to
+the bound SHA with compare-and-swap; any CAS failure or post-readback mismatch
+is `STOP`. Verify the clean exact post-state afterward. Dirty state, wrong
+origin or branch, local tracking
+mismatch, ambiguity, drift, divergence, local-only commits, command failure,
+or readback mismatch is `STOP`. It must never reset, rebase, stash, force, or
+recover another workspace. Success recommends only registered CLI Discovery
+and fresh Context; it grants no objective-edit authority. An exact-base
+invocation is a read-only no-op with the same fresh-Context next action.
+
 ### Wrong-Issue workspace acquisition
 
 When a new or resumed Execution session starts in a wrong-Issue workspace, apply
