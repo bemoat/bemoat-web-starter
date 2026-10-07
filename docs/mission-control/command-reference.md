@@ -169,6 +169,14 @@ validator does not inspect identity, authority, or live evidence; it does not
 publish a comment or create a Context route. Invalid bodies return FAIL with
 `INVALID_INVOCATION`.
 
+## REVIEW_VERDICT syntax validation
+
+Use the read-only public validator for a complete candidate body:
+
+    pnpm run bemoat:review-verdict:validate -- --body-file ./review-verdict.md --json
+
+It validates the canonical REVIEW_VERDICT heading, exact identity fields, full reviewed and approved-base commit IDs, supported verdict, optional parser-supported Supersedes field, and the immutable finding contract for CORRECTION REQUIRED. PASS establishes syntax and shape only. It does not verify reviewer independence, live freshness, ancestry, semantic correctness, submission, routing, Founder authority, or merge eligibility; it does not publish a review or create a Context route. Invalid bodies return FAIL with `INVALID_INVOCATION`.
+
 ## Handoff
 
     pnpm run bemoat:handoff <issue-number> --body-file <strict-handoff.json>
