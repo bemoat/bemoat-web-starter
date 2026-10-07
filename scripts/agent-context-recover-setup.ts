@@ -4,6 +4,7 @@ import { createHelpEnvelopeV1, formatTextHelp } from './cli/command-help.ts'
 import { CliInvocationError, parseCommandInvocation, resolveCommandIdentity } from './cli/command-invocation.ts'
 import { classificationExitCode, createResultEnvelopeV1 } from './cli/command-result.ts'
 import { recoverSetupBase } from './context/setup-recovery.ts'
+import { ContextSyncWorktreeError, resolveSetupRecoveryRoots, verifySetupRecoveryWorktrees } from './context/setup-recovery-worktree.ts'
 import type { SetupRecoveryResult } from './context/setup-recovery.ts'
 import type { ParsedInvocation } from './cli/command-invocation-schemas.ts'
 
@@ -67,7 +68,36 @@ function main() {
     if (invocation.mode === 'help') return renderHelp(invocation)
     if (invocation.mode !== 'run') throw new Error('run invocation required')
 
+    const targetWorktree = typeof invocation.values.target_worktree === 'string' ? invocation.values.target_worktree : null
+    let cwd = process.cwd()
+    let verifySource: ((boundary: 'initial' | 'before-fetch' | 'before-merge' | 'before-tracking-update') => string | null) | undefined
+    if (targetWorktree !== null) {
+      let roots
+      try {
+        roots = resolveSetupRecoveryRoots({ sourceCwd: process.cwd(), targetWorktree })
+      } catch (error) {
+        if (error instanceof ContextSyncWorktreeError) throw new CliInvocationError('--target-worktree', error.message)
+        throw error
+      }
+      cwd = roots.targetCwd
+      const expectedRepository = String(invocation.values.expected_repository)
+      const expectedBaseBranch = String(invocation.values.expected_base_branch)
+      const expectedBaseSha = String(invocation.values.expected_base_sha)
+      const expectedLocalHead = String(invocation.values.expected_local_head)
+      verifySource = (boundary) => verifySetupRecoveryWorktrees({
+        sourceCwd: roots.sourceCwd,
+        targetCwd: roots.targetCwd,
+        expectedRepository,
+        expectedBaseBranch,
+        expectedBaseSha,
+        expectedLocalHead,
+        separateTarget: roots.separateTarget,
+        boundary,
+      })
+    }
     const result = recoverSetupBase({
+      cwd,
+      verifySource,
       binding: {
         issueNumber: String(invocation.values.issue_number),
         expectedRepository: String(invocation.values.expected_repository),
