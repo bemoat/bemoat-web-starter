@@ -68,21 +68,19 @@ export function validateStrictReviewVerdictCandidate(body: string, binding: Cand
     throw stateConflict('REVIEW_VERDICT candidate requires matching full reviewed-head and approved-base identities')
   }
 
-  const supersedes = [...body.matchAll(/^[ \t]*(?:\*\*|__)?(?:Supersedes|Supersedes review|Supersedes predecessor)(?:\*\*|__)?(?::(?:\*\*|__)?)?[ \t]*(.*)$/gim)]
+  const supersedes = [...body.matchAll(/^[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?(?:Supersedes|Supersedes review|Supersedes predecessor)(?:\*\*|__)?(?::(?:\*\*|__)?)?[ \t]*(.*)$/gim)]
   if (supersedes.length > 1 || (supersedes.length === 1 &&
     !/^\*\*Supersedes:\*\*[ \t]*[1-9]\d*[ \t]*$/.test(supersedes[0]?.[0] ?? ''))) {
     throw stateConflict('REVIEW_VERDICT candidate Supersedes field is malformed or duplicated')
   }
 
   const alternateCanonicalFields = [
-    /^\*\*PR:\*\*/im,
-    /^\*\*Exact reviewed head:\*\*/im,
-    /^\*\*Exact head reviewed:\*\*/im,
-    /^\*\*Branch:\*\*/im,
-    /^\*\*Repository:\*\*/im,
-    /^\*\*Task(?: \/ Issue)?:\*\*/im,
+    'PR(?![ \t]*/[ \t]*base[ \t]*/[ \t]*head)',
+    'Exact\\s+reviewed\\s+head',
+    'Exact\\s+head\\s+reviewed',
+    'Branch',
   ]
-  if (alternateCanonicalFields.some((expression) => expression.test(body))) {
+  if (alternateCanonicalFields.some((label) => fieldOccurrences(label).length > 0)) {
     throw stateConflict('REVIEW_VERDICT candidate contains unsupported alternate identity fields')
   }
 

@@ -91,6 +91,11 @@ describe('REVIEW_VERDICT validation public CLI', () => {
     ['adding an empty duplicate Verdict field', candidate().replace('**Verdict:** ELIGIBLE FOR FOUNDER REVIEW', '**Verdict:** ELIGIBLE FOR FOUNDER REVIEW\n**Verdict:**')],
     ['adding a partial alternate Approved base field', candidate().replace('**Approved base:** `main@' + baseSha + '`', '**Approved base:** `main@' + baseSha + '`\nApproved base: main')],
     ['duplicating the Supersedes field', candidate('ELIGIBLE FOR FOUNDER REVIEW', '**Supersedes:** 9003\n**Supersedes:** 9003\n')],
+    ['using a list-prefixed malformed Supersedes field', candidate('ELIGIBLE FOR FOUNDER REVIEW', '- **Supersedes:** invalid\n')],
+    ['using an indented list-prefixed Supersedes alias', candidate('ELIGIBLE FOR FOUNDER REVIEW', '  + __Supersedes predecessor__: invalid\n')],
+    ['duplicating Supersedes with a list-prefixed field', candidate('ELIGIBLE FOR FOUNDER REVIEW', '**Supersedes:** 9003\n- **Supersedes:** 9004\n')],
+    ['adding an indented alternate PR field', candidate().replace('Task: Issue #535', 'Task: Issue #535\n  **PR:** PR #9002')],
+    ['adding a list-prefixed historical Branch field', candidate().replace('Task: Issue #535', 'Task: Issue #535\n- **Branch:** fix/535-review')],
     ['using an unsupported verdict', candidate('APPROVED')],
     ['omitting immutable findings for a correction', candidate('CORRECTION REQUIRED').replace(/\n\n### Immutable finding disposition[\s\S]*$/, '')],
   ])('returns deterministic FAIL for a body %s without mutation or route creation', (_story, body) => {
