@@ -162,12 +162,15 @@ export interface ProtectionEvidence {
   requiredApprovals: number
 }
 
+import type { HistoricalRepositoryIdentityProof } from './historical-repository-identity.ts'
+
 export interface NativeReviewEvidence {
   id: number | null
   url: string | null
   state: string
   body: string
   commitId: string | null
+  repositoryIdentityProof?: HistoricalRepositoryIdentityProof | null
 }
 
 export interface NativeReviewAncestryProof {
@@ -188,6 +191,7 @@ export interface RoleEvidence {
   authorLogin?: string | null
   authorAssociation?: string | null
   authorIdentityConflict?: boolean
+  repositoryIdentityProof?: HistoricalRepositoryIdentityProof | null
 }
 
 export interface DurableContextEvidence {

@@ -92,7 +92,7 @@ function isCliClassification(value: unknown): value is CliClassification {
   return typeof value === 'string' && Object.hasOwn(CLI_EXIT_CODES, value)
 }
 
-const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'boat1994/bemoat-web-starter'
+const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'bemoat/bemoat-web-starter'
 const ref = process.env.BEMOAT_BOILERPLATE_REF || 'main'
 const targetRoot = process.cwd()
 const tempRoot = resolve(targetRoot, '.bemoat-sync-tmp')

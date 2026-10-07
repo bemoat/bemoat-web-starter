@@ -19,7 +19,7 @@ import type {
   SyncMode,
 } from '../types.ts'
 
-const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'boat1994/bemoat-web-starter'
+const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'bemoat/bemoat-web-starter'
 const ref = process.env.BEMOAT_BOILERPLATE_REF || 'main'
 function readJSON(path: string): PackageJson {
   const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))

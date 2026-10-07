@@ -107,6 +107,7 @@ export function parseRoleEvidence(comments: unknown[]): RoleEvidenceResult {
       body,
       createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
       url: typeof comment.url === 'string' ? comment.url : '',
+      ...(comment.repositoryIdentityProof ? { repositoryIdentityProof: comment.repositoryIdentityProof as RoleEvidence['repositoryIdentityProof'] } : {}),
       ...(marker === 'BLOCKER_RESOLUTION' || marker === 'FOUNDER_DECISION' || marker === 'FOUNDER_DECISION_REPAIR' ? {
         authorLogin: explicitAuthorLogin ?? nestedAuthorLogin,
         authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,

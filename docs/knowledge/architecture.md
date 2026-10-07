@@ -16,7 +16,7 @@ Check current versions in root `package.json`.
 | **`bemoat-web-starter`** | Reusable harness, shared schema seed, agent rules, sync scripts |
 | **Child project** | Deploy button output; owns Cloudflare resources and product customizations |
 
-Real customer/product work starts from the [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/boat1994/bemoat-web-starter) button, then clone the **generated** repo — not this starter directly.
+Real customer/product work starts from the [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/bemoat/bemoat-web-starter) button, then clone the **generated** repo — not this starter directly.
 
 ## Reusable vs product-specific
 

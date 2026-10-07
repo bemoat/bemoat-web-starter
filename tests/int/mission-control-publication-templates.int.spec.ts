@@ -38,7 +38,7 @@ describe('Mission Control publication templates', () => {
 
     expect(parseProductionMergeReviewVerdict(body, '9001')).toMatchObject({
       verdict: 'ELIGIBLE FOR FOUNDER REVIEW',
-      repository: 'boat1994/bemoat-web-starter',
+      repository: 'bemoat/bemoat-web-starter',
       issue: '535',
       pr: '9002',
       base: 'main',
@@ -53,14 +53,14 @@ describe('Mission Control publication templates', () => {
       '<!-- review-verdict:correction:start -->',
       '<!-- review-verdict:correction:end -->',
     )
-    const reviewUrl = 'https://github.com/boat1994/bemoat-web-starter/pull/9002#pullrequestreview-9003'
+    const reviewUrl = 'https://github.com/bemoat/bemoat-web-starter/pull/9002#pullrequestreview-9003'
     const headSha = 'b'.repeat(40)
     const evidence = {
       repository: {
-        owner: 'boat1994',
+        owner: 'bemoat',
         name: 'bemoat-web-starter',
-        nameWithOwner: 'boat1994/bemoat-web-starter',
-        url: 'https://github.com/boat1994/bemoat-web-starter',
+        nameWithOwner: 'bemoat/bemoat-web-starter',
+        url: 'https://github.com/bemoat/bemoat-web-starter',
       },
       issue: { number: '535' },
       currentHeadVerification: {

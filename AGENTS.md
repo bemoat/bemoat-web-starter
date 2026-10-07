@@ -64,7 +64,7 @@ conflict.
   project infrastructure: shared Payload schema, starter pages, agent rules,
   GitHub templates, CI patterns, sync behavior, and harness docs.
 - Real child projects start from the README
-  [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/boat1994/bemoat-web-starter)
+[Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/bemoat/bemoat-web-starter)
   button, then clone the generated project locally.
 - Do not recommend cloning this starter directly for real child projects unless
   the task is to develop the starter itself.

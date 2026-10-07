@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import type { ActivePullRequestEvidence, HistoricalBlockerResolutionProof, NormalizedContextEvidence, PolicyEvidence, RoleEvidence } from './model.ts'
 import type { HandoffRecord } from '../handoff/schema.ts'
+import { repositoryClaimMatches } from './historical-repository-identity.ts'
 
 export type BlockerResolutionRecord = {
   schema_version: 1
@@ -180,7 +181,7 @@ function bindsCurrentStop(
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): boolean {
-  return resolution.repository === evidence.repository.nameWithOwner &&
+  return repositoryClaimMatches(resolution.repository, evidence.repository.nameWithOwner, source.repositoryIdentityProof, { id: source.id, url: source.url, body: source.body }) &&
     resolution.issue_number === evidence.issue.number &&
     resolution.pr_number === activePr.number &&
     resolution.exact_head === activePr.headSha &&
@@ -204,7 +205,7 @@ function bindsNoPrCurrentStop(
   evidence: NormalizedContextEvidence,
 ): boolean {
   return record.schema_version === 3 && record.route === 'STOP' && record.pr === null &&
-    resolution.repository === evidence.repository.nameWithOwner &&
+    repositoryClaimMatches(resolution.repository, evidence.repository.nameWithOwner, source.repositoryIdentityProof, { id: source.id, url: source.url, body: source.body }) &&
     resolution.issue_number === evidence.issue.number &&
     resolution.pr_number === null &&
     resolution.branch === record.branch && resolution.branch === evidence.localGit.branch &&
@@ -262,7 +263,7 @@ function bindsHistoricalStop(
     proof.historicalBase?.branch === evidence.protectedBase.branch && proof.historicalBase?.sha === historicalSha &&
     /^[0-9a-f]{40}$/.test(proof.currentBase?.sha ?? '') &&
     proof.currentBase?.branch === evidence.protectedBase.branch && proof.currentBase?.sha === currentSha &&
-    resolution.repository === evidence.repository.nameWithOwner && resolution.issue_number === evidence.issue.number &&
+    repositoryClaimMatches(resolution.repository, evidence.repository.nameWithOwner, comment.repositoryIdentityProof, { id: comment.id, url: comment.url, body: comment.body }) && resolution.issue_number === evidence.issue.number &&
     resolution.pr_number === activePr.number && resolution.exact_head === activePr.headSha &&
     resolution.protected_base.branch === evidence.protectedBase.branch && historicalSha !== currentSha &&
     resolution.source_stop_handoff.comment_id === String(source.id) &&

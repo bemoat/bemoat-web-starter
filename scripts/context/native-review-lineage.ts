@@ -2,6 +2,7 @@ import type { ActivePullRequestEvidence, NativeReviewAncestryProof, NativeReview
 import { parseProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 import { isFullSha, type ContextCommandRunner } from './runtime.ts'
 import { hasUniqueCanonicalReviewIdentity } from './semantic-review-evidence.ts'
+import { repositoryClaimMatches } from './historical-repository-identity.ts'
 
 function submitted(review: NativeReviewEvidence): boolean {
   return ['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase())
@@ -35,7 +36,7 @@ export function hasStrictCrossHeadNativeReviewPredecessor(
 
   try {
     const prior = parseProductionMergeReviewVerdict(predecessor.body, predecessor.id)
-    if (prior.repository !== evidence.repository.nameWithOwner.toLowerCase() ||
+    if (!prior.repository || !repositoryClaimMatches(prior.repository, evidence.repository.nameWithOwner.toLowerCase(), predecessor.repositoryIdentityProof, { id: predecessor.id!, url: predecessor.url!, body: predecessor.body }) ||
       String(prior.issue) !== evidence.issue.number || String(prior.pr) !== activePr.number ||
       prior.base !== activePr.baseBranch || prior.reviewed_head?.toLowerCase() !== predecessor.commitId.toLowerCase()) return false
   } catch {
@@ -91,7 +92,7 @@ export function readNativeReviewAncestryProofs({
     } catch {
       continue
     }
-    if (!verdict.supersedes_predecessor || verdict.repository !== repository.toLowerCase() ||
+    if (!verdict.supersedes_predecessor || !verdict.repository || !repositoryClaimMatches(verdict.repository, repository.toLowerCase(), current.repositoryIdentityProof, { id: current.id, url: current.url ?? '', body: current.body }) ||
       verdict.issue !== issue || verdict.pr !== pr || verdict.base !== base ||
       verdict.reviewed_head?.toLowerCase() !== currentHead.toLowerCase()) continue
 
@@ -109,7 +110,7 @@ export function readNativeReviewAncestryProofs({
     } catch {
       continue
     }
-    if (previousVerdict.repository !== repository.toLowerCase() || previousVerdict.issue !== issue ||
+    if (!previousVerdict.repository || !repositoryClaimMatches(previousVerdict.repository, repository.toLowerCase(), predecessor.repositoryIdentityProof, { id: predecessor.id!, url: predecessor.url!, body: predecessor.body }) || previousVerdict.issue !== issue ||
       previousVerdict.pr !== pr || previousVerdict.base !== base ||
       previousVerdict.reviewed_head?.toLowerCase() !== predecessor.commitId.toLowerCase()) continue
 

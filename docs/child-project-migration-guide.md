@@ -324,7 +324,7 @@ pnpm run bemoat:test:int
 
 ## Rollback plan
 
-Revert this PR or reset branch to pre-sync commit `<SHA>`. See [child project migration guide](https://github.com/boat1994/bemoat-web-starter/blob/main/docs/child-project-migration-guide.md#12-rollback-checklist).
+Revert this PR or reset branch to pre-sync commit `<SHA>`. See [child project migration guide](https://github.com/bemoat/bemoat-web-starter/blob/main/docs/child-project-migration-guide.md#12-rollback-checklist).
 
 ## Risks
 

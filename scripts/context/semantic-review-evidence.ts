@@ -1,7 +1,8 @@
 import { hasImmutableFindingDisposition } from './immutable-finding-disposition.ts'
 import type { ActivePullRequestEvidence, NativeReviewEvidence, NormalizedContextEvidence, RoleEvidence } from './model.ts'
 import { parseProductionMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
-import type { HandoffRecord } from '../handoff/schema.ts'
+import { renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
+import { HISTORICAL_REPOSITORY, nativeReviewReference, pullRequestUrlMatchesRepositoryClaim, repositoryClaimMatches } from './historical-repository-identity.ts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -83,25 +84,24 @@ export function hasNativeReviewLineage(
   activePr: ActivePullRequestEvidence,
   requiredVerdict: 'CORRECTION REQUIRED' | 'ELIGIBLE FOR FOUNDER REVIEW',
 ): boolean {
-  const reviewUrlPrefix = `https://github.com/${evidence.repository.nameWithOwner}/pull/${activePr.number}#pullrequestreview-`
-  if (!url.startsWith(reviewUrlPrefix)) return false
-  const idText = url.slice(reviewUrlPrefix.length)
-  if (!/^[1-9]\d*$/.test(idText)) return false
-  const reviewId = Number(idText)
-  if (!Number.isSafeInteger(reviewId)) return false
+  const reference = nativeReviewReference(url, evidence.repository.nameWithOwner, activePr.number)
+  if (!reference) return false
+  const { reviewId, historicalReference } = reference
 
   const reviews = (evidence.currentHeadVerification?.reviews.nativeReviews ?? [])
     .filter((review) => review.id === reviewId)
   if (reviews.length !== 1) return false
   const review = reviews[0]!
-  if (review.url !== url || !review.commitId || !/^[0-9a-f]{40}$/i.test(review.commitId) ||
+  const canonicalReviewUrl = `https://github.com/${evidence.repository.nameWithOwner}/pull/${activePr.number}#pullrequestreview-${reviewId}`
+  if (review.url !== canonicalReviewUrl || !review.commitId || !/^[0-9a-f]{40}$/i.test(review.commitId) ||
     review.commitId.toLowerCase() !== activePr.headSha.toLowerCase() ||
     !['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase()) ||
     !/^##\s+REVIEW_VERDICT\b/i.test(review.body)) return false
   try {
     const verdict = parseProductionMergeReviewVerdict(review.body, review.id)
-    return verdict.verdict === requiredVerdict && verdict.non_superseded === true &&
-      verdict.repository === evidence.repository.nameWithOwner.toLowerCase() &&
+    return verdict.verdict === requiredVerdict && verdict.non_superseded === true && verdict.repository !== null &&
+      (!historicalReference || verdict.repository.toLowerCase() === HISTORICAL_REPOSITORY) &&
+      repositoryClaimMatches(verdict.repository, evidence.repository.nameWithOwner.toLowerCase(), review.repositoryIdentityProof, { id: review.id ?? '', url: review.url, body: review.body }) &&
       String(verdict.issue) === evidence.issue.number && String(verdict.pr) === activePr.number &&
       verdict.base === activePr.baseBranch &&
       verdict.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase() &&
@@ -133,6 +133,7 @@ function publicationIdentityMatches(
   body: string,
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  identityProof?: NativeReviewEvidence['repositoryIdentityProof'],
 ): boolean {
   try {
     const binding = resolveMergeReviewVerdictBinding(body)
@@ -142,7 +143,11 @@ function publicationIdentityMatches(
     const branchFields = [...body.matchAll(/^[ \t]*(?:\*\*Branch:\*\*|__Branch:__|Branch:)[ \t]*(.*?)[ \t]*$/gim)]
     const branch = branchFields[0]?.[1].match(/^(?:`([^`\s]+)`|([^`\s]+))$/)
     if (branchFields.length > 1 || (branchFields.length === 1 && (branch?.[1] ?? branch?.[2]) !== activePr.headBranch)) return false
-    return (!binding.repository || binding.repository.toLowerCase() === evidence.repository.nameWithOwner.toLowerCase()) &&
+    return (!binding.repository || repositoryClaimMatches(binding.repository.toLowerCase(), evidence.repository.nameWithOwner.toLowerCase(), identityProof, {
+      id: identityProof?.resource.id ?? 1,
+      url: identityProof?.resource.url ?? '',
+      body,
+    })) &&
       (!binding.issue || binding.issue === evidence.issue.number) &&
       (!binding.pr || binding.pr === activePr.number) &&
       (!binding.base || binding.base === activePr.baseBranch) &&
@@ -158,6 +163,7 @@ function exactLegacyReviewBody(
   expectedHead: string,
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
+  identityProof?: NativeReviewEvidence['repositoryIdentityProof'],
 ): boolean {
   if (/^###\s+Immutable finding disposition\b/im.test(body)) return false
 
@@ -181,7 +187,7 @@ function exactLegacyReviewBody(
   const findingText = reviewLines.slice(0, nextSection < 0 ? reviewLines.length : nextSection).join('\n')
     .replace(/^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+|>[ \t]*)/gm, '')
     .trim()
-  if (!/[\p{L}\p{N}]/u.test(findingText) || !publicationIdentityMatches(body, evidence, activePr)) return false
+  if (!/[\p{L}\p{N}]/u.test(findingText) || !publicationIdentityMatches(body, evidence, activePr, identityProof)) return false
 
   return true
 }
@@ -224,7 +230,7 @@ function currentPublicationSummaryCandidate(
   try {
     const binding = resolveMergeReviewVerdictBinding(comment.body)
     return binding.pr === activePr.number && binding.base === activePr.baseBranch &&
-      binding.repository?.toLowerCase() === evidence.repository.nameWithOwner.toLowerCase() &&
+      Boolean(binding.repository) && repositoryClaimMatches(binding.repository!.toLowerCase(), evidence.repository.nameWithOwner.toLowerCase(), comment.repositoryIdentityProof, { id: comment.id, url: comment.url, body: comment.body }) &&
       binding.issue === evidence.issue.number
   } catch {
     return false
@@ -243,9 +249,9 @@ function publicationSummaryAgrees(
 
   try {
     const binding = parseProductionMergeReviewVerdict(comment.body, comment.id)
-    return binding.verdict === 'CORRECTION REQUIRED' && binding.non_superseded === true &&
+    return binding.verdict === 'CORRECTION REQUIRED' && binding.non_superseded === true && binding.repository !== null &&
       binding.supersedes_predecessor === null &&
-      binding.repository === evidence.repository.nameWithOwner.toLowerCase() &&
+      repositoryClaimMatches(binding.repository, evidence.repository.nameWithOwner.toLowerCase(), comment.repositoryIdentityProof, { id: comment.id, url: comment.url, body: comment.body }) &&
       binding.issue === evidence.issue.number && binding.pr === activePr.number &&
       binding.base === activePr.baseBranch &&
       binding.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()
@@ -266,12 +272,9 @@ export function publicationEraNativeReviewLineage(
   const outcomes = [...handoffValue.matchAll(/\b(CORRECTION REQUIRED|ELIGIBLE FOR FOUNDER REVIEW)\b/g)]
   if (outcomes.length !== 1 || outcomes[0]?.[1] !== 'CORRECTION REQUIRED') return null
 
-  const prefix = `https://github.com/${evidence.repository.nameWithOwner}/pull/${activePr.number}#pullrequestreview-`
-  if (!reviewUrl.startsWith(prefix)) return null
-  const idText = reviewUrl.slice(prefix.length)
-  if (!/^[1-9]\d*$/.test(idText)) return null
-  const reviewId = Number(idText)
-  if (!Number.isSafeInteger(reviewId)) return null
+  const reference = nativeReviewReference(reviewUrl, evidence.repository.nameWithOwner, activePr.number)
+  if (!reference) return null
+  const { reviewId, historicalReference } = reference
 
   const reviews = evidence.currentHeadVerification?.reviews.nativeReviews ?? []
   const reviewRows = reviews.map((review) => ({ id: review.id, url: review.url }))
@@ -283,10 +286,15 @@ export function publicationEraNativeReviewLineage(
   const matches = reviews.filter((review) => review.id === reviewId)
   if (matches.length !== 1) return null
   const review = matches[0]!
-  if (review.url !== reviewUrl || !review.commitId || !/^[0-9a-f]{40}$/i.test(review.commitId) ||
+  const canonicalReviewUrl = `https://github.com/${evidence.repository.nameWithOwner}/pull/${activePr.number}#pullrequestreview-${reviewId}`
+  if (review.url !== canonicalReviewUrl || !review.commitId || !/^[0-9a-f]{40}$/i.test(review.commitId) ||
     review.commitId.toLowerCase() !== activePr.headSha.toLowerCase() ||
     !['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase()) ||
-    !exactLegacyReviewBody(review.body, activePr.headSha, evidence, activePr)) return null
+    !exactLegacyReviewBody(review.body, activePr.headSha, evidence, activePr, review.repositoryIdentityProof)) return null
+  try {
+    const binding = resolveMergeReviewVerdictBinding(review.body)
+    if (historicalReference && binding.repository?.toLowerCase() !== HISTORICAL_REPOSITORY) return null
+  } catch { return null }
 
   const summaries = evidence.durableContext.historicalResults.filter((comment) =>
     currentPublicationSummaryCandidate(comment, reviewUrl, evidence, activePr),
@@ -305,12 +313,21 @@ export function publicationEraReviewLineageForHandoff(
   evidence: NormalizedContextEvidence,
   activePr: ActivePullRequestEvidence,
 ): PublicationEraNativeReviewLineage | null {
+  const sourceCandidates = handoff
+    ? (evidence.durableContext.handoffs ?? (evidence.durableContext.latestHandoff ? [evidence.durableContext.latestHandoff] : []))
+      .filter((comment) => comment.body === renderHandoffComment(handoff))
+    : []
+  const source = sourceCandidates.length === 1 ? sourceCandidates[0] : null
   if (!handoff || handoff.route !== 'FIX' ||
-    handoff.repository !== evidence.repository.nameWithOwner || handoff.issue_number !== evidence.issue.number ||
+    !repositoryClaimMatches(handoff.repository, evidence.repository.nameWithOwner, source?.repositoryIdentityProof, { id: source?.id ?? '', url: source?.url ?? '', body: source?.body ?? '' }) || handoff.issue_number !== evidence.issue.number ||
     handoff.branch !== activePr.headBranch || handoff.exact_head.toLowerCase() !== activePr.headSha.toLowerCase() ||
     handoff.protected_base.branch !== activePr.baseBranch ||
     handoff.protected_base.sha.toLowerCase() !== activePr.baseSha.toLowerCase() ||
-    handoff.pr === null || handoff.pr.number !== activePr.number || handoff.pr.url !== activePr.url ||
+    handoff.pr === null || handoff.pr.number !== activePr.number ||
+    (handoff.pr.url !== activePr.url && !pullRequestUrlMatchesRepositoryClaim(
+      handoff.repository, evidence.repository.nameWithOwner, handoff.pr.url, activePr.number,
+      source?.repositoryIdentityProof, { id: source?.id ?? '', url: source?.url ?? '', body: source?.body ?? '' },
+    )) ||
     handoff.pr.base !== activePr.baseBranch || handoff.pr.head !== activePr.headBranch ||
     handoff.pr.head_sha.toLowerCase() !== activePr.headSha.toLowerCase() ||
     handoff.local_durability.durable !== true) return null
@@ -356,8 +373,8 @@ export function hasCurrentHandoffReviewVerdict(
 
   try {
     const verdict = parseProductionMergeReviewVerdict(comment.body, comment.id)
-    return (verdict.verdict === requiredVerdict && verdict.non_superseded === true &&
-      verdict.repository === evidence.repository.nameWithOwner.toLowerCase() &&
+    return (verdict.verdict === requiredVerdict && verdict.non_superseded === true && verdict.repository !== null &&
+      repositoryClaimMatches(verdict.repository, evidence.repository.nameWithOwner.toLowerCase(), comment.repositoryIdentityProof, { id: comment.id, url: comment.url, body: comment.body }) &&
       String(verdict.issue) === evidence.issue.number && String(verdict.pr) === activePr.number &&
       verdict.base === activePr.baseBranch &&
       verdict.reviewed_head?.toLowerCase() === activePr.headSha.toLowerCase()) || publicationEraRecovery()

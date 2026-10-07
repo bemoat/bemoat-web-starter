@@ -5,6 +5,7 @@ import { staleBaseError } from './stale-base.ts'
 import { runContextCommand, type ContextCommandResult, type ContextCommandRunner } from './runtime.ts'
 import { verifyContextSyncSource } from './sync-worktree.ts'
 import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
+import { pullRequestUrlMatchesRepositoryClaim, repositoryClaimMatches } from './historical-repository-identity.ts'
 
 export type ContextSyncClassification = 'SUCCESS' | 'EVIDENCE_CONFLICT' | 'HEAD_DRIFT' | 'BLOCKED_EXTERNAL' | 'AMBIGUOUS_RESULT'
 
@@ -83,14 +84,16 @@ function remoteSha(output: string | null): string | null {
 }
 
 function latestHandoffBindsScope(evidence: NormalizedContextEvidence, activePr: ActivePullRequestEvidence): boolean {
-  const body = evidence.durableContext.latestHandoff?.body
+  const source = evidence.durableContext.latestHandoff
+  const body = source?.body
   const match = body?.match(/^## HANDOFF\n\n```json\n([\s\S]+)\n```\n$/)
   if (!match) return false
 
   try {
     const handoff = parseHandoffBody(match[1])
+    if (handoff.repository !== evidence.repository.nameWithOwner && evidence.policy.trustedFounderLogin !== 'bemoat') return false
     return renderHandoffComment(handoff) === body &&
-      handoff.repository === evidence.repository.nameWithOwner &&
+      repositoryClaimMatches(handoff.repository, evidence.repository.nameWithOwner, source?.repositoryIdentityProof, { id: source?.id ?? '', url: source?.url ?? '', body: source?.body ?? '' }) &&
       handoff.issue_number === evidence.issue.number &&
       handoff.branch === activePr.headBranch &&
       handoff.exact_head === activePr.headSha &&
@@ -98,7 +101,10 @@ function latestHandoffBindsScope(evidence: NormalizedContextEvidence, activePr: 
       handoff.protected_base.branch === activePr.baseBranch &&
       handoff.protected_base.sha === activePr.baseSha &&
       handoff.pr?.number === activePr.number &&
-      handoff.pr.url === activePr.url &&
+      (handoff.pr.url === activePr.url || pullRequestUrlMatchesRepositoryClaim(
+        handoff.repository, evidence.repository.nameWithOwner, handoff.pr.url, activePr.number,
+        source?.repositoryIdentityProof, { id: source?.id ?? '', url: source?.url ?? '', body: source?.body ?? '' },
+      )) &&
       handoff.pr.base === activePr.baseBranch &&
       handoff.pr.head === activePr.headBranch &&
       handoff.pr.head_sha === activePr.headSha

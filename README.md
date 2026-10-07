@@ -1,6 +1,6 @@
 # Bemoat Web Starter
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/boat1994/bemoat-web-starter)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bemoat/bemoat-web-starter)
 
 Bemoat Web Starter is a reusable, production-ready web foundation and AI-agent development harness. It provides a modern technology stack deployed to the edge, paired with rigorous agent-coordination rails (Mission Control) to build, review, and evolve real products safely.
 
@@ -41,7 +41,7 @@ Bemoat is designed for AI-driven development. It embeds a complete workflow harn
 
 Real product repositories should start from the Cloudflare deployment, not by cloning this starter directly.
 
-1. Click **[Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/boat1994/bemoat-web-starter)** to provision your Worker, D1, R2, and secrets.
+1. Click **[Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/bemoat/bemoat-web-starter)** to provision your Worker, D1, R2, and secrets.
 2. Clone the **generated child repository** locally.
 3. Run local setup:
    ```bash

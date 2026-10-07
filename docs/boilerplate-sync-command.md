@@ -1,6 +1,6 @@
 # Bemoat boilerplate sync command
 
-This repo includes a one-command sync script for copying reusable boilerplate pieces from `boat1994/bemoat-web-starter` into any project that was cloned from this starter.
+This repo includes a one-command sync script for copying reusable boilerplate pieces from `bemoat/bemoat-web-starter` into any project that was cloned from this starter.
 
 ## Command
 
@@ -185,7 +185,7 @@ BEMOAT_BOILERPLATE_REF=dev pnpm run bemoat:boilerplate:sync -- --harness-only
 ## Use a different source repository
 
 ```bash
-BEMOAT_BOILERPLATE_REPO=boat1994/bemoat-web-starter pnpm run bemoat:boilerplate:sync -- --harness-only
+BEMOAT_BOILERPLATE_REPO=bemoat/bemoat-web-starter pnpm run bemoat:boilerplate:sync -- --harness-only
 ```
 
 ## After syncing

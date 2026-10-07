@@ -34,7 +34,7 @@ candidate with `pnpm run bemoat:review-verdict:validate -- --body-file
 ````markdown
 ## REVIEW_VERDICT
 
-Repository: `boat1994/bemoat-web-starter`
+Repository: `bemoat/bemoat-web-starter`
 Task: Issue #535
 **Verdict:** ELIGIBLE FOR FOUNDER REVIEW
 **PR / base / head:** PR #9002 · `main` · `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
@@ -54,7 +54,7 @@ second finding schema or replace this record with prose.
 ````markdown
 ## REVIEW_VERDICT
 
-Repository: `boat1994/bemoat-web-starter`
+Repository: `bemoat/bemoat-web-starter`
 Task: Issue #535
 **Verdict:** CORRECTION REQUIRED
 **PR / base / head:** PR #9002 · `main` · `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`
@@ -70,7 +70,7 @@ Task: Issue #535
     {
       "id": "REVIEW-535-001",
       "canonical_summary": "The exact-head publication example must use the parser-required identity syntax.",
-      "source_thread": "https://github.com/boat1994/bemoat-web-starter/pull/9002#discussion_r9004",
+      "source_thread": "https://github.com/bemoat/bemoat-web-starter/pull/9002#discussion_r9004",
       "required_evidence": ["Publish the canonical identity fields and verify them against the reviewed head."]
     }
   ]
@@ -98,7 +98,7 @@ its existing semantics.
 ## REVIEW_VERDICT
 
 **Supersedes:** 9003
-Repository: `boat1994/bemoat-web-starter`
+Repository: `bemoat/bemoat-web-starter`
 Task: Issue #535
 **Verdict:** ELIGIBLE FOR FOUNDER REVIEW
 **PR / base / head:** PR #9002 · `main` · `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`

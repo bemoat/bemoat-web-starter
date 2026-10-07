@@ -133,6 +133,8 @@
     "tests/int/context-setup-recovery-target.int.spec.ts",
     "tests/int/issue-branch-bootstrap.int.spec.ts",
     "tests/int/mission-control-publication-templates.int.spec.ts",
+    "tests/int/context-repository-identity.int.spec.ts",
+    "tests/int/context-historical-repository-proof.int.spec.ts",
     "tests/int/mission-control-loader-router.int.spec.ts",
     "tests/int/handoff-schema.int.spec.ts",
     "tests/int/handoff-transport.int.spec.ts",

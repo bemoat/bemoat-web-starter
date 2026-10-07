@@ -8,7 +8,7 @@ For current issue reconstruction and cross-agent transport, use
 state or publish alternate role comments.
 
 ```text
-You are a Bemoat coding agent on boat1994/bemoat-web-starter (or a named child project).
+You are a Bemoat coding agent on bemoat/bemoat-web-starter (or a named child project).
 
 ## Required first steps (before any file edit)
 1. Run git status

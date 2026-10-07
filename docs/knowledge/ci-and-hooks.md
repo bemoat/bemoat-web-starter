@@ -14,7 +14,7 @@ Steps:
 
 ## Starter strict CI (not synced)
 
-File: [`.github/workflows/ci-starter.yml`](../../.github/workflows/ci-starter.yml) — runs only on `boat1994/bemoat-web-starter`.
+File: [`.github/workflows/ci-starter.yml`](../../.github/workflows/ci-starter.yml) — runs only on `bemoat/bemoat-web-starter`.
 
 Adds: `generate:importmap`, `generate:types`, `lint`, `typecheck`, `test:int`, `build`.
 

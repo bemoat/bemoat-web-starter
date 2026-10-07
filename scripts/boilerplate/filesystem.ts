@@ -16,7 +16,7 @@ import type {
   SyncPathsResult,
 } from './types.ts'
 
-const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'boat1994/bemoat-web-starter'
+const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'bemoat/bemoat-web-starter'
 const ref = process.env.BEMOAT_BOILERPLATE_REF || 'main'
 const targetRoot = process.cwd()
 

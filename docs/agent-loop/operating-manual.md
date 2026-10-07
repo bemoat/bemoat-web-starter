@@ -169,7 +169,7 @@ Task:
 [Paste issue body or user task here]
 ```
 
-Starter-only links point to [boat1994/bemoat-web-starter](https://github.com/boat1994/bemoat-web-starter) and may not be present in child repos after harness sync.
+Starter-only links point to [bemoat/bemoat-web-starter](https://github.com/bemoat/bemoat-web-starter) and may not be present in child repos after harness sync.
 
 ## Related docs
 
@@ -184,4 +184,4 @@ Starter-only links point to [boat1994/bemoat-web-starter](https://github.com/boa
 | [guard-pack.md](../guard-pack.md) | Central guard pack |
 | [harness-sync-workflow.md](./harness-sync-workflow.md) | Child harness sync loop after starter merge |
 | [harness-sync-contract.md](../harness-sync-contract.md) | What syncs to children |
-| [child-project-migration-guide.md](https://github.com/boat1994/bemoat-web-starter/blob/main/docs/child-project-migration-guide.md) | Starter-only child harness migration playbook |
+| [child-project-migration-guide.md](https://github.com/bemoat/bemoat-web-starter/blob/main/docs/child-project-migration-guide.md) | Starter-only child harness migration playbook |

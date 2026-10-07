@@ -4,6 +4,7 @@ import { parseBlockerResolutionRecord } from './blocker-resolution.ts'
 import type { HistoricalBlockerResolutionProof, PolicyEvidence, RoleEvidence } from './model.ts'
 import { parseProtectedPolicyContent } from './policy.ts'
 import { json, isFullSha, type ContextCommandRunner } from './runtime.ts'
+import { repositoryClaimMatches } from './historical-repository-identity.ts'
 
 const GUIDE_PATH = 'docs/mission-control/mission-control-guide.md'
 const COMMAND_REFERENCE_PATH = 'docs/mission-control/command-reference.md'
@@ -58,7 +59,7 @@ function acquireOne({ repo, currentBase, policy, resolution, contextBinding, run
   env?: NodeJS.ProcessEnv
 }): HistoricalBlockerResolutionProof | null {
   const record = parseBlockerResolutionRecord(resolution.body)
-  if (!record || record.repository !== repo || record.protected_base.branch !== currentBase.branch ||
+  if (!record || !repositoryClaimMatches(record.repository, repo, resolution.repositoryIdentityProof, { id: resolution.id, url: resolution.url, body: resolution.body }) || record.protected_base.branch !== currentBase.branch ||
       record.protected_base.sha === currentBase.sha || !isSha(record.protected_base.sha) ||
       !isSha(currentBase.sha) || !isSha(policy.sourceSha) || policy.path !== GUIDE_PATH ||
       !policy.trustedFounderLogin ||
@@ -74,7 +75,7 @@ function acquireOne({ repo, currentBase, policy, resolution, contextBinding, run
       currentGuide.sha !== policy.sourceSha) return null
 
   const historicalPolicy = parseProtectedPolicyContent({
-    repo, branch: record.protected_base.sha, sha: historicalGuide.sha, content: historicalGuide.content,
+    repo: record.repository, branch: record.protected_base.sha, sha: historicalGuide.sha, content: historicalGuide.content,
   })
   const exactCurrentPolicy = parseProtectedPolicyContent({
     repo, branch: currentBase.sha, sha: currentGuide.sha, content: currentGuide.content,

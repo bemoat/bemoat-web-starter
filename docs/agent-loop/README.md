@@ -12,7 +12,7 @@ That includes shared Payload collections and globals, starter pages, helper util
 
 The default path for a **real Bemoat project** is **deploy-first**:
 
-1. Use the **[Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/boat1994/bemoat-web-starter)** button in the root README.
+1. Use the **[Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/bemoat/bemoat-web-starter)** button in the root README.
 2. Let Cloudflare create or connect the project and its Cloudflare resources (Worker, D1, R2, secrets).
 3. Clone the **generated child project** locally—not this starter repo directly.
 4. Run install, generate import map, generate types, create migrations as needed, then dev and deploy.
@@ -38,7 +38,7 @@ It does **not** overwrite project-specific infrastructure (`wrangler.jsonc`, D1 
 
 For the canonical **child harness sync loop** (branch gates, sync command, validation, PR, report), see [harness-sync-workflow.md](./harness-sync-workflow.md).
 
-For a step-by-step harness migration in child repos (audit mode, sync mode, PR conventions, rollback), use the [Child project migration guide](https://github.com/boat1994/bemoat-web-starter/blob/main/docs/child-project-migration-guide.md) (starter-only).
+For a step-by-step harness migration in child repos (audit mode, sync mode, PR conventions, rollback), use the [Child project migration guide](https://github.com/bemoat/bemoat-web-starter/blob/main/docs/child-project-migration-guide.md) (starter-only).
 
 ## Task-only prompts
 
@@ -107,9 +107,9 @@ task → read AGENTS.md + agent-loop → git status & issue branch → intent ch
 | [source-of-truth.md](./source-of-truth.md) | What lives in starter vs child projects |
 | [../workflow/git-flow.md](../workflow/git-flow.md) | Git Flow branch roles, topic branch rules, hooks, and branch protection checklist |
 | [../hardening.md](../hardening.md) | Production hardening index (releases, drift check, smoke test, secrets, branch protection) |
-| [Knowledge base](https://github.com/boat1994/bemoat-web-starter/blob/main/docs/knowledge/README.md) | Starter-only — short notes on scripts, sync, guards, failures |
-| [ADR index](https://github.com/boat1994/bemoat-web-starter/blob/main/docs/adr/README.md) | Starter-only — why core starter choices exist |
-| [Starter operating handoff](https://github.com/boat1994/bemoat-web-starter/blob/main/docs/starter-operating-handoff.md) | Starter-only — deliverables, label sanity, P0 red-team, risks |
+| [Knowledge base](https://github.com/bemoat/bemoat-web-starter/blob/main/docs/knowledge/README.md) | Starter-only — short notes on scripts, sync, guards, failures |
+| [ADR index](https://github.com/bemoat/bemoat-web-starter/blob/main/docs/adr/README.md) | Starter-only — why core starter choices exist |
+| [Starter operating handoff](https://github.com/bemoat/bemoat-web-starter/blob/main/docs/starter-operating-handoff.md) | Starter-only — deliverables, label sanity, P0 red-team, risks |
 
 ## Agent entrypoint
 

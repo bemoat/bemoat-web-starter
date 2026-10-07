@@ -1,6 +1,6 @@
 # Bemoat dev boilerplate
 
-Target repository: `boat1994/bemoat-web-starter`
+Target repository: `bemoat/bemoat-web-starter`
 
 ## Included
 

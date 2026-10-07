@@ -2,6 +2,7 @@ import { parseIssueBody } from './issue-parser.ts'
 import { prOwnsIssue } from './pr-issue-ownership.ts'
 import { hasUniqueCanonicalReviewIdentity, nativeReviewRows, reviewCounts } from './semantic-review-evidence.ts'
 import { readNativeReviewAncestryProofs } from './native-review-lineage.ts'
+import { createHistoricalRepositoryProofReader } from './historical-repository-proof-reader.ts'
 import type {
   ActivePullRequestEvidence,
   HeadVerificationEvidence,
@@ -227,6 +228,9 @@ export function readGithubEvidence({
     }
   }) : []
 
+  const repositoryProofReader = createHistoricalRepositoryProofReader(repo, issueNumber, run, cwd, env)
+  repositoryProofReader.attachComments(comments)
+
   let issue: IssueEvidence | null = null
   if (!issuePayload) {
     errors.push(`BLOCKED_EXTERNAL: Issue #${issueNumber} evidence is unavailable${issueResult.error ? ` (${issueResult.error})` : ''}`)
@@ -355,8 +359,9 @@ export function readGithubEvidence({
       errors.push(`EVIDENCE_CONFLICT: native review identity for PR #${input.number} is malformed or ambiguous`)
     }
     const counts = reviewCounts(reviews ?? [], input.headSha)
+    const nativeReviews = counts.nativeReviews.map((review) => repositoryProofReader.attachReview(review, reviews ?? [], input.number))
     const nativeReviewAncestryProofs = readNativeReviewAncestryProofs({
-      reviews: counts.nativeReviews,
+      reviews: nativeReviews,
       repository: repo,
       issue: issueNumber,
       pr: input.number,
@@ -376,7 +381,7 @@ export function readGithubEvidence({
         exactHead: requiredApprovals === 0 || counts.exactHeadApprovedCount >= requiredApprovals,
         approvedCount: counts.approvedCount,
         exactHeadApprovedCount: counts.exactHeadApprovedCount,
-        nativeReviews: counts.nativeReviews,
+        nativeReviews,
         nativeReviewAncestryProofs,
       },
       protection,

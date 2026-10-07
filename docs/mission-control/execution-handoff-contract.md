@@ -532,7 +532,7 @@ paste anything elsewhere or grant another approval.
 
 ```text
 Continue the approved #578 implementation in this same Execution session for
-boat1994/bemoat-web-starter.
+bemoat/bemoat-web-starter.
 ```
 
 #### 3. ACTION REQUIRED — NEW EXECUTION SESSION
@@ -546,7 +546,7 @@ boat1994/bemoat-web-starter.
 
 **ACTION REQUIRED — NEW EXECUTION SESSION**
 
-- **Destination:** a new Execution/IDE session for `boat1994/bemoat-web-starter`,
+- **Destination:** a new Execution/IDE session for `bemoat/bemoat-web-starter`,
   Issue `#578`.
 - **Action:** open that session and use the complete canonical 15-section
   handoff, not a same-session continuation.

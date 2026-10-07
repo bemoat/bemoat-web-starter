@@ -3,6 +3,7 @@ import type { NormalizedContextEvidence, RoleEvidence } from './model.ts'
 import type { HandoffRecord } from '../handoff/schema.ts'
 import { parseFounderDecisionComment, parseFounderDecisionRepairComment } from './founder-decision.ts'
 import { isExactIssueCommentUrl } from './runtime.ts'
+import { repositoryClaimMatches } from './historical-repository-identity.ts'
 
 export type ApplicableNoPrHandoff = { source: RoleEvidence; record: HandoffRecord }
 type FoldResult = {
@@ -64,7 +65,7 @@ export function foldNoPrFounderDecision(
     !record || !gate || !trustedFounderLogin || source.authorIdentityConflict || !source.authorLogin ||
     source.authorLogin.toLowerCase() !== trustedFounderLogin.toLowerCase() ||
     record.authority.login.toLowerCase() !== trustedFounderLogin.toLowerCase() ||
-    record.repository !== evidence.repository.nameWithOwner || record.issue_number !== evidence.issue.number ||
+    !repositoryClaimMatches(record.repository, evidence.repository.nameWithOwner, source.repositoryIdentityProof, { id: source.id, url: source.url, body: source.body }) || record.issue_number !== evidence.issue.number ||
     record.pr_number !== null || record.branch !== evidence.localGit.branch ||
     record.exact_head !== evidence.localGit.head ||
     record.protected_base.branch !== evidence.protectedBase.branch ||

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 
 import type { NormalizedContextEvidence, RoleEvidence } from '../../scripts/context/model.ts'
+import type { HistoricalRepositoryIdentityProof } from '../../scripts/context/historical-repository-identity.ts'
 import { parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
 import { routeContext } from '../../scripts/context/router.ts'
 import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
@@ -284,7 +285,46 @@ function routeNoPr(
   return routeContext(evidence)
 }
 
+function historicalCommentProof(comment: RoleEvidence): HistoricalRepositoryIdentityProof {
+  const repoUrl = 'https://api.github.com/repos/bemoat/bemoat-web-starter'
+  return {
+    claim: 'boat1994/bemoat-web-starter',
+    resource: { id: comment.id, url: comment.url, body: comment.body },
+    parent: {
+      kind: 'issue',
+      id: 5723632641,
+      url: 'https://api.github.com/repos/bemoat/bemoat-web-starter/issues/582',
+      repositoryUrl: repoUrl,
+    },
+    currentRepository: { id: 1267006707, fullName: 'bemoat/bemoat-web-starter', url: repoUrl },
+    historicalRepository: { id: 1267006707, fullName: 'bemoat/bemoat-web-starter', url: repoUrl },
+  }
+}
+
+function historicalizeComment<T extends RoleEvidence>(comment: T): T {
+  const fence = String.fromCharCode(96).repeat(3)
+  const marker = fence + 'json\n'
+  const start = comment.body.indexOf(marker)
+  const end = comment.body.lastIndexOf('\n' + fence)
+  if (start < 0 || end <= start) throw new Error('Expected strict JSON comment body')
+  const record = JSON.parse(comment.body.slice(start + marker.length, end)) as Record<string, unknown>
+  record.repository = 'boat1994/bemoat-web-starter'
+  const body = `${comment.body.slice(0, start)}${marker}${JSON.stringify(record, null, 2)}\n${fence}${comment.body.slice(end + 1 + fence.length)}`
+  const result = { ...comment, body }
+  result.repositoryIdentityProof = historicalCommentProof(result)
+  return result
+}
+
 describe('exact no-PR FOUNDER_GATE decision consumption', () => {
+  it('consumes historical no-PR gate and Founder decision only with exact comment parent-chain proof', () => {
+    const gate = historicalizeComment(handoff(gateIdentity, { id: 6014391169 }))
+    const decision = historicalizeComment(founderDecision(currentIdentity, gate, { createdAt: '' }))
+
+    expect(routeNoPr(currentIdentity, [gate], [decision]).route).toBe('IMPLEMENT')
+    expect(routeNoPr(currentIdentity, [{ ...gate, repositoryIdentityProof: null }], [decision]).route).toBe('STOP')
+    expect(routeNoPr(currentIdentity, [gate], [{ ...decision, repositoryIdentityProof: null }]).route).toBe('STOP')
+  })
+
   it('ignores a historical merged-PR-bound Founder gate during current no-PR routing', () => {
     const historicalGate = historicalPrBoundFounderGate(issue508CurrentIdentity)
 

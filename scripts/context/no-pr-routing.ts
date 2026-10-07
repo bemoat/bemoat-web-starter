@@ -4,6 +4,7 @@ import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../h
 import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-decision-folding.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
+import { repositoryClaimMatches } from './historical-repository-identity.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -21,7 +22,7 @@ function isExactCurrentNoPrFounderGate(
 ): boolean {
   return record.route === 'FOUNDER_GATE' &&
     record.objective_mode === 'read_only' && record.pr === null &&
-    record.repository === evidence.repository.nameWithOwner && record.issue_number === evidence.issue.number &&
+    repositoryClaimMatches(record.repository, evidence.repository.nameWithOwner, source.repositoryIdentityProof, { id: source.id, url: source.url, body: source.body }) && record.issue_number === evidence.issue.number &&
     record.branch === evidence.localGit.branch && record.exact_head === evidence.localGit.head &&
     record.protected_base.branch === evidence.protectedBase.branch &&
     record.local_durability.durable && renderHandoffComment(record) === source.body &&
@@ -61,7 +62,7 @@ function applicableNoPrHandoffs(evidence: NormalizedContextEvidence): Applicable
       const record = parseHandoffBody(JSON.stringify(payload))
       if (
         (record.route !== 'STOP' || record.schema_version === 3) && record.pr === null &&
-        record.repository === evidence.repository.nameWithOwner && record.issue_number === evidence.issue.number &&
+        repositoryClaimMatches(record.repository, evidence.repository.nameWithOwner, source.repositoryIdentityProof, { id: source.id, url: source.url, body: source.body }) && record.issue_number === evidence.issue.number &&
         record.branch === evidence.localGit.branch && record.exact_head === head &&
         record.protected_base.branch === evidence.protectedBase.branch &&
         record.local_durability.durable && renderHandoffComment(record) === source.body &&
