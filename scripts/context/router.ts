@@ -9,6 +9,7 @@ import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './sem
 import { hasStrictCrossHeadNativeReviewPredecessor } from './native-review-lineage.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
 import { routeNoPrContext, routeWrongIssueActivePrContext } from './no-pr-routing.ts'
+import { protectedBranchSetupState } from './setup-base-recovery-routing.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 
@@ -44,7 +45,7 @@ function commandAction(description: string): ContextDecision['nextAction'] {
   return { type: 'COMMAND', command: null, description }
 }
 
-function identityErrors(evidence: NormalizedContextEvidence, allowWellFormedStaleBase = false): string[] {
+export function identityErrors(evidence: NormalizedContextEvidence, allowWellFormedStaleBase = false): string[] {
   const errors: string[] = []
   const repo = evidence.repository?.nameWithOwner ?? ''
   if (!evidence.issue || typeof evidence.issue.number !== 'string' || !isPositiveInteger(evidence.issue.number)) {
@@ -106,24 +107,16 @@ function reviewedHeadForApplicability(body: string): string | null {
   return unique.length === 1 ? unique[0] ?? null : null
 }
 
-function isProtectedOrIntegrationBranch(branch: string): boolean {
-  return /^(?:main|master|dev|develop|integration|staging|production)(?:\/.*)?$/i.test(branch)
-}
-
 function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleBaseError: string | null = null): ContextDecision {
   const allowPublicationEraReviewRecovery = ignoredStaleBaseError !== null
+  const activeEvidence = evidence.activePr as ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
+  const mergedPr = activeEvidence && !Array.isArray(activeEvidence) && (activeEvidence.merged || activeEvidence.state.toUpperCase() === 'MERGED')
+  const setupState = protectedBranchSetupState(evidence, Boolean(mergedPr))
   const baseReasons = [
     ...evidence.evidenceErrors.filter((error) => error !== ignoredStaleBaseError),
     ...identityErrors(evidence, ignoredStaleBaseError !== null),
+    ...setupState.durabilityReasons,
   ]
-  const activeEvidence = evidence.activePr as ActivePullRequestEvidence | ActivePullRequestEvidence[] | null
-  const mergedPr = activeEvidence && !Array.isArray(activeEvidence) && (activeEvidence.merged || activeEvidence.state.toUpperCase() === 'MERGED')
-  if (!mergedPr && (!evidence.localGit.clean || evidence.localGit.detached || !evidence.localGit.pushed || !evidence.localGit.durable)) {
-    baseReasons.push(
-      ...evidence.localGit.reasons,
-      'LOCAL_STATE_NOT_DURABLE: required local work is not clean, pushed, and attached to a durable branch',
-    )
-  }
   if (Array.isArray(evidence.activePr)) baseReasons.push('EVIDENCE_CONFLICT: competing active PRs cannot be uniquely resolved')
 
   if (baseReasons.length > 0) {
@@ -138,7 +131,7 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
 
   const wrongIssuePrWorkspace = routeWrongIssueActivePrContext(evidence)
   if (wrongIssuePrWorkspace) return decision(evidence, wrongIssuePrWorkspace.route, wrongIssuePrWorkspace.reasons, wrongIssuePrWorkspace.nextAction, wrongIssuePrWorkspace.recovery)
-  if (!mergedPr && isProtectedOrIntegrationBranch(evidence.localGit.branch)) {
+  if (setupState.blocked) {
     return decision(evidence, 'STOP', [
       'EVIDENCE_CONFLICT: protected or integration branch cannot route IMPLEMENT',
     ], {

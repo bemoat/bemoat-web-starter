@@ -59,6 +59,27 @@ export interface LocalGitEvidence {
   reasons: string[]
 }
 
+/** Exact live protected-base proof for the bounded clean stale-base setup path. */
+export interface SetupBaseRecoveryEvidence {
+  liveUpstreamHead: string
+  localUpstreamHead: string
+  ancestry: 'STRICT_ANCESTOR' | 'NOT_ANCESTOR' | 'UNPROVEN_UNTIL_FETCH'
+}
+
+export interface ContextSetupBaseRecovery {
+  type: 'RECOVER_STALE_PROTECTED_BASE'
+  command: 'bemoat:context:recover-setup'
+  args: string[]
+  display_command: string
+  binding: {
+    repository: string
+    issue_number: string
+    protected_base_branch: string
+    protected_base: { branch: string; sha: string }
+    local_state: { branch: string; head: string; upstream: string; clean: true; detached: false }
+  }
+}
+
 /** Internal candidate evidence for one exact wrong-Issue branch switch. */
 export interface IssueBranchRecoveryCandidateEvidence {
   branch: string
@@ -209,6 +230,8 @@ export interface NormalizedContextEvidence {
   durableContext: DurableContextEvidence
   /** Internal evidence; createContextOutput intentionally omits this field. */
   issueBranchRecoveryCandidates?: IssueBranchRecoveryCandidateEvidence[]
+  /** Internal exact-ref/ancestry proof for stale protected-base setup recovery. */
+  setupBaseRecovery?: SetupBaseRecoveryEvidence | null
   historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
   evidenceErrors: string[]
 }
@@ -221,7 +244,7 @@ export interface ContextDecision {
     command: string | null
     description: string
   }
-  recovery?: ContextBranchRecovery
+  recovery?: ContextBranchRecovery | ContextSetupBaseRecovery
   evidenceUrls: string[]
 }
 

@@ -3,7 +3,7 @@ import { hasMalformedNoPrBlockerResolutionEvidence, resolveStopBlockers } from '
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { parseFounderDecisionComment } from './founder-decision.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
-
+import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 type ApplicableNoPrHandoff = { source: RoleEvidence; record: HandoffRecord }
 
@@ -384,6 +384,9 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
       'Resolve conflicting current-head no-PR HANDOFF evidence and protected-base identities before continuing.',
     )
   }
+
+  const setupRecovery = setupBaseRecoveryRoute(evidence)
+  if (setupRecovery) return setupRecovery
 
   return {
     route: 'IMPLEMENT',

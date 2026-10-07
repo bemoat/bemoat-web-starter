@@ -35,6 +35,19 @@ branch, treat it as branch setup: complete the
 rerun `pnpm run bemoat:context <issue-number>`, and continue only after the
 preflight passes. Creating a local-only branch is not sufficient.
 
+For a clean canonical protected branch that is strictly behind its exact live
+protected base, follow only the recovery command and binding returned by fresh
+Context. The registered `bemoat:context:recover-setup` command independently
+revalidates the pre-state and current Context route, fetches the exact base ref
+to `FETCH_HEAD` only, proves strict ancestry against the verified SHA, and
+uses fast-forward-only recovery to that immutable SHA. It then advances the
+tracking ref with compare-and-swap from the original tracking SHA. After
+success, immediately rerun
+registered CLI Discovery and fresh Context. This setup step grants no
+objective-edit authority; the ordinary Issue branch bootstrap and first-edit
+trigger still apply. Dirty, divergent, local-only, wrong-origin, ambiguous, or
+changed-base states remain `STOP`.
+
 Run these in order. **Stop and report** if a hard blocker fails; do not modify
 files until branch setup is complete and preflight passes.
 
@@ -94,6 +107,8 @@ mutation:
   by repository policy (`dev` normally, or `main` for this starter while its
   documented exception applies);
 - the local topic branch must be absent;
+- `refs/remotes/origin/<topic-branch>` must also be absent; a stale or
+  conflicting tracking ref is a `STOP` and must be reconstructed separately;
 - the topic name follows `<type>/<issue-number>-<short-slug>`; and
 - the remote topic branch must be absent. If it already exists, do not guess
   ownership or overwrite it; stop and reconstruct the existing branch state.
@@ -106,6 +121,7 @@ git branch --show-current
 git remote get-url origin
 git rev-parse HEAD
 git branch --list <topic-branch>
+git show-ref --verify --quiet refs/remotes/origin/<topic-branch>
 git ls-remote --heads origin refs/heads/<base-branch> refs/heads/<topic-branch>
 ```
 
@@ -113,15 +129,48 @@ The live base line must contain exactly one base ref whose 40-hex SHA matches
 local `HEAD`; the topic line must be absent. A missing, malformed, or
 ambiguous result is a `STOP` before branch creation.
 
-Only after every eligibility check passes, the mutation boundary is exactly:
+Only after every eligibility check passes, the bounded bootstrap write sequence
+is:
 
 ```bash
 git switch -c <topic-branch> <exact-base-sha>
 git push -u origin HEAD:refs/heads/<topic-branch>
+# only when the current fetch mapping does not cover this topic:
+git remote set-branches --add origin <topic-branch>
+git fetch --no-tags --no-recurse-submodules --refmap= origin refs/heads/<topic-branch>:
+# only if the tracking ref is still absent after exact readback:
+git update-ref refs/remotes/origin/<topic-branch> <exact-live-topic-sha> 0000000000000000000000000000000000000000
 ```
 
 Do not create an empty commit. Do not force-push, delete, reset, stash, edit a
 file, or reuse a conflicting remote branch as part of bootstrap.
+In a single-branch clone, `remote.origin.fetch` may not map the new topic
+branch. The tracking ref had to be absent before bootstrap. After the push,
+read the exact live topic SHA and stop unless it uniquely equals local `HEAD`.
+Determine mapping coverage from the read-only `git config --get-all
+remote.origin.fetch` output. Verify `FETCH_HEAD` equals the exact live topic
+SHA, then read `refs/remotes/origin/<topic-branch>`. A present tracking ref is
+reused read-only only when it exactly equals the live topic SHA. If it is
+absent, create it with create-only compare-and-swap after rechecking absence;
+if it differs from the exact live SHA, stop. Ordinary clones may create the
+matching tracking ref during `git push -u`, while isolated single-branch
+clones may leave it absent. The `update-ref` is conditional, and fails if the
+ref appears after the absence check:
+
+```bash
+git config --get-all remote.origin.fetch
+git ls-remote --heads origin refs/heads/<topic-branch>
+git rev-parse FETCH_HEAD
+git rev-parse --verify --quiet refs/remotes/origin/<topic-branch>
+```
+
+Finally verify `@{upstream}` resolves to `origin/<topic-branch>` and that the
+tracking ref, upstream SHA, local `HEAD`, and exact live remote topic SHA all
+match. Do not fetch directly into `refs/remotes/*`: Git may accept updates
+there without a `+` refspec, so non-force syntax does not protect an existing
+tracking ref. FETCH_HEAD-only fetch prevents overwriting that ref. If the
+tracking ref mismatches the live SHA, the live SHA moves, fetch fails, or
+create-only update-ref fails, stop and reconstruct.
 
 Immediately read back the result:
 
@@ -131,12 +180,15 @@ git branch --show-current
 git rev-parse HEAD
 git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
 git rev-parse '@{upstream}'
+git rev-parse refs/remotes/origin/<topic-branch>
+git rev-parse FETCH_HEAD
 git ls-remote --heads origin refs/heads/<base-branch> refs/heads/<topic-branch>
 ```
 
 The readback must contain exactly one live base ref still matching the chosen
-base SHA and exactly one topic ref matching local `HEAD` and
-`@{upstream}`. The upstream name must be `origin/<topic-branch>`; any missing,
+base SHA and exactly one topic ref matching local `HEAD`,
+`refs/remotes/origin/<topic-branch>`, and `@{upstream}`. The upstream name
+must be `origin/<topic-branch>`; any missing,
 malformed, conflicting, or ambiguous result is a `STOP`.
 
 Continuation is allowed only when the worktree is still clean, the branch and

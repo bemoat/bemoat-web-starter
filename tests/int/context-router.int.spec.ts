@@ -3721,3 +3721,68 @@ describe('advisory model preferences cannot supply workflow evidence', () => {
     }))).toThrow()
   })
 })
+
+describe('agent-owned stale protected-base setup recovery', () => {
+  // Authority: Issue #585 explicitly requires a clean canonical protected branch
+  // that is a strict ancestor of the exact live protected base to be recovered
+  // by bounded fetch + ff-only, followed by fresh Context. Recovery itself does
+  // not authorize objective edits; this story protects the STOP/COMMAND seam.
+  it('offers only the bounded setup command for an otherwise-valid strict-ancestor protected branch', () => {
+    const staleHead = '1'.repeat(40)
+    const liveBase = '2'.repeat(40)
+    const evidence = baseEvidence({
+      repository: {
+        owner: 'bemoat',
+        name: 'bemoat-web-starter',
+        nameWithOwner: 'bemoat/bemoat-web-starter',
+        url: 'https://github.com/bemoat/bemoat-web-starter',
+      },
+      policy: { ...baseEvidence().policy, version: '1.5.0', trustedFounderLogin: 'bemoat' },
+      issue: {
+        ...baseEvidence().issue,
+        number: '585',
+        title: 'Deterministic setup recovery',
+        url: 'https://github.com/bemoat/bemoat-web-starter/issues/585',
+      },
+      protectedBase: {
+        branch: 'main',
+        sha: liveBase,
+        source: 'live GitHub ref',
+        url: 'https://github.com/bemoat/bemoat-web-starter/tree/main',
+      },
+      localGit: {
+        branch: 'main',
+        head: staleHead,
+        upstream: 'origin/main',
+        originRepository: 'bemoat/bemoat-web-starter',
+        clean: true,
+        detached: false,
+        pushed: false,
+        durable: false,
+        reasons: ['LOCAL_STATE_NOT_DURABLE: current HEAD is not proven pushed to its live upstream'],
+      },
+    })
+    const withAncestryProof = {
+      ...evidence,
+      setupBaseRecovery: {
+        liveUpstreamHead: liveBase,
+        localUpstreamHead: staleHead,
+        ancestry: 'STRICT_ANCESTOR',
+      },
+    } as unknown as NormalizedContextEvidence
+
+    expect(routeContext(withAncestryProof)).toMatchObject({
+      route: 'STOP',
+      nextAction: { type: 'COMMAND', command: 'bemoat:context:recover-setup' },
+      recovery: {
+        type: 'RECOVER_STALE_PROTECTED_BASE',
+        binding: {
+          repository: 'bemoat/bemoat-web-starter',
+          issue_number: '585',
+          protected_base: { branch: 'main', sha: liveBase },
+          local_state: { branch: 'main', head: staleHead, upstream: 'origin/main', clean: true, detached: false },
+        },
+      },
+    })
+  })
+})
