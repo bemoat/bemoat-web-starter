@@ -16,6 +16,7 @@ export interface SetupRecoveryResult {
 }
 
 type Binding = { issueNumber: string; expectedRepository: string; expectedBaseBranch: string; expectedBaseSha: string; expectedLocalHead: string }
+type RecoveryMutationBoundary = 'initial' | 'before-fetch' | 'before-merge' | 'before-tracking-update'
 
 function fail(classification: SetupRecoveryClassification, reason: string, mutationPerformed = false): SetupRecoveryResult {
   return {
@@ -169,11 +170,19 @@ export function recoverSetupBase({
   cwd = process.cwd(),
   run = runContextCommand,
   binding,
+  verifySource,
 }: {
   cwd?: string
   run?: ContextCommandRunner
   binding: Binding
+  verifySource?: (boundary: RecoveryMutationBoundary) => string | null
 }): SetupRecoveryResult {
+  const checkSource = (boundary: RecoveryMutationBoundary, mutationPerformed = false): SetupRecoveryResult | null => {
+    const reason = verifySource?.(boundary)
+    return reason ? fail('EVIDENCE_CONFLICT', reason, mutationPerformed) : null
+  }
+  const sourceInitial = checkSource('initial')
+  if (sourceInitial) return sourceInitial
   let evidence = collect(binding.issueNumber, cwd, run)
   const verified = verifyPrestate({ evidence, binding, cwd, run })
   if (verified.ok === false) return fail(verified.classification, verified.reason)
@@ -202,6 +211,8 @@ export function recoverSetupBase({
   if (githubBeforeFetch !== verified.baseSha || originBeforeFetch !== verified.baseSha) {
     return fail('HEAD_DRIFT', 'Live protected-base identity moved before the exact fetch.')
   }
+  const sourceBeforeFetch = checkSource('before-fetch')
+  if (sourceBeforeFetch) return sourceBeforeFetch
   const fetched = run('git', ['fetch', '--no-tags', '--no-recurse-submodules', '--refmap=', 'origin', `refs/heads/${verified.baseBranch}:`], { cwd })
   if (fetched.status !== 0 || fetched.error) {
     return fail('BLOCKED_EXTERNAL', `Exact protected-base fetch failed: ${fetched.error?.message || fetched.stderr.trim() || 'git fetch failed'}`, true)
@@ -235,6 +246,8 @@ export function recoverSetupBase({
   if (refImmediatelyBeforeMerge !== verified.baseSha || githubImmediatelyBeforeMerge !== verified.baseSha) {
     return fail('HEAD_DRIFT', 'Live protected base moved immediately before fast-forward.', true)
   }
+  const sourceBeforeMerge = checkSource('before-merge', true)
+  if (sourceBeforeMerge) return sourceBeforeMerge
 
   const merged = run('git', ['merge', '--ff-only', verified.baseSha], { cwd })
   if (merged.status !== 0 || merged.error) {
@@ -242,6 +255,8 @@ export function recoverSetupBase({
   }
 
   const trackingRef = `refs/remotes/origin/${verified.baseBranch}`
+  const sourceBeforeTrackingUpdate = checkSource('before-tracking-update', true)
+  if (sourceBeforeTrackingUpdate) return sourceBeforeTrackingUpdate
   const trackingAdvance = run('git', ['update-ref', trackingRef, verified.baseSha, verified.exactHead], { cwd })
   if (trackingAdvance.status !== 0 || trackingAdvance.error) {
     return fail('HEAD_DRIFT', `Fast-forward completed but compare-and-swap tracking-ref advancement failed: ${trackingAdvance.error?.message || trackingAdvance.stderr.trim() || 'git update-ref failed'}; stop and reconstruct from the observed state.`, true)

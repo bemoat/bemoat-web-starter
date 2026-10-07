@@ -121,6 +121,7 @@
     "tests/int/context-bootstrap.int.spec.ts",
     "tests/int/context-corrections.int.spec.ts",
     "tests/int/context-setup-recovery.int.spec.ts",
+    "tests/int/context-setup-recovery-target.int.spec.ts",
     "tests/int/issue-branch-bootstrap.int.spec.ts",
     "tests/int/mission-control-publication-templates.int.spec.ts",
     "tests/int/mission-control-loader-router.int.spec.ts",

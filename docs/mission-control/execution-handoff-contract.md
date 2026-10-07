@@ -255,6 +255,56 @@ recover another workspace. Success recommends only registered CLI Discovery
 and fresh Context; it grants no objective-edit authority. An exact-base
 invocation is a read-only no-op with the same fresh-Context next action.
 
+### Issue #592: explicit target for stale setup recovery
+
+If the clean attached protected-branch target predates the recovery-emitting
+command, run the current registered `bemoat:context:recover-setup` from a
+separate exact-live protected-main source and supply exactly one
+`--target-worktree <absolute-path>`. Keep the Issue, canonical repository,
+protected-base branch, exact live base SHA, and target's exact local HEAD as
+caller-supplied values read from the target's public Context evidence. A
+pre-emission target cannot emit this recovery command. The current registered
+recovery command re-collects and validates the target Context internally
+before mutation. Same-worktree invocations omit the flag and retain the #585
+behavior.
+
+The supported public sequence is:
+
+1. In the target, run `pnpm run bemoat:context -- --help --json`, then the
+   read-only `pnpm run bemoat:context <issue-number> --json`. Record the unambiguous
+   canonical repository, protected-base branch and live SHA, and target local
+   HEAD. Context remains read-only and its route is unchanged; if these exact
+   inputs are unavailable or conflicting, stop.
+2. In the separate exact-live protected-main source, run
+   `pnpm run bemoat:context:recover-setup -- --help --json`, then invoke it with those
+   caller-supplied values and the one explicit target:
+
+       pnpm run bemoat:context:recover-setup -- <issue-number> \
+         --expected-repository <owner/name> \
+         --expected-base-branch <base-branch> \
+         --expected-base-sha <exact-live-base-sha> \
+         --expected-local-head <exact-target-head> \
+         --target-worktree <absolute-target-path> --json
+
+The command uses its current registered implementation to re-collect target
+Context and require the exact recovery route internally before fetch, after
+fetch, and before fast-forward. This invocation path does not add a Context
+route or recovery-emission fallback.
+
+The command independently verifies the source and target roots and canonical
+origins; source and target may be separate clones or worktrees. The source must
+be clean at the exact live protected-base SHA, attached to the protected branch
+or detached at that exact SHA. The target must be a clean attached canonical
+protected branch tracking `origin/<base>`, with its local HEAD equal to that
+tracking ref and strictly behind the exact live base. Revalidate source and
+target binding and live-base/head drift at mutation boundaries. Reuse the
+existing recovery sequence above: fetch only into `FETCH_HEAD`, prove strict
+ancestry against the exact SHA, fast-forward only to that SHA, compare-and-swap
+the tracking ref, and verify the exact clean post-state. Success remains
+`route: STOP`, grants no objective authority, and recommends only registered
+CLI Discovery and fresh target Context. This narrow source-target path does
+not change `bemoat:context:sync-base` or Context bootstrap behavior.
+
 ### Wrong-Issue workspace acquisition
 
 When a new or resumed Execution session starts in a wrong-Issue workspace, apply

@@ -179,6 +179,46 @@ describe('Issue #585 clean stale protected-base setup recovery', () => {
     expect(git.calls.some((call) => /\b(reset|rebase|stash|push|commit|checkout|switch)\b/.test(call))).toBe(false)
   })
 
+  // Authority: Issue #592 and the source-target recovery contract require the
+  // protected-main source to be revalidated before every target mutation;
+  // source drift must stop before the next fetch, fast-forward, or ref CAS.
+  it('revalidates an explicit source at each recovery mutation boundary', () => {
+    const git = runner()
+    let checks = 0
+    const result = recoverSetupBase({
+      cwd: '/target',
+      run: git.run,
+      binding: binding(),
+      verifySource: () => { checks += 1; return null },
+    })
+
+    expect(result).toMatchObject({ classification: 'SUCCESS', currentHead: liveHead, route: 'STOP', nextAction: { type: 'COMMAND', command: 'bemoat:context' } })
+    expect(checks).toBe(4)
+    expect(git.calls).toContain(`merge --ff-only ${liveHead}`)
+    expect(git.calls).toContain(`update-ref refs/remotes/origin/main ${liveHead} ${oldHead}`)
+  })
+
+  it.each([
+    ['before fetch', 2, false, false],
+    ['before fast-forward', 3, true, false],
+    ['before tracking-ref update', 4, true, true],
+  ])('stops if the protected-main source drifts %s', (_phase, driftCheck, fetched, merged) => {
+    const git = runner()
+    let checks = 0
+    const result = recoverSetupBase({
+      cwd: '/target',
+      run: git.run,
+      binding: binding(),
+      verifySource: () => { checks += 1; return checks === driftCheck ? 'Source no longer matches the exact live protected base.' : null },
+    })
+
+    expect(result.route).toBe('STOP')
+    expect(result.nextAction.type).toBe('STOP')
+    expect(git.calls.some((call) => call.startsWith('fetch '))).toBe(fetched)
+    expect(git.calls.some((call) => call.startsWith('merge '))).toBe(merged)
+    expect(git.calls.some((call) => call.startsWith('update-ref '))).toBe(false)
+  })
+
   // Authority: the same contract classifies a bound exact-base retry as a
   // read-only no-op followed by fresh Context; no Git write is authorized.
   it('treats an exact-base invocation as a no-op with no Git mutation', () => {
@@ -201,10 +241,15 @@ describe('Issue #585 clean stale protected-base setup recovery', () => {
     const bound = binding()
     const first = recoverSetupBase({ cwd: '/repo', run: git.run, binding: bound })
     const callsAfterFirst = [...git.calls]
-    const retry = recoverSetupBase({ cwd: '/repo', run: git.run, binding: bound })
+    const retryBoundaries: string[] = []
+    const retry = recoverSetupBase({
+      cwd: '/repo', run: git.run, binding: bound,
+      verifySource: (boundary) => { retryBoundaries.push(boundary); return null },
+    })
 
     expect(first.classification).toBe('SUCCESS')
     expect(retry).toMatchObject({ classification: 'NO_OP_IDENTICAL_RETRY', mutationPerformed: false, currentHead: liveHead, nextAction: { type: 'COMMAND', command: 'bemoat:context' } })
+    expect(retryBoundaries).toEqual(['initial'])
     expect(git.calls.slice(callsAfterFirst.length).some((call) => /\b(fetch|merge)\b/.test(call))).toBe(false)
   })
 
