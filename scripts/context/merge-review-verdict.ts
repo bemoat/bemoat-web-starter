@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { validateStrictReviewVerdictCandidate } from './review-verdict-candidate-schema.ts'
+
 function unwrapManagedReferenceQuotes(value: string): string {
   let current = value.trim()
   while (
@@ -31,7 +33,7 @@ function resolvePrNumber(reference: unknown): number | null {
 
 const FULL_SHA_RE = /^[0-9a-f]{40}$/i
 
-type MergeReviewVerdictBinding = {
+export type MergeReviewVerdictBinding = {
   verdict: string | null
   pr: string | null
   base: string | null
@@ -98,10 +100,12 @@ function resolveMergeReviewVerdictBindingInternal(body: unknown): MergeReviewVer
 export function parseProductionMergeReviewVerdict(
   body: unknown,
   commentId: unknown,
+  mode: 'context' | 'strict_candidate' = 'context',
 ): ProductionMergeReviewVerdict {
   z.unknown().parse(body)
   z.unknown().parse(commentId)
   const binding = resolveMergeReviewVerdictBindingInternal(body)
+  if (mode === 'strict_candidate') validateStrictReviewVerdictCandidate(String(body ?? ''), binding)
   return {
     comment_id: String(commentId),
     verdict: binding.verdict,

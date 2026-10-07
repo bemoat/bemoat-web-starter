@@ -1,3 +1,4 @@
+import { hasImmutableFindingDisposition } from './immutable-finding-disposition.ts'
 import type { ActivePullRequestEvidence, NativeReviewEvidence, NormalizedContextEvidence, RoleEvidence } from './model.ts'
 import { parseProductionMergeReviewVerdict, resolveMergeReviewVerdictBinding } from './merge-review-verdict.ts'
 import type { HandoffRecord } from '../handoff/schema.ts'
@@ -375,24 +376,7 @@ export function hasBlockingFinding(body: string, expectedHead: string): boolean 
 
   try {
     const parsed: unknown = JSON.parse(serialized)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
-    const record = parsed as { schema_version?: unknown; reviewed_head?: unknown; findings?: unknown }
-    if (record.schema_version !== 1 || typeof record.reviewed_head !== 'string' ||
-      record.reviewed_head.toLowerCase() !== expectedHead.toLowerCase()) return false
-    const findings = record.findings
-    if (!Array.isArray(findings) || findings.length === 0) return false
-    const findingIds = new Set<string>()
-    return findings.every((finding) => {
-      if (!finding || typeof finding !== 'object' || Array.isArray(finding)) return false
-      const findingRecord = finding as { id?: unknown; canonical_summary?: unknown; source_thread?: unknown; required_evidence?: unknown }
-      const id = typeof findingRecord.id === 'string' ? findingRecord.id.trim() : ''
-      if (!id || findingIds.has(id)) return false
-      findingIds.add(id)
-      return typeof findingRecord.canonical_summary === 'string' && findingRecord.canonical_summary.trim() !== '' &&
-        typeof findingRecord.source_thread === 'string' && findingRecord.source_thread.trim() !== '' &&
-        Array.isArray(findingRecord.required_evidence) && findingRecord.required_evidence.length > 0 &&
-        findingRecord.required_evidence.every((item) => typeof item === 'string' && item.trim() !== '')
-    })
+    return hasImmutableFindingDisposition(parsed, expectedHead)
   } catch {
     return false
   }
