@@ -36,6 +36,17 @@ const currentIdentity: Identity = {
   policyVersion: '1.5.0',
 }
 
+const issue508CurrentIdentity: Identity = {
+  repository: 'bemoat/bemoat-web-starter',
+  issue: '508',
+  branch: 'fix/508-current-head',
+  head: 'a'.repeat(40),
+  baseBranch: 'main',
+  baseSha: 'b'.repeat(40),
+  policySha: 'c'.repeat(40),
+  policyVersion: '1.5.0',
+}
+
 /**
  * Story authority: merged Mission Control policy v1.4.0 says an unresolved
  * exact-current-head read-only no-PR FOUNDER_GATE is a human decision boundary,
@@ -81,6 +92,43 @@ function handoff(
     body: renderHandoffComment(record),
     createdAt: '2026-10-04T18:00:00Z',
     url: 'https://github.com/' + identity.repository + '/issues/' + identity.issue + '#issuecomment-' + options.id,
+  }
+}
+
+function historicalPrBoundFounderGate(identity: Identity): RoleEvidence {
+  const record: HandoffRecord = {
+    schema_version: 2,
+    record_type: 'HANDOFF',
+    objective_mode: 'implementation',
+    repository: 'boat1994/bemoat-web-starter',
+    issue_number: identity.issue,
+    objective: 'Review the merged historical PR-bound Founder gate.',
+    permitted_scope: ['Review historical evidence.'],
+    prohibited_scope: ['Do not authorize current no-PR work.'],
+    executing_agent: 'Codex independent semantic reviewer',
+    provider: 'OpenAI Codex',
+    branch: 'feat/508-model-routing-profile-v1',
+    exact_head: '0f42af09d9197482afa6696a0f023c8c1654b17b',
+    protected_base: { branch: 'main', sha: '416f85586c1761724949fb39ee09a0c052481fcc' },
+    pr: {
+      number: '528',
+      url: 'https://github.com/boat1994/bemoat-web-starter/pull/528',
+      base: 'main',
+      head: 'feat/508-model-routing-profile-v1',
+      head_sha: '0f42af09d9197482afa6696a0f023c8c1654b17b',
+    },
+    verified_evidence: [{ kind: 'review-verdict', value: 'Historical PR review completed.', url: 'https://github.com/boat1994/bemoat-web-starter/pull/528' }],
+    route: 'FOUNDER_GATE',
+    next_action: { route: 'FOUNDER_GATE', description: 'Historical Founder review was required for PR #528.' },
+    stop_conditions: ['Do not treat this historical PR gate as current no-PR authority.'],
+    local_durability: { required: true, durable: true, reason: null },
+  }
+
+  return {
+    id: 5948729722,
+    body: renderHandoffComment(record),
+    createdAt: '2026-10-02T09:04:19Z',
+    url: 'https://github.com/bemoat/bemoat-web-starter/issues/508#issuecomment-5948729722',
   }
 }
 
@@ -235,6 +283,72 @@ function routeNoPr(
 }
 
 describe('exact no-PR FOUNDER_GATE decision consumption', () => {
+  it('ignores a historical merged-PR-bound Founder gate during current no-PR routing', () => {
+    const historicalGate = historicalPrBoundFounderGate(issue508CurrentIdentity)
+
+    expect(routeNoPr(issue508CurrentIdentity, [historicalGate])).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: { type: 'COMMAND', command: null },
+    })
+  })
+
+  // Oracle: Issue #599 requires the reproduced #508 state to proceed into
+  // ordinary canonical wrong-Issue recovery after excluding its historical
+  // PR-bound gate. Mission Control policy and execution-handoff-contract.md
+  // §12 require that recovery to remain STOP, name the unique live #508 branch,
+  // and grant no objective-edit authority.
+  it('reaches bounded #508 wrong-Issue recovery despite the historical PR-bound Founder gate', () => {
+    const sourceBranch = 'fix/590-blocker-resolution-validation'
+    const sourceHead = 'a7aa5ee83799963f676b60b990a6b72b3ab1bc93'
+    const targetBranch = 'feat/508-model-routing-profile-v1'
+    const targetHead = '0f42af09d9197482afa6696a0f023c8c1654b17b'
+    const historicalGate = historicalPrBoundFounderGate(issue508CurrentIdentity)
+    const evidence = contextFor(issue508CurrentIdentity, [historicalGate])
+    evidence.localGit.branch = sourceBranch
+    evidence.localGit.head = sourceHead
+    evidence.localGit.upstream = `origin/${sourceBranch}`
+    evidence.issueBranchRecoveryCandidates = [{
+      branch: targetBranch,
+      liveHead: targetHead,
+      localHead: null,
+      remoteTrackingHead: targetHead,
+      upstream: null,
+      checkedOutElsewhere: false,
+      eligible: true,
+    }]
+
+    expect(routeContext(evidence)).toMatchObject({
+      route: 'STOP',
+      nextAction: { type: 'STOP', command: null },
+      recovery: {
+        type: 'SWITCH_BRANCH',
+        command: 'git',
+        args: ['switch', '--track', `origin/${targetBranch}`],
+        binding: {
+          issue_number: '508',
+          source: { branch: sourceBranch, head: sourceHead },
+          target: { branch: targetBranch, head: targetHead },
+        },
+      },
+    })
+  })
+
+  it.each([
+    ['malformed', (gate: RoleEvidence) => ({
+      ...gate,
+      body: gate.body.replace('"verified_evidence": [', '"verified_evidence": ??? ['),
+    })],
+    ['mismatched native comment identity', (gate: RoleEvidence) => ({
+      ...gate,
+      url: 'https://github.com/bemoat/bemoat-web-starter/issues/508#issuecomment-9999999999',
+    })],
+  ])('keeps a malformed current no-PR gate at STOP alongside historical PR-bound evidence (%s)', (_label, invalidate) => {
+    const historicalGate = historicalPrBoundFounderGate(issue508CurrentIdentity)
+    const currentGate = handoff(issue508CurrentIdentity, { id: 6014391169 })
+
+    expect(routeNoPr(issue508CurrentIdentity, [historicalGate, invalidate(currentGate)]).route).toBe('STOP')
+  })
+
   it('keeps an unresolved exact #582 gate at FOUNDER_GATE', () => {
     const gate = handoff(gateIdentity, { id: 6014391169 })
 
