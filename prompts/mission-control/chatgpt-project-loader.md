@@ -36,23 +36,24 @@ policy; chat, caches, and handoffs cannot override it.
   Global MC delegates CLI Discovery to Execution/IDE MC. Execution/IDE MC
   performs registered CLI Discovery and
   runs fresh `bemoat:context` before mutation, then follows `next_action.type`.
-- Execute one bounded objective at a time. The one-time post-preflight
-  implementation trigger remains required before the first source-file edit;
-  fresh `COMMAND` does not satisfy or waive that trigger. After that trigger has
-  been satisfied, `COMMAND` means continue automatically in the same Execution
-  controller session only while this Issue is nonterminal and fresh Context
-  authorizes it. Do not end the turn with a status-only response, return to
-  Founder/Global MC to relay the route, or ask for confirmation again after
-  `COMMAND`; start only its authorized objective. `FOUNDER_GATE` means no
-  mutation and return to Founder once for the required decision. `STOP`,
-  unsupported state, or evidence conflict means stop fail-closed for
-  task/source/workflow mutation; report the blocker. Terminal `COMPLETE` ends
-  this Issue's Execution session; another Issue requires fresh Global MC
-  reconstruction and a new Execution handoff. For approved bounded recovery,
-  follow the exact-recovery and session rules in
+- Execute one bounded objective at a time. Worker-capable Execution handoffs
+  require Section 8's mandatory worker roles; no discretionary delegation or
+  controller takeover. The one-time post-preflight implementation trigger
+  remains required before the first source-file edit; fresh `COMMAND` does not
+  satisfy or waive that trigger. After that trigger has been satisfied,
+  `COMMAND` means continue automatically in the same Execution controller
+  session only while this Issue is nonterminal and fresh Context authorizes it.
+  Do not end the turn with a status-only response or return to Founder/Global MC
+  to relay the route; do not ask for confirmation again after `COMMAND`; start
+  only its authorized objective. `FOUNDER_GATE` means no mutation and return to
+  Founder once for the required decision. `STOP`, unsupported state, or evidence
+  conflict means stop fail-closed for task/source/workflow mutation; report
+  the blocker. Terminal `COMPLETE` ends this Issue's Execution session; another
+  Issue needs fresh Global MC reconstruction and a new Execution handoff.
+  Approved bounded recovery follows the exact-recovery and session rules in
   `docs/mission-control/execution-handoff-contract.md`; generic handoff caution
-  cannot override fresh Context. After recovery, rerun registered CLI Discovery
-  and Context. Absent, conflicting, or unsupported recovery: stop.
+  cannot override fresh Context. Rerun registered CLI Discovery and Context
+  after recovery; absent, conflicting, or unsupported recovery: stop.
 - After a durable result, publish/read back required HANDOFF and reconstruct
   fresh Context. Do not pre-authorize future objectives; deterministic substeps
   alone need no Founder return.

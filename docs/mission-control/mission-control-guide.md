@@ -32,14 +32,55 @@ object.
 
 ## Bounded objective execution
 
-Assign one accountable controller per bounded objective. The controller may
-delegate bounded internal subwork, including read-only evidence gathering,
-Git/GitHub and repository inventory, mechanical implementation, focused
-testing and validation, and other deterministic substeps. These tasks stay
-inside the authorized objective. The controller retains responsibility for the
-objective contract, authority and routing, evidence synthesis against live
-durable state, resolving contradictions, acceptance criteria audit, durable
-delivery/Handoff, and fresh Context after durable completion before continuing.
+Assign exactly one accountable controller per bounded objective. In a
+worker-capable Execution, the controller is orchestration-only: it reconstructs
+authority, selects only the Context-authorized objective, defines and assigns
+bounded worker scopes, synthesizes evidence, resolves contradictions,
+independently verifies durable state, audits acceptance criteria, publishes or
+verifies required Handoff, reruns fresh Context, and enforces workflow gates.
+The controller retains responsibility for the objective contract, authority,
+routing, evidence synthesis against live durable state, acceptance criteria,
+durable delivery, and fresh Context after durable completion.
+The controller must not perform substantive objective execution, including
+repository characterization, test/oracle authoring, implementation, focused
+testing, deterministic verification, or implementation correction. The
+accountable controller role is non-delegable: a worker cannot replace, shadow,
+nest, or recursively instantiate an accountable controller for the active
+objective.
+An outer chat layer that spawns this controller may exist only as a pure
+transport/relay shell. Before spawning, it must not interpret Context, select
+the objective or worker roles, make STOP / FOUNDER_GATE / COMPLETE decisions,
+synthesize evidence into next-action authority, mutate repository state, or
+perform implementation, verification, or semantic review. If it performs any
+of those actions, it is acting as a controller and cannot spawn another
+controller.
+
+Workers own objective execution. Assign a read-only characterization worker for
+substantive inspection; assign worker-owned test/oracle work when applicable;
+assign exactly one implementation worker as the sole mutation owner for each
+bounded mutation scope; and assign worker-owned deterministic verification.
+Delegated bounded internal work includes read-only characterization,
+non-overlapping role assignments, and deterministic verification.
+State each role, scope, and mutation effect explicitly. The implementation
+worker must be a different identity from the controller. The independent
+semantic/Delta reviewer must be a different identity from both controller and
+implementer. No overlapping mutation workers are allowed. Model or provider
+substitution never changes this topology.
+Mutation ownership must be unambiguous before workers write; overlapping
+mutation is prohibited.
+
+If a worker cannot be created or fails, retry or reassign that bounded worker
+role when safe, or STOP and report the execution limitation. The controller
+must not silently take over the worker's objective work. Where the host truly
+lacks worker capability, state that compatibility limitation and do not claim
+this worker-capable topology is satisfied; this policy defines no alternative
+execution route.
+
+Canonical pre-COMMAND wrong-Issue workspace acquisition and zero-delta branch
+bootstrap are setup authority only, not substantive objective execution. They
+grant no objective-work authority. After routing, any authorized objective or
+recovery mutation remains worker-owned; the controller verifies the durable
+result.
 Continuation follows only independently reconstructed Context command routes.
 
 Workers receive no new authority. They must stay within assigned scope and cannot
@@ -50,26 +91,26 @@ decisions.
 
 Multiple read-only, non-overlapping workers may contribute evidence or
 deterministic findings to the same objective; they do not create a bundle of
-independent objectives. Make mutation ownership unambiguous before workers
-write. Overlapping worker mutation is prohibited. Assign one worker to each
-bounded mutation scope. The controller remains accountable for combining
-the results and completing the objective's authorized delivery steps.
+independent objectives. The controller remains accountable for combining the
+results and completing the objective's authorized delivery steps, but never
+becomes an objective execution or mutation fallback.
 
 Policy semantics remain agnostic to provider and model identity. Provider or
-model identity never grants authority or changes routing. Independent review
+model identity never grants authority or changes routing. Model substitution
+does not change role topology. Independent review
 remains independent; a worker implementing or controlling the objective does
 not perform its review.
 
 Global MC authorizes one bounded objective at a time. If semantics and
 authority are clear, choose the lowest-cost sufficient model and keep one
-accountable controller for the objective. Delegate suitable internal subtasks
-to non-overlapping workers as needed; the controller need not perform every
-deterministic step personally. When useful, the controller may keep the same
-capable worker through a coherent inspect/implement/focused-check/correction
-chain and any authorized delivery steps. Run the required full validation tier
-on the final candidate; do not repeat it after each small edit unless a failure
-or specific risk warrants it. Completing a substep alone does not require
-replacing the controller, a return to Global MC, or fresh Context.
+accountable controller for the objective. Model recommendations remain
+advisory: changing the selected model does not change role ownership or permit
+controller self-execution. Assign non-overlapping workers to the required
+execution roles; do not turn role ownership into optional delegation. Run the
+required full validation tier on the final candidate; do not repeat it after
+each small edit unless a failure or specific risk warrants it. Completing a
+substep alone does not require replacing the controller, a return to Global MC,
+or fresh Context.
 
 Split only at a real boundary: unresolved authority or protocol decision;
 destructive, production, migration, or secret gate; independent review required
