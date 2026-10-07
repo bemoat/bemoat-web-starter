@@ -372,6 +372,26 @@ describe('Mission Control delegation and execution model policy', () => {
       expect(delegation()).toMatch(/worker.owned roles for substantive read.only characterization.*implementation.*deterministic verification/i)
     })
 
+    // Oracle: the bounded #508 direction requires worker-capable same-Issue
+    // REVIEW to dispatch a distinct reviewer from the active controller. If
+    // the host cannot dispatch that worker, the contract permits only reporting
+    // the limitation; it defines no operator-session fallback.
+    it('dispatches same-Issue REVIEW to an independent worker or reports the capability limit', () => {
+      expect(delegation()).toMatch(/same.Issue `REVIEW`.*active accountable controller.*dispatch.*distinct independent reviewer worker/i)
+      expect(delegation()).toMatch(/after durable review evidence.*fresh Context/i)
+      expect(delegation()).toMatch(/host cannot create or dispatch.*stop and report.*execution limitation/i)
+      expect(delegation()).toMatch(/no operator.session fallback/i)
+    })
+
+    // Oracle: Founder direction 6036218038 defines reviewer independence by
+    // agent/worker identity; GitHub credential identity may be shared for a
+    // native COMMENTED verdict when the worker cannot self-APPROVE.
+    it('separates reviewer identity from GitHub credential identity', () => {
+      expect(delegation()).toMatch(/reviewer independence is a distinct reviewer agent\/worker identity.*does not require a separate GitHub account/i)
+      expect(delegation()).toMatch(/if the reviewer cannot self.`APPROVE`, the same GitHub credential may publish a native `COMMENTED` `REVIEW_VERDICT`/i)
+      expect(delegation()).toMatch(/credential reuse does not change reviewer identity or controller ownership/i)
+    })
+
     it('keeps characterization and verification separate from controller objective work', () => {
       expect(guide()).toMatch(/read.only characterization worker.*substantive inspection/i)
       expect(guide()).toMatch(/worker.owned test\/oracle work.*when applicable/i)
@@ -462,7 +482,7 @@ describe('Mission Control delegation and execution model policy', () => {
       const routing = artifactSection('Model routing')
 
       expect(loader.replace(/\s+/g, ' ')).toMatch(/on explicit controller selection, name the actual controller first in the six.field summary and Section 7; label a different profile value advisory baseline only/i)
-      expect(routing).toMatch(/Sol Medium advisory baseline.*Luna XHigh.*actual controller.*Sol Medium.*advisory baseline/i)
+      expect(routing).toMatch(/Luna XHigh advisory default.*explicitly selected Luna Medium.*actual controller.*Luna XHigh.*advisory recommendation/i)
       expect(routing).toMatch(/must not downgrade or replace the explicit selection because the advisory baseline differs/i)
     })
 
@@ -475,7 +495,7 @@ describe('Mission Control delegation and execution model policy', () => {
 
     it('keeps the advisory controller recommendation usable when no controller is explicitly selected', () => {
       const routing = artifactSection('Model routing')
-      expect(routing).toMatch(/without an explicit current.execution controller selection.*advisory profile.*controller default may be presented as the recommendation/i)
+      expect(routing).toMatch(/without an explicit current.execution controller selection.*resolve the recommendation from the loaded profile/i)
       expect(routing).toMatch(/future target policy.*only when the active Issue changes the advisory defaults.*otherwise.*NOT_APPLICABLE/i)
     })
 
@@ -485,6 +505,22 @@ describe('Mission Control delegation and execution model policy', () => {
 
     it('keeps the independent semantic reviewer separate from the controller and implementer', () => {
       expect(artifactSection('Model routing')).toMatch(/independent semantic.*reviewer.*remain separate from.*actual controller and implementer/i)
+    })
+
+    // Oracle: Founder direction 6036218038 makes Luna XHigh the profile default
+    // and forbids Sol Medium as an ordinary or fallback controller. The profile
+    // remains advisory; explicit current-execution selections stay explicit.
+    it('uses Luna XHigh as the advisory controller default without a Sol fallback', () => {
+      const contract = readFileSync(resolve(root, 'docs/mission-control/model-routing-profile.md'), 'utf8')
+      const block = contract.match(/```json\s*([\s\S]*?)```/)
+      expect(block).not.toBeNull()
+      const profile = JSON.parse(block![1]!)
+      const controller = profile.defaults.find((entry: { role: string }) => entry.role === 'controller')
+
+      expect(controller).toMatchObject({ role: 'controller', model_class: 'Luna', effort: 'XHigh' })
+      expect(contract).toMatch(/default accountable controller is Luna XHigh/i)
+      expect(contract).toMatch(/Sol Medium is not an ordinary or fallback controller\s+default/i)
+      expect(contract).toMatch(/advisory_only/)
     })
   })
 
@@ -517,7 +553,7 @@ describe('Mission Control delegation and execution model policy', () => {
     it('covers exactly the five supported roles with sufficient versionless defaults', () => {
       const contract = profile()
       expect(contract.defaults.map((entry: Record<string, string>) => [entry.role, entry.model_class, entry.effort])).toEqual([
-        ['controller', 'Sol', 'Medium'],
+        ['controller', 'Luna', 'XHigh'],
         ['read_only_characterization', 'Luna', 'Medium'],
         ['implementation', 'Luna', 'High'],
         ['deterministic_verification', 'Luna', 'Medium'],

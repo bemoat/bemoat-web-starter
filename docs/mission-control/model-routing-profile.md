@@ -18,7 +18,7 @@ code loads this profile to select models or execute work.
   "output_fields": ["role", "model_class", "effort", "rationale", "escalation_trigger"],
   "defaults": [
     {
-      "role": "controller", "model_class": "Sol", "effort": "Medium",
+      "role": "controller", "model_class": "Luna", "effort": "XHigh",
       "rationale": "Synthesize evidence and keep one bounded objective accountable.",
       "escalation_trigger": "Ambiguity, conflicting evidence, or a policy/spec boundary."
     },
@@ -57,9 +57,11 @@ code loads this profile to select models or execute work.
 }
 ```
 
-Controller defaults to Sol Medium; read-only / inventory and mechanical
-verification default to Luna Medium; implementation defaults to Luna High;
-independent semantic / Delta review defaults to a separate Sol Medium reviewer.
+The default accountable controller is Luna XHigh. Read-only / inventory and
+mechanical verification default to Luna Medium; implementation defaults to
+Luna High; independent semantic / Delta review defaults to a separate Sol
+Medium reviewer. Sol Medium is not an ordinary or fallback controller
+default.
 Reviewer independence prevents reuse of the current controller or implementer,
 even when they use the recommended model class.
 
