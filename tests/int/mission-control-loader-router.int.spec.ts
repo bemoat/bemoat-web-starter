@@ -11,11 +11,17 @@ const executionHandoff = readFileSync(resolve(root, 'docs/mission-control/execut
 const commandReference = readFileSync(resolve(root, 'docs/mission-control/command-reference.md'), 'utf8')
 const normalizedExecutionHandoff = executionHandoff.replace(/\s+/g, ' ')
 const normalizedCommandReference = commandReference.replace(/\s+/g, ' ')
+const hasHardCodedSolMediumControllerDefault = (text: string) => text
+  .split(/[.;]\s+/)
+  .some((statement) => /\bSol\b/i.test(statement)
+    && /\bMedium\b/i.test(statement)
+    && (/\b(?:controller|accountable)\b/i.test(statement)
+      || /\b(?:default|fallback|recommendation)\b/i.test(statement)))
 
 describe('Global Mission Control progressive-disclosure router', () => {
   it('keeps only the always-required authority and routing in the loader', () => {
     // Allow the mandatory Section 8 reminder while keeping the progressive loader compact.
-    expect(loader.length).toBeLessThanOrEqual(5150)
+    expect(loader.length).toBeLessThanOrEqual(5350)
 
     for (const invariant of [
       /authoritative protected-base policy/i,
@@ -66,6 +72,19 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(normalizedLoader).toMatch(/Resolve Suggested model whenever model recommendations or an Execution handoff are triggered/i)
     expect(normalizedLoader).toMatch(/Require Next action in this pre-artifact block/i)
     expect((loader.match(/^ {0,3}```/gm) ?? []).length % 2).toBe(0)
+  })
+
+  // Oracle: Founder direction 6036218038 makes the loaded advisory profile the
+  // source for generated handoffs; the loader must not encode a controller
+  // model of its own. Check behavior and role/model separation, not one stale
+  // example string.
+  it('resolves an unoverridden controller from the profile without a stale Sol default', () => {
+    const handoffRoute = loader.split('- Execution handoff:')[1]?.split('- Authorized objective/recovery:')[0] ?? ''
+
+    expect(handoffRoute).toContain('docs/mission-control/model-routing-profile.md')
+    expect(hasHardCodedSolMediumControllerDefault('Default model: Sol Medium')).toBe(true)
+    expect(hasHardCodedSolMediumControllerDefault(normalizedLoader)).toBe(false)
+    expect(normalizedExecutionHandoff).toMatch(/Luna XHigh advisory default.*explicitly selected.*actual controller/i)
   })
 
   // Oracle: Founder direction 5971335066 and the bounded checkout-recovery

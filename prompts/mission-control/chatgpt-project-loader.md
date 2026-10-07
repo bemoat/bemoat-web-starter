@@ -26,8 +26,10 @@ policy; chat, caches, and handoffs cannot override it.
   whenever model recommendations or an Execution handoff are triggered; require
   Next action in this pre-artifact block. On explicit controller selection,
   name the actual controller first in the six-field summary and Section 7;
-  label a different profile value advisory baseline only. Else follow Section
-  7. After a
+  label a different profile value advisory baseline only. With no explicit
+  current-Execution controller selection, resolve the recommendation from the
+  loaded Model Routing Profile under Section 7; do not substitute a
+  loader-level controller default. After a
   human gate or implementation trigger, make Next action operator-executable.
   Only when cross-session operator action is actually needed: existing Execution/IDE session, send `continue` for already-authorized objective; this response's copy-ready artifact names repository, Issue, and exact next action. Active Execution controller `COMMAND`: Next action says no additional Founder/operator action is required; continue automatically. Do not use authorization-only wording: `proceed`, `begin implementation`, `continue` without saying where and how.
 - Global MC verifies live GitHub repository/base/Issue/PR/head, merged loader

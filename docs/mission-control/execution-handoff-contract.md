@@ -53,7 +53,7 @@ List only the current objective's bounded work. The list does not authorize a ne
 List objective exclusions and applicable production, migration, secret, deploy, merge, child-resource, and unrelated-work boundaries.
 
 ## 7. Model routing
-Resolve the actual selected controller for this Execution separately from the advisory baseline/recommendation in Model Routing Profile v1. When an operator/Founder explicitly selects the current Execution controller, identify that selection first as the actual controller in both the six-field operator summary and this section, even if it differs from the profile. Label a different profile value separately as an advisory baseline/reference only. For example, Sol Medium advisory baseline plus explicitly selected Luna XHigh means identify Luna XHigh as the actual controller and Sol Medium only as the advisory baseline. Without an explicit current-execution controller selection, the advisory profile's controller default may be presented as the recommendation. A future target policy applies only when the active Issue changes the advisory defaults; otherwise mark it `NOT_APPLICABLE`.
+Resolve the actual selected controller for this Execution separately from the advisory baseline/recommendation in Model Routing Profile v1. When an operator/Founder explicitly selects the current Execution controller, identify that selection first as the actual controller in both the six-field operator summary and this section, even if it differs from the profile. Label a different profile value separately as an advisory baseline/reference only. For example, Luna XHigh advisory default plus explicitly selected Luna Medium means identify Luna Medium as the actual controller and Luna XHigh only as the advisory recommendation. Without an explicit current-Execution controller selection, resolve the recommendation from the loaded profile; do not substitute a separate controller default. A future target policy applies only when the active Issue changes the advisory defaults; otherwise mark it `NOT_APPLICABLE`.
 
 Never describe an advisory profile recommendation as workflow or model-execution authority. Do not say or imply that it governs, binds, or prevents a different explicitly selected controller. Execution must not downgrade or replace the explicit selection because the advisory baseline differs. An explicit controller selection does not change Context authority, routes, gates, repository policy, or acceptance criteria, and cannot bypass any workflow gate.
 
@@ -64,6 +64,19 @@ If Global MC cannot run repository-local CLI, any implementation recommendation 
 Name exactly one accountable controller and explicitly state that the controller is orchestration-only and does not execute objective work. The controller must not characterize, author tests, implement, run objective verification, correct implementation, or mutate objective files, even when it has write capability; it is never the mutation fallback. Name worker-owned roles for substantive read-only characterization, implementation, and deterministic verification; assign worker-owned test/oracle work when applicable. The implementation worker is a distinct identity from the controller and is the sole mutation owner for the bounded mutation scope. The independent semantic/Delta reviewer is distinct from both. Do not use permissive wording such as “delegate where useful,” “same capable worker through inspect/implement/check,” or any equivalent that lets controller discretion decide whether objective work is delegated. The controller role cannot be transferred, shadowed, nested, or recursively instantiated by a worker.
 
 Any outer chat layer that spawns the accountable controller may exist only as a pure transport/relay shell. Before spawning, it must not interpret Context, select the objective or worker roles, make STOP / FOUNDER_GATE / COMPLETE decisions, synthesize evidence into next-action authority, mutate repository state, or perform implementation, verification, or semantic review. If it performs any of those actions, it is acting as a controller and cannot spawn another controller.
+
+For a same-Issue `REVIEW` route in a worker-capable Execution session, the active
+accountable controller dispatches a distinct independent reviewer worker within
+the same session; do not require a manual Founder/operator reviewer session.
+After durable review evidence, reconstruct fresh Context. If the host cannot
+create or dispatch the required reviewer worker, stop and report that execution
+limitation; this contract defines no operator-session fallback.
+
+Reviewer independence is a distinct reviewer agent/worker identity from the
+controller and implementer; it does not require a separate GitHub account. If
+the reviewer cannot self-`APPROVE`, the same GitHub credential may publish a
+native `COMMENTED` `REVIEW_VERDICT`. Credential reuse does not change reviewer
+identity or controller ownership.
 
 If a worker cannot be created or fails, retry or reassign that bounded role when safe, or STOP and report the execution limitation. The controller must not silently take over objective execution. Model routing remains advisory; model/provider substitution does not change these roles. If the host genuinely lacks worker capability, state that compatibility limitation and do not claim the worker-capable topology is satisfied; this contract defines no alternative execution route.
 
