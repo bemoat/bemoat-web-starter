@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { blockerResolutionValidationCommands } from './blocker-resolution-validation-command-metadata.ts'
 import { handoffCommands } from './handoff-command-metadata.ts'
 import { handoffRoutes } from './handoff-routing-policy.ts'
 import { contextSyncCommands } from './context-sync-command-metadata.ts'
@@ -518,13 +519,14 @@ const commands: Record<string, CommandContract> = {
 
 const commandMetadataDependencies: any = { contract: contract as unknown as <T extends Record<string, unknown>>(value: T) => T, positional, flag, environment, nextAction }
 const protocolCommands = handoffCommands(commandMetadataDependencies)
+const validationCommands = blockerResolutionValidationCommands(commandMetadataDependencies)
 
 const trailingCommands = Object.fromEntries(
   ['bemoat:test:int', 'bemoat:typecheck'].map((command) => [command, commands[command]]),
 )
 delete commands['bemoat:test:int']
 delete commands['bemoat:typecheck']
-const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...protocolCommands, ...trailingCommands }
+const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
 
 const routes = [
   ...utilityRoutes(),

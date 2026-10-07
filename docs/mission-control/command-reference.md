@@ -159,6 +159,16 @@ Before an authorized Founder publishes one, use the canonical
 validated against the production parser; replace its sample values only with
 the exact bound live evidence described above.
 
+Use the read-only public syntax validator for a complete candidate body:
+
+    pnpm run bemoat:blocker-resolution:validate -- --body-file ./blocker-resolution.md --json
+
+It reports PASS only when the exact body matches the production schema-v1
+active-PR or schema-v2 no-PR parser. PASS establishes syntax only. The
+validator does not inspect identity, authority, or live evidence; it does not
+publish a comment or create a Context route. Invalid bodies return FAIL with
+`INVALID_INVOCATION`.
+
 ## Handoff
 
     pnpm run bemoat:handoff <issue-number> --body-file <strict-handoff.json>
