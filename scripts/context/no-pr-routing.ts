@@ -42,7 +42,7 @@ function hasInvalidNoPrFounderGateEvidence(evidence: NormalizedContextEvidence):
 
     try {
       const record = parseHandoffBody(JSON.stringify(payload))
-      return !isExactCurrentNoPrFounderGate(source, record, evidence)
+      return record.pr === null && !isExactCurrentNoPrFounderGate(source, record, evidence)
     } catch {
       return true
     }
