@@ -39,7 +39,7 @@ describe('stateless public coordination contract', () => {
 
     const guide = read('docs/mission-control/mission-control-guide.md')
     expect(guide).toMatch(/^policy_id: bemoat-mission-control$/m)
-    expect(guide).toMatch(/^version: 1\.5\.0$/m)
+    expect(guide).toMatch(/^version: 1\.6\.0$/m)
     expect(guide).toContain('STANDARD')
     expect(guide).toContain('Delta Review')
     expect(guide).toContain('FOUNDER_GATE')

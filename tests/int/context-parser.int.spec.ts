@@ -223,4 +223,23 @@ Implementation Plan: docs/superpowers/plans/example/implementation-plan.md
       invalidFounderDecisions: [{ id: '', authorLogin: 'founder' }],
     })
   })
+
+  // #602's approved strict repair contract requires native identity and author
+  // evidence to survive projection; timestamp and OWNER never grant authority.
+  it('projects repair evidence independently and preserves author conflicts and invalid native identity', () => {
+    const repair = {
+      id: 19,
+      body: '## FOUNDER_DECISION_REPAIR\n\n```json\n{}\n```\n',
+      createdAt: 'not-a-date',
+      url: 'https://github.com/example/repo/issues/410#issuecomment-19',
+      authorLogin: 'founder',
+      author: { login: 'other' },
+      authorAssociation: 'OWNER',
+    }
+    expect(parseRoleEvidence([repair, { ...repair, id: '', url: '' }])).toMatchObject({
+      founderDecisions: [],
+      founderDecisionRepairs: [{ id: 19, authorLogin: 'founder', authorIdentityConflict: true }],
+      invalidFounderDecisionRepairs: [{ id: '', authorLogin: 'founder', authorIdentityConflict: true }],
+    })
+  })
 })

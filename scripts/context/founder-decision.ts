@@ -13,6 +13,11 @@ export interface FounderDecisionRecord {
   authority: { role: 'FOUNDER'; login: string }
 }
 
+export interface FounderDecisionRepairRecord extends Omit<FounderDecisionRecord, 'record_type'> {
+  record_type: 'FOUNDER_DECISION_REPAIR'
+  source_founder_decision: { comment_id: string; url: string; body_sha256: string }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -65,4 +70,28 @@ export function parseFounderDecisionComment(body: string): FounderDecisionRecord
 
   const canonical = `## FOUNDER_DECISION\n\n${fence}json\n${JSON.stringify(value, null, 2)}\n${fence}\n`
   return canonical === body ? value : null
+}
+
+/** The repair supplies its own complete decision; never parse/normalize its predecessor as authority. */
+export function parseFounderDecisionRepairComment(body: string): FounderDecisionRepairRecord | null {
+  const fence = '`'.repeat(3)
+  const prefix = `## FOUNDER_DECISION_REPAIR\n\n${fence}json\n`
+  const suffix = `\n${fence}\n`
+  if (!body.startsWith(prefix) || !body.endsWith(suffix)) return null
+  let value: unknown
+  try {
+    value = JSON.parse(body.slice(prefix.length, -suffix.length))
+  } catch {
+    return null
+  }
+  if (!isRecord(value) || value.record_type !== 'FOUNDER_DECISION_REPAIR') return null
+  const { source_founder_decision: predecessor, ...decision } = value
+  if (!isFounderDecisionRecord({ ...decision, record_type: 'FOUNDER_DECISION' }) ||
+    !isRecord(predecessor) || !hasExactKeys(predecessor, ['comment_id', 'url', 'body_sha256']) ||
+    typeof predecessor.comment_id !== 'string' || !/^[1-9]\d*$/.test(predecessor.comment_id) ||
+    predecessor.url !== `https://github.com/${value.repository}/issues/${value.issue_number}#issuecomment-${predecessor.comment_id}` ||
+    typeof predecessor.body_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(predecessor.body_sha256)
+  ) return null
+  const canonical = `${prefix}${JSON.stringify(value, null, 2)}${suffix}`
+  return canonical === body ? value as unknown as FounderDecisionRepairRecord : null
 }

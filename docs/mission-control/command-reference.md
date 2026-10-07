@@ -154,6 +154,37 @@ Before an authorized Founder publishes one, use the canonical
 [FOUNDER_DECISION template](founder-decision-template.md). Replace every
 sample value with exact current evidence and preserve the strict body format.
 
+## Immutable malformed Founder-decision recovery
+
+For exactly one syntactically malformed ordinary no-PR `FOUNDER_DECISION`, the
+trusted Founder may append one strict schema-v1 `FOUNDER_DECISION_REPAIR`.
+Use the [canonical repair template](founder-decision-repair-template.md). The
+repair carries a complete current `PROCEED` decision, exact source gate, and
+exact predecessor native comment ID/URL plus SHA-256 of its unchanged UTF-8
+body. Both native authors and the repair's declared Founder must match merged
+trusted-Founder policy. The repair, gate, and predecessor are distinct comments.
+
+This is not a second ordinary decision. The malformed predecessor grants no
+authority; Context never normalizes it into a valid record. Valid ordinary
+decisions cannot be repaired, even when stale or wrong-identity. Orphan,
+malformed, duplicate, competing, wrong-binding, wrong-author, or changed-body
+evidence stays STOP. Every remaining STOP, historical-base, HANDOFF, and
+COMPLETE rule still applies after consuming only the exact gate. Context is
+read-only; repair evidence grants no generic implementation, merge,
+blocker-resolution, deployment, migration, or terminal authority and cannot
+consume an active-PR gate.
+
+Run registered CLI Discovery, then the public syntax validator before publication:
+
+    pnpm run bemoat:founder-decision-repair:validate -- --help --json
+    pnpm run bemoat:founder-decision-repair:validate -- --body-file ./founder-decision-repair.md --json
+
+PASS checks only the exact strict repair body. It does not verify the digest
+against live predecessor content, authority, identity, policy, evidence,
+publication, or a Context route. It performs no mutation. FAIL returns
+`INVALID_INVOCATION`. After authorized Founder publication, rerun CLI Discovery
+and fresh Context to reconstruct from current merged authority.
+
 Before an authorized Founder publishes one, use the canonical
 [BLOCKER_RESOLUTION template](blocker-resolution-template.md). The example is
 validated against the production parser; replace its sample values only with

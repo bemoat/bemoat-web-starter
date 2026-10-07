@@ -39,6 +39,13 @@
       "migration_status": "migrated"
     },
     {
+      "path": "scripts/agent-validate-founder-decision-repair.ts",
+      "facade_disposition": "composition_root",
+      "internal_destination": "scripts/context/",
+      "owning_slice": 7,
+      "migration_status": "migrated"
+    },
+    {
       "path": "scripts/agent-validate-review-verdict.ts",
       "facade_disposition": "composition_root",
       "internal_destination": "scripts/context/",

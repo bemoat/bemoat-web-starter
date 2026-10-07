@@ -186,6 +186,8 @@ export function collectContextEvidence({
       invalidBlockerResolutions: roleEvidence.invalidBlockerResolutions,
       founderDecisions: roleEvidence.founderDecisions,
       invalidFounderDecisions: roleEvidence.invalidFounderDecisions,
+      founderDecisionRepairs: roleEvidence.founderDecisionRepairs,
+      invalidFounderDecisionRepairs: roleEvidence.invalidFounderDecisionRepairs,
     },
     ...(historicalBlockerResolutionProofs.length > 0 ? { historicalBlockerResolutionProofs } : {}),
     evidenceErrors: [...new Set([

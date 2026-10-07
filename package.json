@@ -42,6 +42,7 @@
     "bemoat:context:recover-setup": "node scripts/agent-context-recover-setup.ts",
     "bemoat:handoff": "node scripts/agent-handoff.ts",
     "bemoat:blocker-resolution:validate": "node scripts/agent-validate-blocker-resolution.ts",
+    "bemoat:founder-decision-repair:validate": "node scripts/agent-validate-founder-decision-repair.ts",
     "bemoat:review-verdict:validate": "node scripts/agent-validate-review-verdict.ts",
     "bemoat:branch:check": "bash scripts/check-branch-safety.sh",
     "bemoat:boilerplate:sync": "node scripts/sync-boilerplate.ts",
