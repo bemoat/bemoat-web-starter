@@ -1,18 +1,6 @@
-import { z } from 'zod'
+import { hasStrictImmutableFindingDisposition } from './immutable-finding-disposition.ts'
 
 const FULL_SHA_RE = /^[0-9a-f]{40}$/i
-const IMMUTABLE_FINDING_SCHEMA = z.object({
-  schema_version: z.literal(1),
-  mode: z.literal('implementation_pr'),
-  reviewed_head: z.string().regex(FULL_SHA_RE),
-  findings: z.array(z.object({
-    id: z.string().trim().min(1),
-    canonical_summary: z.string().trim().min(1),
-    source_thread: z.string().trim().min(1),
-    required_evidence: z.array(z.string().trim().min(1)).min(1),
-  }).strict()).min(1),
-}).strict()
-
 function stateConflict(message: string): Error {
   return new Error(`STATE_CONFLICT: ${message}`)
 }
@@ -46,6 +34,22 @@ export function validateStrictReviewVerdictCandidate(body: string, binding: Cand
   const verdict = one('Verdict', /^\*\*Verdict:\*\*[ \t]*(.+?)[ \t]*$/gm)[1] ?? ''
   const target = one('PR / base / head', /^\*\*PR \/ base \/ head:\*\*[ \t]*PR #([1-9]\d*) · `([^`\s]+)` · `([^`\s]+)`[ \t]*$/gm)
   const approvedBase = one('Approved base', /^\*\*Approved base:\*\*[ \t]*`([^`\s@]+)@([^`\s]+)`[ \t]*$/gm)
+  const fieldOccurrences = (label: string): string[] => {
+    const expression = new RegExp('^[ \\t]*(?:[-*+][ \\t]+)?(?:\\*\\*|__)?(?:' + label + ')(?:\\*\\*|__)?[ \\t]*:', 'i')
+    return lines.filter((line) => expression.test(line))
+  }
+  const canonicalFields = [
+    ['Repository', 'Repository'],
+    ['Task', 'Task(?:\\s*\\/\\s*Issue)?'],
+    ['Verdict', 'Verdict'],
+    ['PR / base / head', 'PR\\s*\\/\\s*base\\s*\\/\\s*head'],
+    ['Approved base', 'Approved\\s+base'],
+  ] as const
+  for (const [label, expression] of canonicalFields) {
+    if (fieldOccurrences(expression).length !== 1) {
+      throw stateConflict(`REVIEW_VERDICT candidate requires exactly one ${label} field occurrence`)
+    }
+  }
   const repositoryFields = [...body.matchAll(/^[ \t]*(?:-[ \t]*)?(?:\*\*|__)?Repository:(?:\*\*|__)?[ \t]*(?:`([^`\s]+)`|([^`\s]+))[ \t]*$/gim)]
   const taskFields = [...body.matchAll(/^[ \t]*(?:-[ \t]*)?(?:\*\*|__)?(?:Task\s*\/\s*Issue(?:\*\*|__)?(?::(?:\*\*|__)?)?|Task(?:\*\*|__)?:(?:\*\*|__)?)[ \t]*(.*)$/gim)]
   if (repositoryFields.length !== 1 || taskFields.length !== 1) {
@@ -102,9 +106,7 @@ export function validateStrictReviewVerdictCandidate(body: string, binding: Cand
     } catch {
       throw stateConflict('immutable finding disposition JSON is malformed')
     }
-    const result = IMMUTABLE_FINDING_SCHEMA.safeParse(parsed)
-    if (!result.success || result.data.reviewed_head.toLowerCase() !== reviewedHead.toLowerCase() ||
-      new Set(result.data.findings.map((finding) => finding.id)).size !== result.data.findings.length) {
+    if (!hasStrictImmutableFindingDisposition(parsed, reviewedHead)) {
       throw stateConflict('immutable finding disposition does not match the production finding contract')
     }
   } else if (dispositionHeadings.length > 0) {

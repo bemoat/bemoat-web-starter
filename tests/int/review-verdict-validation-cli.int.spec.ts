@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { runCliBoundaryCase } from '../helpers/cli-boundary-harness'
 import { getCommandContract } from '../../scripts/cli/command-contract.ts'
 import { parseProductionMergeReviewVerdict } from '../../scripts/context/merge-review-verdict.ts'
+import { hasBlockingFinding } from '../../scripts/context/semantic-review-evidence.ts'
 
 const COMMAND = 'bemoat:review-verdict:validate'
 const ENTRYPOINT = 'scripts/agent-validate-review-verdict.ts'
@@ -86,6 +87,9 @@ describe('REVIEW_VERDICT validation public CLI', () => {
     ['using a partial base commit identity', candidate().replace(baseSha, 'main')],
     ['duplicating the task identity', candidate().replace('Task: Issue #535', 'Task: Issue #535\nTask: Issue #535')],
     ['adding a historical alternate task identity', candidate().replace('Task: Issue #535', 'Task: Issue #535\nTask / Issue: #535')],
+    ['adding an empty duplicate Repository field', candidate().replace('Repository: `boat1994/bemoat-web-starter`', 'Repository: `boat1994/bemoat-web-starter`\nRepository:')],
+    ['adding an empty duplicate Verdict field', candidate().replace('**Verdict:** ELIGIBLE FOR FOUNDER REVIEW', '**Verdict:** ELIGIBLE FOR FOUNDER REVIEW\n**Verdict:**')],
+    ['adding a partial alternate Approved base field', candidate().replace('**Approved base:** `main@' + baseSha + '`', '**Approved base:** `main@' + baseSha + '`\nApproved base: main')],
     ['duplicating the Supersedes field', candidate('ELIGIBLE FOR FOUNDER REVIEW', '**Supersedes:** 9003\n**Supersedes:** 9003\n')],
     ['using an unsupported verdict', candidate('APPROVED')],
     ['omitting immutable findings for a correction', candidate('CORRECTION REQUIRED').replace(/\n\n### Immutable finding disposition[\s\S]*$/, '')],
@@ -118,6 +122,23 @@ describe('REVIEW_VERDICT validation public CLI', () => {
 **Verdict:** ELIGIBLE FOR FOUNDER REVIEW`
 
     expect(parseProductionMergeReviewVerdict(historical, '5426416809').issue).toBe('434')
+  })
+
+  it('preserves Context finding compatibility for records without mode and with legacy extra fields', () => {
+    const legacyRecord = {
+      schema_version: 1,
+      reviewed_head: head,
+      findings: [finding],
+      retained_context_metadata: 'historical record',
+    }
+    const disposition = `### Immutable finding disposition\n\`\`\`json\n${JSON.stringify(legacyRecord)}\n\`\`\``
+    const historicalContextBody = `## REVIEW_VERDICT\n\n${disposition}`
+    const strictCandidateBody = candidate('CORRECTION REQUIRED').replace(
+      /### Immutable finding disposition[\s\S]*$/, disposition,
+    )
+
+    expect(hasBlockingFinding(historicalContextBody, head)).toBe(true)
+    expect(invoke(strictCandidateBody).status).toBe(2)
   })
 
   it('exposes machine-readable safe help for a read-only command contract', () => {
