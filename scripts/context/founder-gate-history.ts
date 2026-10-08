@@ -17,14 +17,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function hasStaleTerminalHandoff(sources: RoleEvidence[], evidence: NormalizedContextEvidence): boolean {
   return sources.some((source) => {
     const payload = extractHandoffPayload(source.body)
-    if (!isRecord(payload)) return false
+    if (!isRecord(payload) || !['STOP', 'COMPLETE'].includes(String(payload.route)) || payload.pr !== null ||
+        payload.repository !== evidence.repository.nameWithOwner || payload.issue_number !== evidence.issue.number ||
+        payload.branch !== evidence.localGit.branch || typeof payload.exact_head !== 'string' ||
+        !isFullSha(payload.exact_head) || payload.exact_head.toLowerCase() === evidence.localGit.head?.toLowerCase() ||
+        !isRecord(payload.protected_base) || payload.protected_base.branch !== evidence.protectedBase.branch ||
+        !isRecord(payload.local_durability) || payload.local_durability.durable !== true ||
+        !isExactIssueCommentUrl(source.url, source, evidence)) return false
     let record: HandoffRecord
-    try { record = parseHandoffBody(JSON.stringify(payload)) } catch { return false }
-    return (record.route === 'STOP' || record.route === 'COMPLETE') && record.pr === null &&
-      record.repository === evidence.repository.nameWithOwner && record.issue_number === evidence.issue.number &&
-      record.branch === evidence.localGit.branch && record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase() &&
-      record.protected_base.branch === evidence.protectedBase.branch && record.local_durability.durable &&
-      renderHandoffComment(record) === source.body && isExactIssueCommentUrl(source.url, source, evidence)
+    try { record = parseHandoffBody(JSON.stringify(payload)) } catch { return true }
+    return renderHandoffComment(record) === source.body
   })
 }
 

@@ -131,15 +131,28 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
     if (args[0] === 'pr' && args[1] === 'list') {
       if (unlinkedPr) {
         if (args.includes('--search')) return response('[]')
-        unlinkedPrCalls.push(key)
-        return response(JSON.stringify([{
+        const activeBranchPr = {
           number: 621,
           url: `https://github.com/${repository}/pull/621`,
           headRefName: branch,
           title: 'Unrelated improvement',
           body: 'Changes for the current topic branch.',
-          closingIssuesReferences: [],
-        }]))
+          closingIssuesReferences: [] as unknown[],
+        }
+        if (args.includes('--head')) return response(JSON.stringify([activeBranchPr]))
+        const limitIndex = args.indexOf('--limit')
+        const limit = limitIndex >= 0 ? Number(args[limitIndex + 1]) : 100
+        const firstHundred = Array.from({ length: 100 }, (_, index) => ({
+          number: 700 + index,
+          url: `https://github.com/${repository}/pull/${700 + index}`,
+          headRefName: `fix/${700 + index}-unrelated`,
+          title: 'Unrelated improvement',
+          body: 'No Issue link.',
+          closingIssuesReferences: [] as unknown[],
+        }))
+        if (limit > 100) return response(JSON.stringify([...firstHundred, activeBranchPr]))
+        unlinkedPrCalls.push(key)
+        return response(JSON.stringify(firstHundred))
       }
       return response(activePr ? JSON.stringify([{
         number: 620,
@@ -264,11 +277,13 @@ describe('Context PR_READY after protected main advances', () => {
     expect(compareCalls).toEqual([])
   })
 
-  it('does not return PR_READY when an active PR uses the verified branch but has no Issue link', () => {
+  it('does not return PR_READY when an unlinked same-branch PR is beyond the first 100 entries', () => {
     // Founder eligibility requires that no active PR is already associated
     // with the verified branch. Issue linkage is not required for that branch
-    // association, so this story asserts only the exclusion uniquely required
-    // by the PR_READY contract, not a guessed fallback route.
+    // association. The issue search succeeds with no result; the unfiltered
+    // query returns its first 100 entries while the same-branch PR is entry 101.
+    // A branch-specific query or pagination can detect it; assert only the
+    // exclusion uniquely required by PR_READY, not a guessed fallback route.
     const { evidence, decision, unlinkedPrSeen } = runAncestryScenario(undefined, false, true)
 
     expect(unlinkedPrSeen).toBe(true)

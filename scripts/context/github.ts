@@ -119,7 +119,6 @@ function requiredRulesetRequirements(rulesets: Record<string, unknown>[]): { req
   }
   return { requiredChecks: [...requiredChecks].sort(), requiredApprovals }
 }
-
 function readNativeProtection({
   repo,
   baseBranch,
@@ -160,7 +159,6 @@ function readNativeProtection({
     error: active.length > 0 ? null : 'no active native ruleset applies to the protected base',
   }
 }
-
 function checkEvidence(statusChecks: unknown, requiredChecks: string[]): HeadVerificationEvidence['checks'] {
   const checks = Array.isArray(statusChecks) ? statusChecks : []
   const terminal = new Set(['SUCCESS', 'FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'SKIPPED', 'NEUTRAL'])
@@ -191,7 +189,6 @@ function candidateNumber(value: unknown): string | null {
   if (!isPositiveInteger(value)) return null
   return String(value)
 }
-
 export function readGithubEvidence({
   cwd = process.cwd(),
   env = process.env,
@@ -226,7 +223,6 @@ export function readGithubEvidence({
       authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,
     }
   }) : []
-
   let issue: IssueEvidence | null = null
   if (!issuePayload) {
     errors.push(`BLOCKED_EXTERNAL: Issue #${issueNumber} evidence is unavailable${issueResult.error ? ` (${issueResult.error})` : ''}`)
@@ -252,18 +248,21 @@ export function readGithubEvidence({
       }
     }
   }
-
   const candidates = new Map<string, Record<string, unknown>>()
   const issueOwnedCandidates = new Set<string>()
   const queryArgs: string[][] = [
     ['pr', 'list', '--repo', repo, '--state', 'all', '--search', `repo:${repo} #${issueNumber}`, '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '100'],
     ['pr', 'list', '--repo', repo, '--state', 'all', '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '100'],
+    ...(branch ? [['pr', 'list', '--repo', repo, '--state', 'open', '--head', branch, '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '1000']] : []),
   ]
   let successfulList = false
+  let branchListSucceeded = !branch
   for (const args of queryArgs) {
+    const branchQuery = args.includes('--head')
     const result = readJson<unknown[]>(run, 'gh', args, { cwd, env })
     if (!Array.isArray(result.value)) continue
     successfulList = true
+    if (branchQuery) branchListSucceeded = true
     for (const value of result.value) {
       const issueOwned = isRecord(value) && prOwnsIssue(value, repo, issueNumber)
       if (!isRecord(value) || (!issueOwned && (!branch || asString(value.headRefName) !== branch))) continue
@@ -274,6 +273,7 @@ export function readGithubEvidence({
     }
   }
   if (!successfulList) errors.push('BLOCKED_EXTERNAL: active PR lookup is unavailable')
+  if (!branchListSucceeded) errors.push(`BLOCKED_EXTERNAL: active PR lookup for branch ${branch} is unavailable`)
 
   const legacy = readJson<Record<string, unknown>>(run, 'gh', ['api', `repos/${repo}/branches/${protectedBaseBranch}/protection`], { cwd, env })
   let protection: ProtectionEvidence

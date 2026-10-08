@@ -262,6 +262,41 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     expect(decision.nextAction.type).not.toBe('OPEN_PR')
   })
 
+  it('preserves read-only no-change IMPLEMENT reconstruction with the writer-generated read-only proof', () => {
+    // The HANDOFF writer emits this proof for an empty protected-base diff.
+    // Mission Control's no-change read-only reconstruction remains IMPLEMENT
+    // with no mutation command; the PR_READY rule still excludes it because
+    // it is read_only and carries a read-only-tier proof.
+    const readOnly = implementationHandoff({
+      objective_mode: 'read_only',
+      protected_base: { branch: 'main', sha: head },
+      verified_evidence: [{
+        kind: 'validation-proof',
+        value: JSON.stringify({
+          status: 'PASS',
+          tier: 'read-only',
+          command: 'pnpm run bemoat:guard:safety',
+          exact_head: head,
+        }),
+        url: null,
+      }],
+    })
+    const current = evidence([handoffComment(readOnly)], {
+      protectedBase: {
+        branch: 'main',
+        sha: head,
+        source: 'live GitHub ref',
+        url: `https://github.com/${repository}/tree/main`,
+      },
+    })
+    const decision = routeContext(current)
+
+    expect(decision).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: { type: 'COMMAND', command: null },
+    })
+  })
+
   const staleHistoryCases: Array<[string, HandoffRecord]> = [
     ['stale STOP', {
       ...implementationHandoff(),
@@ -287,6 +322,25 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     const decision = routeContext(evidence([
       handoffComment(implementationHandoff()),
       handoffComment(stale, commentId + 1),
+    ]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it.each(staleHistoryCases)('returns STOP for parseable malformed %s HANDOFF history', (_story, stale) => {
+    const canonical = handoffComment(stale, commentId + 1)
+    const body = canonical.body.replace(/\n}\n```\n$/, ',\n  "unexpected_field": true\n}\n```\n')
+    const malformedStale = { ...canonical, body }
+
+    // Keep this a parseable payload whose extra field makes the strict
+    // HANDOFF schema invalid, rather than a JSON syntax error.
+    const json = body.match(/```json\n([\s\S]+)\n```\n$/)?.[1]
+    expect(json).toBeDefined()
+    expect(JSON.parse(json ?? '{}')).toHaveProperty('unexpected_field', true)
+
+    const decision = routeContext(evidence([
+      handoffComment(implementationHandoff()),
+      malformedStale,
     ]))
 
     expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
