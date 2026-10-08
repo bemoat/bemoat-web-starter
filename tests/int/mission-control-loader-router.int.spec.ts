@@ -11,6 +11,9 @@ const executionHandoff = readFileSync(resolve(root, 'docs/mission-control/execut
 const commandReference = readFileSync(resolve(root, 'docs/mission-control/command-reference.md'), 'utf8')
 const normalizedExecutionHandoff = executionHandoff.replace(/\s+/g, ' ')
 const normalizedCommandReference = commandReference.replace(/\s+/g, ' ')
+const sameIssueAcquisitionContract = normalizedExecutionHandoff
+  .split('#### Same-Issue acquisition after local-durability STOP')[1]
+  ?.split('#### Wrong-Issue acquisition')[0] ?? ''
 const hasHardCodedSolMediumControllerDefault = (text: string) => text
   .split(/[.;]\s+/)
   .some((statement) => /\bSol\b/i.test(statement)
@@ -170,6 +173,60 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(continuationContract).toMatch(/multiple plausible Issue workspaces\/branches.*dirty or non-durable state.*wrong\/noncanonical repository or origin.*conflicting\/stale live-base evidence.*conflicting existing target branch ownership.*filesystem\/network\/host capability prevents isolated safe provisioning/i)
     expect(continuationContract).toMatch(/if the agent can create and verify the isolated sibling checkout but the host cannot switch\/rebind its effective workspace\/root.*prepare the workspace completely first.*report the exact verified path as the single operator action.*do not ask the Founder to run Git clone\/fetch\/checkout commands manually/i)
     expect(continuationContract).toMatch(/no new general scheduler or worktree manager/i)
+  })
+
+  // Oracle: Issue #618's accepted objective permits acquisition only for the
+  // same queried Issue when the source is STOP / LOCAL_STATE_NOT_DURABLE, and
+  // only after exact canonical repository, Issue branch/head, origin, and
+  // approved-base proof. Merged execution-handoff-contract.md §12 establishes
+  // acquisition as isolated setup followed by Discovery and fresh Context,
+  // never objective authority. The candidate implementation is not authority.
+  it('allows only exact same-Issue clean acquisition from a local durability STOP', () => {
+    expect(sameIssueAcquisitionContract).toMatch(/same-Issue.*`STOP`.*`LOCAL_STATE_NOT_DURABLE`/i)
+    expect(sameIssueAcquisitionContract).toMatch(/exact canonical repository and queried Issue identity/i)
+    expect(sameIssueAcquisitionContract).toMatch(/source Issue branch, canonical `origin`, and `origin\/<branch>` upstream/i)
+    expect(sameIssueAcquisitionContract).toMatch(/approved protected-base branch and exact live approved-base SHA/i)
+    expect(sameIssueAcquisitionContract).toMatch(/one unique Issue remote branch with its exact live head SHA/i)
+    expect(sameIssueAcquisitionContract).toMatch(/separate isolated.*clean.*destination/i)
+    expect(sameIssueAcquisitionContract).toMatch(/acquisition only.*does not authorize.*objective work/i)
+    // The wrong-Issue clean-source precondition remains separately asserted by
+    // the existing wrong-Issue acquisition story below.
+  })
+
+  // Oracle: Issue #618 requires preserving dirty source/backups and forbids
+  // candidate-source copying before the acquired destination independently
+  // authorizes work. Section 12's existing setup-only and re-Context rules
+  // establish the boundary; no candidate implementation behavior is assumed.
+  it('preserves the stopped source and candidate while the destination is prepared', () => {
+    expect(sameIssueAcquisitionContract).toMatch(/preserve the dirty source workspace and every associated backup unchanged/i)
+    expect(sameIssueAcquisitionContract).toMatch(/any source or backup mutation must remain `STOP`/i)
+    expect(sameIssueAcquisitionContract).toMatch(/do not copy.*candidate source files.*before.*registered CLI Discovery.*fresh Context/i)
+    expect(sameIssueAcquisitionContract).toMatch(/acquire only one separate isolated, clean destination/i)
+  })
+
+  // Oracle: Issue #618 and merged section 12 require registered CLI Discovery
+  // and fresh Context in the acquired workspace before objective edits. The
+  // repository's one-time first-edit rule requires both Context COMMAND and
+  // the first-edit trigger; this is setup authority, not STOP bypass.
+  it('requires destination Discovery, fresh COMMAND, and the first-edit trigger before objective edits', () => {
+    expect(sameIssueAcquisitionContract).toMatch(/in the acquired workspace.*registered CLI Discovery.*fresh Context/i)
+    expect(sameIssueAcquisitionContract).toMatch(/Context.*`next_action.type: COMMAND`.*first-edit trigger.*before.*objective edits/i)
+    expect(sameIssueAcquisitionContract).toMatch(/if fresh Context.*does not return.*COMMAND.*stop/i)
+    expect(sameIssueAcquisitionContract).toMatch(/workspace acquisition.*never.*objective work/i)
+  })
+
+  // Oracle: Issue #618 explicitly requires fail-closed identity and evidence
+  // checks. Section 12 already makes multiple candidates, stale/conflicting
+  // refs, noncanonical origin, and mutation/loss of unrelated work STOP
+  // conditions. This story binds those exclusions to same-Issue acquisition.
+  it('fails closed on wrong identity, ambiguity, stale refs, and source or backup mutation', () => {
+    expect(sameIssueAcquisitionContract).toMatch(/wrong Issue.*branch.*origin.*remain `STOP`/i)
+    // Issue #618 acceptance criterion 2 explicitly names ambiguous multiple
+    // workspaces as a STOP case; branch-only ambiguity is not a substitute.
+    expect(sameIssueAcquisitionContract).toMatch(/ambiguous.*workspace.*remain `STOP`/i)
+    expect(sameIssueAcquisitionContract).toMatch(/stale.*divergent.*remote.*remain `STOP`/i)
+    expect(sameIssueAcquisitionContract).toMatch(/source or backup.*mutation.*remain `STOP`/i)
+    expect(sameIssueAcquisitionContract).toMatch(/no objective mutation.*at `STOP`/i)
   })
 
   // Oracle: Founder decision #565 comment 5991707507 and the Context Story

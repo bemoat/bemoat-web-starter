@@ -349,6 +349,56 @@ existing canonical path, it must not emit this recovery candidate.
 
 ### Wrong-Issue workspace acquisition
 
+#### Same-Issue acquisition after local-durability STOP
+
+When fresh registered Context for the queried Issue returns `route: STOP` and
+`next_action.type: STOP` solely because the currently bound same-Issue source
+workspace is dirty or otherwise not durable (`LOCAL_STATE_NOT_DURABLE`), the
+same-Issue `STOP` / `LOCAL_STATE_NOT_DURABLE` remains binding for all objective
+work. Acquisition only transports the execution to rerun Context; acquisition
+only does not authorize source repair, candidate recovery, or objective work.
+Workspace acquisition never authorizes objective work by itself.
+
+Before acquisition, independently prove the exact canonical repository and
+queried Issue identity; the source Issue branch, canonical `origin`, and
+`origin/<branch>` upstream; the approved protected-base branch and exact live
+approved-base SHA; and one unique Issue remote branch with its exact live head
+SHA agreeing across canonical GitHub and `git ls-remote` evidence. The remote
+branch must be the established Issue branch, not a guessed name. Wrong Issue,
+branch, or origin; multiple plausible Issue branches remain `STOP`. Missing or
+conflicting evidence; stale, divergent remote refs remain `STOP`; mismatched
+remote refs or an unproven approved base remain `STOP`. Ambiguous workspace
+ownership or multiple plausible workspace candidates remain `STOP`; do not
+guess.
+
+Preserve the dirty source workspace and every associated backup unchanged. Any
+source or backup mutation must remain `STOP`; perform no Git mutation in them,
+including fetch, checkout, reset, stash, rebase, merge, clean, or ref updates.
+Acquire only one separate isolated, clean destination bound to the verified
+canonical repository, Issue branch, exact remote head, and approved-base
+evidence. The destination must be complete, attached to the Issue branch,
+track its canonical `origin/<branch>`, and have clean, durable state at the
+exact verified remote head. A partial, dirty, divergent, stale, or otherwise
+mismatched destination, or any additional candidate destination, remains
+`STOP`; preserve failed acquisition artifacts and the original source without
+attempting repair or replacement. Do no objective mutation at `STOP`.
+
+Do not copy, import, cherry-pick, or otherwise transfer candidate source files,
+content, or state into the destination before performing registered CLI
+Discovery and running fresh Context there for the same Issue. In the acquired
+workspace, registered CLI Discovery and fresh Context must complete before
+objective edits. Only a fresh destination Context result with
+`next_action.type: COMMAND` and the required one-time post-preflight first-edit
+trigger both satisfied before objective edits authorizes objective edits in
+that destination. If fresh
+Context does not return `COMMAND`, stop; this acquisition exception does not
+authorize edits under the source STOP. After acquisition, continue to follow
+the ordinary validation, durability, review, HANDOFF, PR, and other applicable
+gates. This exception adds no command, recovery state, persistence mechanism,
+route, or general STOP bypass.
+
+#### Wrong-Issue acquisition
+
 When a new or resumed Execution session starts in a wrong-Issue workspace, apply
 this order before returning to Founder for Git setup. Context remains read-only;
 this rule authorizes only safe workspace acquisition followed by fresh Context.
