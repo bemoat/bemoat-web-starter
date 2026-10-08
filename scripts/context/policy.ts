@@ -19,6 +19,7 @@ export function parseProtectedPolicyContent({ repo, branch, sha, content }: {
   const version = frontmatter ? frontmatterValue(frontmatter[1], 'version') : null
   const canonicalRepository = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'canonical_repository') : null
   const trustedFounderLogin = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'trusted_founder_login') : null
+  const historicalFounderGateReplay = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'allow_historical_no_pr_founder_gate_replay') : null
   const legacyStopText = frontmatter ? uniqueFrontmatterValue(frontmatter[1], 'legacy_stop_handoffs') : null
   const legacyStopEntries = legacyStopText ? legacyStopText.split(',').map((entry) => entry.trim()) : []
   const legacyStopHandoffs = canonicalRepository === repo && legacyStopEntries.length > 0 &&
@@ -33,6 +34,7 @@ export function parseProtectedPolicyContent({ repo, branch, sha, content }: {
     trustedFounderLogin: canonicalRepository === repo && trustedFounderLogin && /^[A-Za-z0-9-]+$/.test(trustedFounderLogin)
       ? trustedFounderLogin : null,
     legacyStopHandoffs,
+    allowHistoricalNoPrFounderGateReplay: historicalFounderGateReplay === 'true',
     sourceSha: sha,
     url: `https://github.com/${repo}/blob/${branch}/docs/mission-control/mission-control-guide.md`,
   }

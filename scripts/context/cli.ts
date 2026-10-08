@@ -58,7 +58,7 @@ export function renderContextHelp(format = 'text') {
         { name: 'json', syntax: '--json', kind: 'flag', value_type: 'boolean', required: false, source: 'caller', multiple: false, values: [], description: 'Emit deterministic machine-readable context output.' },
         { name: 'target_worktree', syntax: '--target-worktree <absolute-path>', kind: 'option', value_type: 'path', required: false, source: 'caller', multiple: false, values: [], description: 'Evaluate one existing target worktree using this command source; omit for same-worktree mode.' },
       ],
-      reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base'],
+      reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base or a consumed no-PR Founder gate is replayed across strict same-branch ancestry'],
       writes: [],
       result_classifications: ['SUCCESS', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT'],
       stop_classifications: ['INVALID_INVOCATION', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT', 'INTERNAL_ERROR'],

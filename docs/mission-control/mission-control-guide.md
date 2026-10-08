@@ -1,11 +1,12 @@
 ---
 policy_id: bemoat-mission-control
-version: 1.6.0
+version: 1.7.0
 trusted_founder_login: bemoat
 legacy_stop_handoffs: 513:5913355141:f8af039bad10c0bc3c98fa69fc2c7ab9fe782180:edf8134ef9892ba7f8ada31365babb3b22bc7a085f480fa2a5a2ff99f8189ed7,509:5906598686:86c0ec49311a1b356ff96be087bb335ea6dc992f:3bffd4a681a4ac1d2c5db5ddc375713565a5905c4886c9c5082eea8b250d8dd2
 scope: repository-development
 canonical_repository: bemoat/bemoat-web-starter
 max_review_cycles: 3
+allow_historical_no_pr_founder_gate_replay: true
 ---
 
 # Stateless coordination policy
@@ -263,6 +264,28 @@ protected-base conflicts, and normal COMPLETE requirements still apply. This
 decision does not create generic mutation authority, resolve STOP blockers,
 change active-PR Founder gates, or select evidence by timestamps, comment
 order, or association.
+
+## Historical consumed no-PR Founder gates
+
+This policy explicitly permits a narrowly proven consumed read-only no-PR
+`FOUNDER_GATE` at historical head A to remain immutable evidence after the same
+Issue branch advances to head B. Older policy snapshots do not inherit this
+permission unless their own frontmatter explicitly enables it. Historical
+policy and protected-base snapshots prove that the original decision or
+canonical repair was valid at A; the current merged policy controls whether
+the old consumed bundle may be excluded from fresh routing.
+
+Context may exclude only one exact gate whose ordinary decision or canonical
+repair uniquely consumed it at A, after exact repository, Issue, and canonical
+branch identity; strict durable `A != B` ancestry with merge-base(A, B) = A;
+and compatible historical-to-current protected-base ancestry are proven.
+Current head B must be published on the same canonical topic branch. Missing,
+divergent, rewritten, ambiguous, malformed, duplicate, conflicting,
+wrong-author, wrong-identity, or unconsumed evidence stays STOP. Competing
+current gates and current STOP/HANDOFF/COMPLETE conflicts remain authoritative.
+No timestamp or comment order selects evidence. This exclusion satisfies no
+current Founder gate and grants no authority at B; fresh Context recomputes
+ordinary routing from all remaining current evidence.
 
 Use the canonical [FOUNDER_DECISION template](founder-decision-template.md)
 only with exact values from the live gate, current protected base, and merged

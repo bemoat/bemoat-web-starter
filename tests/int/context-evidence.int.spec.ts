@@ -665,6 +665,7 @@ describe('bemoat:context neutral evidence adapters', () => {
         version: '1.3.0',
         trustedFounderLogin: 'boat1994',
         legacyStopHandoffs: [historicalStop],
+        allowHistoricalNoPrFounderGateReplay: false,
         sourceSha: 'c'.repeat(40),
         url: 'https://github.com/boat1994/bemoat-web-starter/blob/' + 'a'.repeat(40) + '/docs/mission-control/mission-control-guide.md',
       },
@@ -706,7 +707,7 @@ describe('bemoat:context neutral evidence adapters', () => {
 
     expect(parseProtectedPolicyContent({ repo: 'bemoat/bemoat-web-starter', ...args })).toMatchObject({
       policyId: 'bemoat-mission-control',
-      version: '1.6.0',
+      version: '1.7.0',
       trustedFounderLogin: 'bemoat',
     })
     expect(parseProtectedPolicyContent({ repo: 'bemoat/child-project', ...args })?.trustedFounderLogin).toBeNull()
