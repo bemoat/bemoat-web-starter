@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { routeContext } from '../../scripts/context/router.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
-import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 import { createContextOutput } from '../../scripts/agent-context.ts'
 
 const repository = 'boat1994/bemoat-web-starter'
@@ -207,6 +207,46 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     const decision = routeContext(evidence([
       handoffComment(implementationHandoff()),
       malformed,
+    ]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  function noncanonicalValidSchemaComment(record: HandoffRecord, id: number) {
+    const canonical = handoffComment(record, id)
+    const json = canonical.body.match(/```json\n([\s\S]+)\n```\n$/)?.[1]
+    expect(json).toBeDefined()
+    const parsed = JSON.parse(json ?? '{}') as Record<string, unknown>
+    const reordered = Object.fromEntries(Object.entries(parsed).reverse())
+    const reorderedJson = JSON.stringify(reordered, null, 2)
+    expect(parseHandoffBody(reorderedJson)).toEqual(record)
+    const body = `## HANDOFF\n\n\`\`\`json\n${reorderedJson}\n\`\`\`\n`
+    expect(body).not.toBe(renderHandoffComment(record))
+    return { ...canonical, body }
+  }
+
+  const noncanonicalCurrentCases: Array<[string, HandoffRecord]> = [
+    ['STOP', {
+      ...implementationHandoff(),
+      schema_version: 3,
+      objective_mode: 'read_only',
+      route: 'STOP',
+      next_action: { route: 'STOP', description: 'A blocker remains.' },
+      verified_evidence: [{ kind: 'stop-blocker', value: 'unresolved-blocker', url: null }],
+    }],
+    ['COMPLETE', {
+      ...implementationHandoff(),
+      objective_mode: 'read_only',
+      route: 'COMPLETE',
+      next_action: { route: 'COMPLETE', description: 'The objective is complete.' },
+    }],
+  ]
+
+  it.each(noncanonicalCurrentCases)('returns STOP for a schema-valid but noncanonical same-identity current-head %s HANDOFF', (_route, record) => {
+    const noncanonical = noncanonicalValidSchemaComment(record, commentId + 1)
+    const decision = routeContext(evidence([
+      handoffComment(implementationHandoff()),
+      noncanonical,
     ]))
 
     expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })

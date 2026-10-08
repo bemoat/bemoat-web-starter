@@ -25,8 +25,8 @@ export function hasConflictingTerminalHandoff(sources: RoleEvidence[], evidence:
         !isExactIssueCommentUrl(source.url, source, evidence)) return false
     let record: HandoffRecord
     try { record = parseHandoffBody(JSON.stringify(payload)) } catch { return true }
-    return record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase() &&
-      renderHandoffComment(record) === source.body
+    if (renderHandoffComment(record) !== source.body) return true
+    return record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase()
   })
 }
 
