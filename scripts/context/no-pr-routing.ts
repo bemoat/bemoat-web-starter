@@ -4,7 +4,7 @@ import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../h
 import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-decision-folding.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
-import { consumedHistoricalNoPrFounderGate, hasStaleTerminalHandoff } from './founder-gate-history.ts'
+import { consumedHistoricalNoPrFounderGate, hasConflictingTerminalHandoff } from './founder-gate-history.ts'
 import { isPrReadyImplementationEvidence } from './evidence.ts'
 import { hasInvalidImplementationHandoffCandidate } from './issue-parser.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
@@ -368,9 +368,9 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
   )
   const prReadyCandidate = handoffs[0]
   if (handoffs.length === 1 && prReadyCandidate && isPrReadyImplementationEvidence(prReadyCandidate.record, prReadyCandidate.source, evidence)) {
-    if (hasStaleTerminalHandoff(handoffSources, evidence)) return stop(
-      `EVIDENCE_CONFLICT: stale no-PR STOP or COMPLETE HANDOFF history competes with the current PR_READY candidate at ${evidence.localGit.head}.`,
-      'Resolve stale terminal HANDOFF history before continuing.',
+    if (hasConflictingTerminalHandoff(handoffSources, evidence)) return stop(
+      `EVIDENCE_CONFLICT: malformed current-head or stale no-PR STOP or COMPLETE HANDOFF history competes with the current PR_READY candidate at ${evidence.localGit.head}.`,
+      'Resolve malformed or stale terminal HANDOFF history before continuing.',
     )
     return {
       route: 'PR_READY',

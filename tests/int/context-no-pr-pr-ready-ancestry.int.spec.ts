@@ -55,7 +55,7 @@ function makeRecord(baseSha: string, headSha: string): HandoffRecord {
   }
 }
 
-function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr = false, unlinkedPr = false }: {
+function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr = false, unlinkedPr = false, branchLookupError = false }: {
   cwd: string
   baseSha: string
   liveBaseSha: string
@@ -63,7 +63,8 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
   compareMutation?: 'diverged' | 'behind' | 'zero-ahead' | 'wrong-base' | 'wrong-merge-base'
   activePr?: boolean
   unlinkedPr?: boolean
-}): { run: ContextCommandRunner; compareCalls: string[]; ancestry: Record<string, unknown>; unlinkedPrCalls: string[] } {
+  branchLookupError?: boolean
+}): { run: ContextCommandRunner; compareCalls: string[]; ancestry: Record<string, unknown>; unlinkedPrCalls: string[]; issueSearchCalls: string[]; branchLookupCalls: string[] } {
   const mergeBase = git(cwd, 'merge-base', baseSha, liveBaseSha)
   const aheadBy = Number(git(cwd, 'rev-list', '--count', `${baseSha}..${liveBaseSha}`))
   const behindBy = Number(git(cwd, 'rev-list', '--count', `${liveBaseSha}..${baseSha}`))
@@ -81,6 +82,8 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
   if (compareMutation === 'wrong-merge-base') ancestry.merge_base_commit.sha = headSha
   const compareCalls: string[] = []
   const unlinkedPrCalls: string[] = []
+  const issueSearchCalls: string[] = []
+  const branchLookupCalls: string[] = []
   const commentId = 6061118688
   const comment = {
     url: `${issueUrl}#issuecomment-${commentId}`,
@@ -129,6 +132,11 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
       }))
     }
     if (args[0] === 'pr' && args[1] === 'list') {
+      if (args.includes('--search')) issueSearchCalls.push(key)
+      if (args.includes('--head')) {
+        branchLookupCalls.push(key)
+        if (branchLookupError) return response('', 1, 'GitHub branch PR lookup unavailable')
+      }
       if (unlinkedPr) {
         if (args.includes('--search')) return response('[]')
         const activeBranchPr = {
@@ -180,10 +188,10 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
     return response('')
   }
 
-  return { run, compareCalls, ancestry, unlinkedPrCalls }
+  return { run, compareCalls, ancestry, unlinkedPrCalls, issueSearchCalls, branchLookupCalls }
 }
 
-function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation'], activePr = false, unlinkedPr = false) {
+function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation'], activePr = false, unlinkedPr = false, branchLookupError = false) {
   const cwd = mkdtempSync(join(tmpdir(), 'bemoat-618-pr-ready-ancestry-'))
   try {
     git(cwd, 'init', '-b', 'main')
@@ -211,14 +219,25 @@ function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRu
     git(cwd, 'config', `branch.${branch}.merge`, `refs/heads/${branch}`)
     git(cwd, 'update-ref', `refs/remotes/origin/${branch}`, headSha)
 
-    const { run, compareCalls, ancestry, unlinkedPrCalls } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr, unlinkedPr })
+    const { run, compareCalls, ancestry, unlinkedPrCalls, issueSearchCalls, branchLookupCalls } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr, unlinkedPr, branchLookupError })
     const evidence = collectContextEvidence({
       cwd,
       issueNumber,
       env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
       run,
     })
-    return { evidence, decision: routeContext(evidence), compareCalls, ancestry, baseSha, liveBaseSha, headSha, unlinkedPrSeen: unlinkedPrCalls.length > 0 }
+    return {
+      evidence,
+      decision: routeContext(evidence),
+      compareCalls,
+      ancestry,
+      baseSha,
+      liveBaseSha,
+      headSha,
+      unlinkedPrSeen: unlinkedPrCalls.length > 0,
+      issueSearchCalls,
+      branchLookupCalls,
+    }
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
@@ -289,6 +308,18 @@ describe('Context PR_READY after protected main advances', () => {
     expect(unlinkedPrSeen).toBe(true)
     expect(evidence.activePr).toBeNull()
     expect(decision.route).not.toBe('PR_READY')
+  })
+
+  it('returns STOP when Issue PR search succeeds but the exact-branch PR lookup fails', () => {
+    // Founder eligibility requires reliable active-PR absence for the exact
+    // branch. A successful Issue search does not substitute for an unavailable
+    // branch lookup, so Context must fail closed.
+    const { evidence, decision, issueSearchCalls, branchLookupCalls } = runAncestryScenario(undefined, false, false, true)
+
+    expect(issueSearchCalls.length).toBeGreaterThan(0)
+    expect(branchLookupCalls.length).toBeGreaterThan(0)
+    expect(evidence.evidenceErrors.join('\n')).toContain('active PR lookup for branch')
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
   it.each([

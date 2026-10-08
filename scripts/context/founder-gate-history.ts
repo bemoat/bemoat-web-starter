@@ -14,19 +14,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function hasStaleTerminalHandoff(sources: RoleEvidence[], evidence: NormalizedContextEvidence): boolean {
+export function hasConflictingTerminalHandoff(sources: RoleEvidence[], evidence: NormalizedContextEvidence): boolean {
   return sources.some((source) => {
     const payload = extractHandoffPayload(source.body)
     if (!isRecord(payload) || !['STOP', 'COMPLETE'].includes(String(payload.route)) || payload.pr !== null ||
         payload.repository !== evidence.repository.nameWithOwner || payload.issue_number !== evidence.issue.number ||
-        payload.branch !== evidence.localGit.branch || typeof payload.exact_head !== 'string' ||
-        !isFullSha(payload.exact_head) || payload.exact_head.toLowerCase() === evidence.localGit.head?.toLowerCase() ||
+        payload.branch !== evidence.localGit.branch || typeof payload.exact_head !== 'string' || !isFullSha(payload.exact_head) ||
         !isRecord(payload.protected_base) || payload.protected_base.branch !== evidence.protectedBase.branch ||
         !isRecord(payload.local_durability) || payload.local_durability.durable !== true ||
         !isExactIssueCommentUrl(source.url, source, evidence)) return false
     let record: HandoffRecord
     try { record = parseHandoffBody(JSON.stringify(payload)) } catch { return true }
-    return renderHandoffComment(record) === source.body
+    return record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase() &&
+      renderHandoffComment(record) === source.body
   })
 }
 

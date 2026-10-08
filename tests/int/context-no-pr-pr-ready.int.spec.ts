@@ -176,6 +176,42 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     expect(decision.nextAction.type).toBe('STOP')
   })
 
+  function malformedSchemaComment(record: HandoffRecord, id: number) {
+    const canonical = handoffComment(record, id)
+    const body = canonical.body.replace(/\n}\n```\n$/, ',\n  "unexpected_field": true\n}\n```\n')
+    const json = body.match(/```json\n([\s\S]+)\n```\n$/)?.[1]
+    expect(json).toBeDefined()
+    expect(JSON.parse(json ?? '{}')).toHaveProperty('unexpected_field', true)
+    return { ...canonical, body }
+  }
+
+  const schemaInvalidCurrentCases: Array<[string, HandoffRecord]> = [
+    ['STOP', {
+      ...implementationHandoff(),
+      schema_version: 3 as const,
+      objective_mode: 'read_only' as const,
+      route: 'STOP' as const,
+      next_action: { route: 'STOP' as const, description: 'A blocker remains.' },
+      verified_evidence: [{ kind: 'stop-blocker' as const, value: 'unresolved-blocker', url: null }],
+    }],
+    ['COMPLETE', {
+      ...implementationHandoff(),
+      objective_mode: 'read_only' as const,
+      route: 'COMPLETE' as const,
+      next_action: { route: 'COMPLETE' as const, description: 'The objective is complete.' },
+    }],
+  ]
+
+  it.each(schemaInvalidCurrentCases)('returns STOP for a parseable schema-invalid same-identity current-head %s HANDOFF', (_route, record) => {
+    const malformed = malformedSchemaComment(record, commentId + 1)
+    const decision = routeContext(evidence([
+      handoffComment(implementationHandoff()),
+      malformed,
+    ]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
   it.each([
     ['dirty local worktree', { clean: false }],
     ['unpushed local branch', { pushed: false, durable: false }],
