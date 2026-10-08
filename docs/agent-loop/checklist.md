@@ -48,11 +48,14 @@ Choose boundaries by meaning and recovery value, not by file, function,
 assertion, line count, or elapsed time. Documentation/specification, valid
 characterization, implementation, separable refactoring,
 integration/registration, and forward corrections can each be a checkpoint
-when independently reviewable. Directly coupled tests and proof normally travel
-with the semantic change they establish. Keep intermediate commits valid,
-buildable, and testable when practical. Do not leave a knowingly broken
-red-test-only commit merely to separate a regression from its fix unless the
-repository explicitly supports that form.
+when independently reviewable. A standalone characterization/test checkpoint
+is appropriate only when it is independently valuable and leaves the branch
+intentionally valid. For a bug fix, the regression and smallest passing fix
+normally belong in the same green commit. Directly coupled tests and proof
+normally travel with the semantic change they establish. Keep intermediate
+commits valid, buildable, and testable when practical. Do not leave a knowingly
+broken red-test-only commit merely to separate a regression from its fix unless
+the repository explicitly supports that form.
 
 The first durable task commit must be pushed promptly. Push and verify the
 exact remote SHA after every semantic checkpoint, and before waiting on long
@@ -73,11 +76,12 @@ protocol. A WIP recovery commit, when allowed by current policy, is durable
 evidence rather than completed delivery, review eligibility, or merge
 authority.
 
-Checkpoint commits do not create another PR per sub-objective or additional
-Founder/review gates. Preserve the one bounded implementation PR, exact-head CI
-and review, existing STOP/FOUNDER_GATE rules, and the prohibition on autonomous
-merge, deploy, or migration authority. Never rewrite already-published
-checkpoints just to reduce commit count.
+Multiple semantic checkpoint commits belong to the same bounded objective and
+one active implementation PR; they do not create another PR per sub-objective
+or additional Founder/review gates. Bind full CI and review to the final PR
+head. Preserve existing STOP/FOUNDER_GATE rules and the prohibition on
+autonomous merge, deploy, or migration authority. Never rewrite
+already-published checkpoints just to reduce commit count.
 
 ## Before coding
 
