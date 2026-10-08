@@ -29,7 +29,7 @@ import {
 const COMMAND = 'bemoat:checkpoint:red-wip'
 const ENTRYPOINT = 'scripts/agent-red-wip-checkpoint.ts'
 type VitestAssertion = { status: string; fullName: string; failureMessages?: string[] }
-type VitestFileResult = { name: string; status: string; assertionResults?: VitestAssertion[]; message?: string; errors?: unknown[] }
+type VitestFileResult = { name: string; status: string; assertionResults?: VitestAssertion[]; message?: string; failureMessage?: string; errors?: unknown[] }
 type VitestJsonReport = { testResults?: VitestFileResult[]; numFailedTests?: number; numPassedTests?: number; numFailedTestSuites?: number; unhandledErrors?: unknown[] }
 const mutationState = createRedWipMutationState()
 let plannedCommit: { parentSha: string; subject: string } | null = null
@@ -188,6 +188,7 @@ function runIntegrationSuite(approval: RedWipApproval) {
       return {
         file: relative(process.cwd(), file.name).split('\\').join('/'), status: file.status,
         ...(typeof file.message === 'string' ? { error: file.message } : {}),
+        ...(typeof file.failureMessage === 'string' ? { failureMessage: file.failureMessage } : {}),
         ...(file.errors?.length ? { error: JSON.stringify(file.errors) } : {}),
         assertions: file.assertionResults.map((assertion) => {
           if (typeof assertion.status !== 'string' || typeof assertion.fullName !== 'string') throw new Error('integration suite returned a malformed assertion result')

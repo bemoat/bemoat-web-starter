@@ -22,6 +22,7 @@ export type RedWipSuiteReport = {
     status: string
     assertions: Array<{ status: string; name: string; message: string }>
     error?: string
+    failureMessage?: string
   }>
 }
 
@@ -146,15 +147,13 @@ export function validateRedWipSuiteReport(approval: RedWipApproval, report: RedW
     return ['integration suite returned an incomplete or malformed JSON report']
   }
   if (report.unhandledErrors?.length) reasons.push('integration report contains an unhandled runtime or collection error')
-  const failedSuites = report.suites.filter((suite) => suite.status === 'failed')
   if (report.suites.some((suite) => suite.status !== 'passed' && suite.status !== 'failed')) {
     reasons.push('integration report contains an ambiguous suite status')
   }
-  if (failedSuites.length !== report.numFailedTestSuites) reasons.push('integration report suite failure count is contradictory')
   const failures: RedWipFailure[] = []
   for (const suite of report.suites) {
     const suiteFailures = suite.assertions.filter((assertion) => assertion.status === 'failed')
-    if (suite.error?.trim()) reasons.push('integration report contains a suite setup, collection, or runtime error')
+    if (suite.error?.trim() || suite.failureMessage?.trim()) reasons.push('integration report contains a suite setup, collection, or runtime error')
     if (suite.status === 'failed' && suiteFailures.length === 0) reasons.push('a failed suite has no explicitly approved assertion failure')
     if (suite.status === 'passed' && suiteFailures.length > 0) reasons.push('integration report suite status contradicts its failed assertions')
     failures.push(...suiteFailures.map((assertion) => ({ name: assertion.name, file: suite.file, message: assertion.message })))

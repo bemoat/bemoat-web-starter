@@ -16,6 +16,7 @@ import {
   validateRedWipReadback,
   type RedWipApproval,
   type RedWipEvidence,
+  type RedWipSuiteReport,
 } from '../../scripts/context/red-wip-checkpoint.ts'
 
 const sha = '1'.repeat(40)
@@ -128,18 +129,26 @@ describe('authorized RED WIP checkpoint boundary', () => {
     expect(validateCanonicalOriginTransport({ configuredFetchUrls: [canonical], configuredPushUrls: ['file:///tmp/remote.git'], effectiveFetchUrls: [canonical], effectivePushUrls: ['file:///tmp/remote.git'] })).not.toEqual([])
   })
 
+  it('accepts nested describe failures when Vitest suite count exceeds failed file rows', () => {
+    const nested = {
+      numFailedTests: 1, numPassedTests: 10, numFailedTestSuites: 5,
+      suites: [{ file: testPath, status: 'failed', assertions: [{ status: 'failed', name: testName, message: expectedMessage }] }],
+    }
+    expect(validateRedWipSuiteReport(approval(), nested)).toEqual([])
+  })
+
   it('rejects suite setup failures beside an otherwise approved RED assertion set', () => {
-    const suite = {
-      numFailedTests: 1, numPassedTests: 10, numFailedTestSuites: 2,
+    const suite: RedWipSuiteReport = {
+      numFailedTests: 1, numPassedTests: 10, numFailedTestSuites: 5,
       suites: [
         { file: testPath, status: 'failed', assertions: [{ status: 'failed', name: testName, message: expectedMessage }] },
-        { file: 'tests/int/unrelated.int.spec.ts', status: 'failed', assertions: [] },
+        { file: 'tests/int/unrelated.int.spec.ts', status: 'failed', assertions: [], error: 'collection failed: missing setup module' },
       ],
     }
     const mutationState = createRedWipMutationState()
     expect(validateRedWipSuiteReport(approval(), suite)).not.toEqual([])
     expect(redWipMutationPerformed(mutationState)).toBe(false)
-    expect(validateRedWipSuiteReport(approval(), { ...suite, suites: suite.suites.slice(0, 1), numFailedTestSuites: 1 })).toEqual([])
+    expect(validateRedWipSuiteReport(approval(), { ...suite, suites: suite.suites.slice(0, 1), numFailedTestSuites: 5 })).toEqual([])
   })
 
   it.each([
@@ -196,6 +205,7 @@ describe('authorized RED WIP checkpoint boundary', () => {
     const repo = join(root, 'repo')
     const bare = join(root, 'remote.git')
     const bin = join(root, 'bin')
+    const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim()
     const fixtureApproval = {
       ...approval(),
       expected_failures: [
@@ -204,18 +214,18 @@ describe('authorized RED WIP checkpoint boundary', () => {
       ],
     }
     const failures = fixtureApproval.expected_failures.map((item) => ({ name: item.test_name, file: testPath, message: item.expected_message }))
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
       GIT_CONFIG_GLOBAL: join(root, 'global.gitconfig'),
-      FIXTURE_ISSUE: issueNumber,
-      FIXTURE_APPROVAL: `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->`,
-      FIXTURE_REPORT: JSON.stringify({ numFailedTests: failures.length, numPassedTests: 10, testResults: [{ name: testPath, assertionResults: failures.map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }] }),
       FIXTURE_ISSUE_DATA: JSON.stringify({ number: Number(issueNumber), state: 'OPEN', body: `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->` }),
       FIXTURE_CONTEXT_COUNT: join(root, 'context-count'),
+      FIXTURE_REAL_GIT: realGit,
+      FIXTURE_BARE_REMOTE: bare,
+      FIXTURE_HOOK: join(repo, '.githooks/pre-push'),
     }
     const git = (args: string[], cwd = repo) => {
-      const result = spawnSync('git', args, { cwd, env, encoding: 'utf8' })
+      const result = spawnSync(realGit, args, { cwd, env, encoding: 'utf8' })
       if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`)
       return result.stdout.trim()
     }
@@ -253,57 +263,96 @@ if (command === 'bemoat:checkpoint:red-wip') {
 process.stderr.write('unexpected pnpm invocation: ' + command + '\\n')
 process.exit(97)
 `)
+      writeFileSync(join(bin, 'git'), `#!/usr/bin/env node
+const { spawnSync } = require('node:child_process')
+const args = process.argv.slice(2)
+const real = process.env.FIXTURE_REAL_GIT
+const bare = process.env.FIXTURE_BARE_REMOTE
+const call = (argv, options = {}) => spawnSync(real, argv, { cwd: process.cwd(), env: process.env, encoding: 'utf8', ...options })
+const write = (value) => { if (value.stdout) process.stdout.write(value.stdout); if (value.stderr) process.stderr.write(value.stderr) }
+if (args[0] === 'ls-remote' && args[1] === 'origin') {
+  const result = call(['ls-remote', bare, ...args.slice(2)]); write(result); process.exit(result.status ?? 1)
+}
+if (args[0] === 'push' && args[1] === 'origin') {
+  const refs = args.slice(2).filter((arg) => !arg.startsWith('-'))
+  const spec = refs.find((arg) => arg.includes(':')) || refs[refs.length - 1]
+  if (!spec) process.exit(98)
+  const [localSpec, remoteSpec] = spec.includes(':') ? spec.split(':', 2) : [spec, 'refs/heads/' + spec]
+  const localRef = localSpec.startsWith('refs/') ? localSpec : 'refs/heads/' + localSpec
+  const localSha = call(['rev-parse', localRef]).stdout.trim()
+  const remoteRef = remoteSpec.startsWith('refs/') ? remoteSpec : 'refs/heads/' + remoteSpec
+  const remoteRow = call(['ls-remote', bare, remoteRef]).stdout.trim()
+  const remoteSha = remoteRow ? remoteRow.split(/\\s+/)[0] : '0000000000000000000000000000000000000000'
+  const hook = spawnSync('sh', [process.env.FIXTURE_HOOK, 'origin', 'https://github.com/bemoat/bemoat-web-starter.git'], {
+    cwd: process.cwd(), env: process.env, encoding: 'utf8',
+    input: [localRef, localSha, remoteRef, remoteSha].join(' ') + '\\n',
+  })
+  write(hook)
+  if (hook.status !== 0) process.exit(hook.status ?? 1)
+  const push = call(['-c', 'core.hooksPath=/dev/null', 'push', bare, ...refs])
+  write(push); process.exit(push.status ?? 1)
+}
+const result = call(args); write(result); process.exit(result.status ?? 1)
+`)
       writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nprocess.stdout.write(process.env.FIXTURE_ISSUE_DATA + '\\n')\n`)
       chmodSync(join(bin, 'pnpm'), 0o755)
+      chmodSync(join(bin, 'git'), 0o755)
       chmodSync(join(bin, 'gh'), 0o755)
-      spawnSync('git', ['init', '--bare', bare], { cwd: root, env, stdio: 'ignore' })
+      spawnSync(realGit, ['init', '--bare', bare], { cwd: root, env, stdio: 'ignore' })
       git(['init', '-b', 'main'])
       git(['config', 'user.email', 'fixture@example.invalid'])
       git(['config', 'user.name', 'Fixture'])
-      git(['remote', 'add', 'origin', 'https://github.com/bemoat/bemoat-web-starter.git'])
-      git(['config', '--global', `url.file://${bare}.insteadOf`, 'https://github.com/bemoat/bemoat-web-starter.git'])
-      git(['config', 'core.hooksPath', '.githooks'])
       writeFileSync(join(repo, testPath), 'fixture baseline\n')
       git(['add', '-A'])
       git(['-c', 'core.hooksPath=/dev/null', 'commit', '-m', 'fixture base'])
       const base = git(['rev-parse', 'HEAD'])
-      git(['-c', 'core.hooksPath=/dev/null', 'push', '-u', 'origin', 'main'])
+      git(['-c', 'core.hooksPath=/dev/null', 'push', bare, 'main:refs/heads/main'])
+      git(['remote', 'add', 'origin', 'https://github.com/bemoat/bemoat-web-starter.git'])
       git(['checkout', '-b', branch])
-      git(['push', '-u', 'origin', branch])
+      git(['-c', 'core.hooksPath=/dev/null', 'push', bare, `${branch}:refs/heads/${branch}`])
+      git(['update-ref', `refs/remotes/origin/${branch}`, base])
+      git(['config', `branch.${branch}.remote`, 'origin'])
+      git(['config', `branch.${branch}.merge`, `refs/heads/${branch}`])
+      git(['config', 'core.hooksPath', '.githooks'])
       fixtureApproval.protected_base_sha = base
-      env.FIXTURE_APPROVAL = `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->`
-      env.FIXTURE_ISSUE_DATA = JSON.stringify({ number: Number(issueNumber), state: 'OPEN', body: env.FIXTURE_APPROVAL })
+      env.FIXTURE_ISSUE_DATA = JSON.stringify({
+        number: Number(issueNumber), state: 'OPEN',
+        body: `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->`,
+      })
       writeFileSync(join(repo, 'README.md'), `${readFileSync(join(repo, 'README.md'), 'utf8')}\nfixture ordinary green push\n`)
       git(['add', 'README.md'])
       git(['commit', '-m', 'fixture ordinary green checkpoint'])
-      const greenPush = spawnSync('git', ['push', 'origin', branch], { cwd: repo, env, encoding: 'utf8' })
+      const greenPush = spawnSync('git', ['push', 'origin', `${branch}:refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' })
       expect(greenPush.status, greenPush.stderr || greenPush.stdout).toBe(0)
       expect(greenPush.stderr + greenPush.stdout).toContain('running integration tests')
       const greenHead = git(['rev-parse', 'HEAD'])
+      git(['update-ref', `refs/remotes/origin/${branch}`, greenHead])
       writeFileSync(join(repo, testPath), 'fixture intentionally red change\n')
       const runCandidate = () => spawnSync('node', ['scripts/agent-red-wip-checkpoint.ts', issueNumber, '--json'], {
         cwd: repo, env: { ...env, BEMOAT_FACADE_COMMAND: 'bemoat:checkpoint:red-wip', BEMOAT_FACADE_ENTRYPOINT: 'scripts/agent-red-wip-checkpoint.ts', npm_lifecycle_event: 'bemoat:checkpoint:red-wip' }, encoding: 'utf8',
       })
-      git(['config', 'remote.origin.url', 'https://github.com/example/not-the-approved-repo.git'])
-      const wrongOrigin = runCandidate()
-      expect(wrongOrigin.status).not.toBe(0)
-      expect(JSON.parse(wrongOrigin.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
-      git(['config', 'remote.origin.url', 'https://github.com/bemoat/bemoat-web-starter.git'])
+      git(['config', '--global', `url.file://${bare}.insteadOf`, 'https://github.com/bemoat/bemoat-web-starter.git'])
       const redirectedOrigin = runCandidate()
       expect(redirectedOrigin.status).not.toBe(0)
       expect(JSON.parse(redirectedOrigin.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
       expect(JSON.parse(redirectedOrigin.stdout).details.reason).toContain('transport')
       expect(git(['rev-parse', 'HEAD'])).toBe(greenHead)
-      const remoteBefore = spawnSync('git', ['ls-remote', 'origin', `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
+      const remoteBefore = spawnSync(realGit, ['ls-remote', bare, `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
       expect(remoteBefore).toBe(greenHead)
+      git(['config', '--global', '--unset-all', `url.file://${bare}.insteadOf`])
 
-      git(['-c', 'core.hooksPath=/dev/null', 'add', testPath])
-      git(['-c', 'core.hooksPath=/dev/null', 'commit', '-m', `WIP RED #${issueNumber}: approved story one, approved story two`])
-      const wipPush = spawnSync('git', ['push', 'origin', branch], { cwd: repo, env, encoding: 'utf8' })
-      expect(wipPush.status).not.toBe(0)
-      expect(wipPush.stderr + wipPush.stdout).toContain('redirected from canonical origin')
-      const remoteAfter = spawnSync('git', ['ls-remote', 'origin', `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
-      expect(remoteAfter).toBe(greenHead)
+      env.FIXTURE_REPORT = JSON.stringify({
+        numFailedTests: failures.length, numPassedTests: 10, numFailedTestSuites: 5,
+        testResults: [{ name: testPath, status: 'failed', assertionResults: failures.map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }],
+      })
+      const result = runCandidate()
+      expect(result.status, `${result.stderr || result.stdout}\n${git(['status', '--porcelain=v1', '--untracked-files=all'])}`).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        outcome: 'SUCCESS', mutation_performed: true,
+        details: { checkpoint_status: 'WIP RED INCOMPLETE', objective_complete: false, actual_context_route: 'STOP' },
+      })
+      const pushed = spawnSync(realGit, ['ls-remote', bare, `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
+      expect(pushed).toBe(git(['rev-parse', 'HEAD']))
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
