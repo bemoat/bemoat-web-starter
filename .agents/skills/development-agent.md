@@ -15,12 +15,21 @@ starter-harness work when native development skills are unavailable.
 8. Create the issue branch from `dev` when needed. If `dev` does not exist,
    follow the bootstrap note in `docs/workflow/git-flow.md` and call out the
    temporary exception.
-9. Make the smallest complete change.
+9. Make the smallest complete change. During multi-step work, commit each
+   coherent, independently understandable semantic unit with its directly
+   coupled proof, then push promptly and verify that the remote task branch
+   contains the exact commit SHA. Do not split commits by file/function or
+   wait until the whole objective is complete for its first durable checkpoint.
 10. Run the validation tier from `AGENTS.md`.
 11. Review `git status` and the diff summary.
 12. Commit, push, open or update a PR, and comment on the source issue when the
     repository workflow requires it.
 13. Summarize changed files, commands run, test results, and risks.
+
+Follow the [durable semantic checkpoint rules](../../docs/agent-loop/checklist.md#durable-semantic-checkpoints)
+for commit boundaries, exact remote readback, push-failure handling, WIP
+recovery, and the final exact-head CI/review boundary. Directly coupled tests
+normally travel with the semantic change they prove.
 
 ## UI Animation Tasks
 

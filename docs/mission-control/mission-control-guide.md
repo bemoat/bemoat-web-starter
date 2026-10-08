@@ -329,10 +329,15 @@ publication; Context may still read historical schema-v2 STOPs.
 
 Each objective has one authority scope, explicit in/out-of-scope boundaries,
 acceptance-criteria audit, required checks, and one terminal outcome.
-Progressive durable commits are allowed for bounded work, but dirty,
-uncommitted, unpublished, or non-durable required state cannot be treated as
-complete evidence. Destructive, production, secret, migration, and merge
-operations require their normal repository gates.
+Normal-path progress uses durable semantic checkpoints: commit each coherent,
+independently understandable unit once its focused proof is available, push it
+promptly, and verify the exact SHA on the remote task ref. See the
+[checkpoint rules](../agent-loop/checklist.md#durable-semantic-checkpoints).
+Dirty, uncommitted, unpublished, or non-durable required state cannot be
+treated as complete evidence. Interruption/WIP recovery composes with #261;
+these checkpoint rules do not create a second recovery protocol. Final CI and
+review remain bound to the one PR head. Destructive, production, secret,
+migration, and merge operations require their normal repository gates.
 
 No agent may autonomously merge, approve its own review, invent authority,
 repair conflicting Issue state, or treat a handoff as permission for a new

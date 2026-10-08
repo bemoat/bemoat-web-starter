@@ -36,33 +36,48 @@ Small tasks with clear acceptance criteria.
 
 When unsure, round **up** one tier for source-of-truth or sync-managed paths; round **down** for clearly local, low-risk edits.
 
-## Optional local milestone checkpoints
+## Durable semantic checkpoints
 
-For **Medium/Core** work on a dedicated issue branch, agents may optionally
-create local checkpoint commits when a proven milestone has real recovery value.
-Small tasks should normally produce the final commit directly without
-checkpoints. Checkpoints are temporary implementation aids, not required
-ceremony:
+During normal execution, make one commit for each coherent, independently
+understandable semantic unit when that unit has the focused proof needed to
+show it works. Then push promptly and read back the remote task ref to confirm
+it contains that exact commit SHA. A commit is a restart-safe progress record;
+the final PR head remains the exact head for full CI and review.
 
-- `wip(red): ...` — the focused check fails for the expected reason. An
-  unexplained failure is a debug condition, not a checkpoint milestone.
-- `wip(green): ...` — the smallest implementation makes the focused check
-  pass.
-- `wip(verify): ...` — a named, bounded verification milestone is complete,
-  with its scope and result known.
+Choose boundaries by meaning and recovery value, not by file, function,
+assertion, line count, or elapsed time. Documentation/specification, valid
+characterization, implementation, separable refactoring,
+integration/registration, and forward corrections can each be a checkpoint
+when independently reviewable. Directly coupled tests and proof normally travel
+with the semantic change they establish. Keep intermediate commits valid,
+buildable, and testable when practical. Do not leave a knowingly broken
+red-test-only commit merely to separate a regression from its fix unless the
+repository explicitly supports that form.
 
-Keep checkpoint commits local and do not push them by default. Do not use their
-SHAs as PR, review, milestone, coordination, `current_head`, or CI evidence,
-and do not report them in a new `## HANDOFF`. Before review or PR evidence:
+The first durable task commit must be pushed promptly. Push and verify the
+exact remote SHA after every semantic checkpoint, and before waiting on long
+CI/review or external work, a human/Founder gate, agent/session handoff,
+planned shutdown, or declaring STOP/BLOCKED/RESULT/COMPLETE. A local commit
+without remote readback is not a durable checkpoint. If meaningful task-owned
+work accumulates for roughly 15 minutes without a useful boundary, reassess the
+slice; use a WIP recovery checkpoint only when interruption risk is material
+and no clean semantic checkpoint is available.
 
-1. Run the required validation tier.
-2. Squash all local checkpoints into one focused final commit.
-3. Confirm the branch to be pushed contains no `wip(...)` checkpoint commits.
-4. Push only the final commit.
+If a push fails or readback cannot prove the exact remote SHA, the checkpoint
+is not yet durable. Do not treat it as a completed milestone; report the local
+SHA and blocker and follow the repository's current STOP and exit-hygiene
+guidance. Existing pre-exit and interruption handling continues to use the
+current [Handoff exit-hygiene gate](../../.agents/skills/handoff.md#exit-hygiene/finalization-gate)
+and Mission Control rules. These normal-path checkpoints add no second WIP
+protocol. A WIP recovery commit, when allowed by current policy, is durable
+evidence rather than completed delivery, review eligibility, or merge
+authority.
 
-This policy adds no automatic commit, push, PR, or durable state behavior and
-does not permit rewriting protected-branch history. The actual PR head and
-exact-head CI remain the durable evidence for review.
+Checkpoint commits do not create another PR per sub-objective or additional
+Founder/review gates. Preserve the one bounded implementation PR, exact-head CI
+and review, existing STOP/FOUNDER_GATE rules, and the prohibition on autonomous
+merge, deploy, or migration authority. Never rewrite already-published
+checkpoints just to reduce commit count.
 
 ## Before coding
 
@@ -119,7 +134,7 @@ Stop instead of committing if the task is ambiguous, forbidden files are require
   - [ ] **Child docs/markdown/CI only** (no code): `pnpm run bemoat:guard:safety` passed
   - [ ] **Starter code changes**: `pnpm run check` passed (**required** — includes lint with **zero warnings**, typecheck, test:int, guard:safety)
   - [ ] **Child code changes**: `pnpm run bemoat:check` passed when the child supports its local `lint` and `typecheck` scripts; otherwise `pnpm run bemoat:guard:safety`, `pnpm run bemoat:test:int`, and the child-owned code checks that exist passed
-- [ ] Exactly one focused final commit is prepared before PR; temporary checkpoint commits, if any, are squashed into it
+- [ ] Each independently proven semantic unit has a focused commit and the task branch has been pushed and read back at the exact checkpoint SHA
 - [ ] No unrelated refactors in the commit
 
 ## Before PR
