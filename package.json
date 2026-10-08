@@ -40,6 +40,7 @@
     "bemoat:context": "node scripts/agent-context.ts",
     "bemoat:context:sync-base": "node scripts/agent-context-sync-base.ts",
     "bemoat:context:recover-setup": "node scripts/agent-context-recover-setup.ts",
+    "bemoat:checkpoint:red-wip": "node scripts/agent-red-wip-checkpoint.ts",
     "bemoat:handoff": "node scripts/agent-handoff.ts",
     "bemoat:blocker-resolution:validate": "node scripts/agent-validate-blocker-resolution.ts",
     "bemoat:founder-decision-repair:validate": "node scripts/agent-validate-founder-decision-repair.ts",

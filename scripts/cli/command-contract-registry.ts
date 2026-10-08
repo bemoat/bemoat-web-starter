@@ -8,6 +8,7 @@ import { contextSyncCommands } from './context-sync-command-metadata.ts'
 import { contextSyncRoutes } from './context-sync-routing-policy.ts'
 import { contextSetupCommands } from './context-setup-command-metadata.ts'
 import { contextSetupRoutes } from './context-setup-routing-policy.ts'
+import { redWipCheckpointCommands } from './red-wip-checkpoint-command-metadata.ts'
 import { utilityRoutes } from './utility-routing-policy.ts'
 
 export const COMMAND_CONTRACT_SCHEMA_VERSION = 1 as const
@@ -532,7 +533,7 @@ const trailingCommands = Object.fromEntries(
 )
 delete commands['bemoat:test:int']
 delete commands['bemoat:typecheck']
-const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
+const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...redWipCheckpointCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
 
 const routes = [
   ...utilityRoutes(),
