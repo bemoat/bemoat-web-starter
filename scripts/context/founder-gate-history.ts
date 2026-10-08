@@ -20,13 +20,14 @@ export function hasConflictingTerminalHandoff(sources: RoleEvidence[], evidence:
     if (!isRecord(payload) || !['STOP', 'COMPLETE'].includes(String(payload.route)) || payload.pr !== null ||
         payload.repository !== evidence.repository.nameWithOwner || payload.issue_number !== evidence.issue.number ||
         payload.branch !== evidence.localGit.branch || typeof payload.exact_head !== 'string' || !isFullSha(payload.exact_head) ||
-        !isRecord(payload.protected_base) || payload.protected_base.branch !== evidence.protectedBase.branch ||
+        !isRecord(payload.protected_base) || typeof payload.protected_base.branch !== 'string' ||
         !isRecord(payload.local_durability) || payload.local_durability.durable !== true ||
         !isExactIssueCommentUrl(source.url, source, evidence)) return false
     let record: HandoffRecord
     try { record = parseHandoffBody(JSON.stringify(payload)) } catch { return true }
     if (renderHandoffComment(record) !== source.body) return true
-    return record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase()
+    return record.protected_base.branch !== evidence.protectedBase.branch ||
+      record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase()
   })
 }
 

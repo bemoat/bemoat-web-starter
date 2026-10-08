@@ -252,6 +252,34 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
+  const wrongProtectedBranchHistoryCases: Array<[string, HandoffRecord]> = [
+    ['STOP', {
+      ...implementationHandoff(),
+      schema_version: 3,
+      objective_mode: 'read_only',
+      protected_base: { branch: 'dev', sha: base },
+      route: 'STOP',
+      next_action: { route: 'STOP', description: 'A blocker remains.' },
+      verified_evidence: [{ kind: 'stop-blocker', value: 'unresolved-blocker', url: null }],
+    }],
+    ['COMPLETE', {
+      ...implementationHandoff(),
+      objective_mode: 'read_only',
+      protected_base: { branch: 'dev', sha: base },
+      route: 'COMPLETE',
+      next_action: { route: 'COMPLETE', description: 'The objective is complete.' },
+    }],
+  ]
+
+  it.each(wrongProtectedBranchHistoryCases)('returns STOP for same-identity %s history bound to a different protected-base branch', (_route, history) => {
+    const decision = routeContext(evidence([
+      handoffComment(implementationHandoff()),
+      handoffComment(history, commentId + 1),
+    ]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
   it.each([
     ['dirty local worktree', { clean: false }],
     ['unpushed local branch', { pushed: false, durable: false }],
