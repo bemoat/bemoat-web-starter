@@ -78,10 +78,11 @@ Do not commit if checks fail.
 
 ## Commit and PR
 1. git status and diff summary
-2. One focused commit (unless issue requires more)
-3. git push -u origin HEAD
-4. Check whether the current branch already has an open PR (gh pr list --head "$(git branch --show-current)" or GitHub skill)
-5. If no PR exists: open PR targeting dev with title and body. Bootstrap exception: bemoat-web-starter currently targets main until dev exists.
+2. For each proven semantic unit, create one focused commit with its coupled proof; do not split mechanically by file/function or leave a knowingly broken commit.
+3. Push promptly after every checkpoint and read back the exact SHA on the remote task branch. Repeat before long waits, handoffs, gates, and planned shutdowns.
+4. Run the full required validation tier before PR creation/update and final objective completion.
+5. Check whether the current branch already has an open PR (gh pr list --head "$(git branch --show-current)" or GitHub skill)
+6. If no PR exists: open PR targeting dev with title and body. Bootstrap exception: bemoat-web-starter currently targets main until dev exists.
    - Summary
    - Test plan (commands run + results)
    - Risks

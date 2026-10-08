@@ -27,7 +27,7 @@ Practical execution guide for Bemoat coding agents. Paste the [prompt seed](#pro
 | **Implement** | Composer 2.5 | Smallest complete diff; match conventions |
 | **Test** | Composer 2.5 | Commands per [validation tier](../../AGENTS.md#validation-before-pr-and-merge) |
 | **Red team** | GPT-5.5 | Security, schema, Cloudflare, scope, overbuild — stop or fix before commit |
-| **Commit** | Composer 2.5 | One focused commit if checks pass |
+| **Commit** | Composer 2.5 | One focused commit per proven semantic unit, after focused proof; push and read back its exact remote SHA |
 | **PR** | Composer 2.5 | Open PR or update existing; template filled; `Closes #N`; acceptance-criteria audit |
 | **Sync upstream** | Human + agent | Reusable harness/docs → starter PR; child follows [harness-sync-workflow.md](./harness-sync-workflow.md) |
 
@@ -66,13 +66,13 @@ Stop and report (do not commit) when any of these is true:
 | "While I'm here" refactor, new abstraction, or extra feature | **Do not** — file follow-up issue instead |
 | Ambiguous requirements | Stop; ask or red-team clarify before coding |
 
-**Mantra:** Smallest complete change. One issue → one PR → one focused commit (unless issue says otherwise).
+**Mantra:** Smallest complete semantic unit, with focused proof, commit, prompt push, and exact remote SHA readback. One issue → one bounded PR; full required validation runs before PR/final delivery.
 
 ## Validation commands
 
 Child-facing automation calls **`bemoat:*` scripts only**. Guards run through the central pack — see [guard-pack.md](../guard-pack.md).
 
-| Change type | Before commit/PR |
+| Change type | Full required validation before PR/final delivery |
 |-------------|------------------|
 | Docs / markdown / CI config only (no `.ts`, `.tsx`, `.mjs` app or script changes) | Starter: `pnpm run guard:safety`; child: `pnpm run bemoat:guard:safety` |
 | Code (TS, scripts, tests, components, collections) | Starter: `pnpm run check`; child: `pnpm run bemoat:check` when supported, otherwise `bemoat:guard:safety`, `bemoat:test:int`, and child-owned code checks |
@@ -87,12 +87,13 @@ Full validation contract: [AGENTS.md § Validation](../../AGENTS.md#validation-b
       baseline if the repo has no `dev` branch yet
 - [ ] Only allowed files in diff
 - [ ] No `.env*`, secrets, tokens, or copied Cloudflare resource IDs
-- [ ] Validation tier passed (evidence, not assumption)
+- [ ] Focused proof passed for each semantic checkpoint; full required validation tier passed before PR/final delivery (evidence, not assumption)
 - [ ] `git status` and diff summary reviewed
-- [ ] Exactly one focused commit (unless issue requires more)
+- [ ] Each commit contains one coherent, proven semantic unit with directly coupled proof; no mechanical per-file or knowingly broken commits
+- [ ] Every checkpoint was pushed promptly and its exact SHA read back from the remote task branch
 - [ ] Commit message states **why**, not a file list
 
-**Do not commit if:** checks fail, forbidden files required, destructive `up()` migration without approval marker, or red-team stop triggered.
+**Do not commit a checkpoint if:** its focused proof fails, forbidden files are required, a destructive `up()` migration lacks its approval marker, or a red-team stop is triggered. The full required validation tier must pass before PR/final delivery.
 
 **Migration files alone:** commit, push, and open **draft** PR after checks — [migration-draft-pr.md](./migration-draft-pr.md).
 

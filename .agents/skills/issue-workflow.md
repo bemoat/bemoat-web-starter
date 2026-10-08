@@ -30,10 +30,14 @@ Canonical workflow details live in:
    exist, follow the bootstrap note in `docs/workflow/git-flow.md` and call out
    the temporary exception.
 6. Make the smallest complete change.
-7. Run the required validation.
+7. Run focused proof for each proposed semantic checkpoint. Run the full
+   required validation tier before PR creation/update and final objective
+   completion.
 8. Review the status and diff summary.
-9. Commit one focused change when checks pass.
-10. Push the branch.
+9. Commit each proven coherent semantic unit with its directly coupled proof
+   after its focused check passes.
+10. Push promptly after each checkpoint and verify the exact remote task-branch
+    SHA before long waits, handoffs, gates, or planned shutdowns.
 11. Open or update a PR targeting `dev`. If `dev` does not exist yet, target the
     safest available protected baseline and call out the temporary exception.
 12. Include `Closes #<issue-number>` in the PR body.

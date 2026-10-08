@@ -123,7 +123,12 @@ already-published checkpoints just to reduce commit count.
 
 ## Before commit
 
-Stop instead of committing if the task is ambiguous, forbidden files are required, checks fail for unrelated reasons, or secrets/Cloudflare IDs/production deploy are involved. See [security-and-migrations.md](./security-and-migrations.md).
+Commit only a coherent semantic unit whose focused proof passes. Stop if the
+task is ambiguous, forbidden files are required, focused checks fail for
+unrelated reasons, or secrets/Cloudflare IDs/production deploy are involved.
+See [security-and-migrations.md](./security-and-migrations.md). Run the full
+required validation tier before PR creation/update and final objective
+completion, not as a prerequisite to each intermediate checkpoint.
 
 **Migration files alone are not a stop** — use [migration-draft-pr.md](./migration-draft-pr.md): commit, push, and open a **draft** PR after checks pass.
 
@@ -133,11 +138,7 @@ Stop instead of committing if the task is ambiguous, forbidden files are require
 - [ ] **Security pre-commit:** no secrets, tokens, or credentials in the diff
 - [ ] **Security pre-commit:** no copied Cloudflare account IDs, D1 IDs, R2 names, or Worker names
 - [ ] **Migration pre-commit:** destructive `up()` migration has `bemoat:destructive-migration-approved` or is additive-only (guard:safety must pass)
-- [ ] **Validation tier applied** (see [AGENTS.md § Validation](../../AGENTS.md#validation-before-pr-and-merge)):
-  - [ ] **Starter docs/markdown/CI only** (no code): `pnpm run guard:safety` passed
-  - [ ] **Child docs/markdown/CI only** (no code): `pnpm run bemoat:guard:safety` passed
-  - [ ] **Starter code changes**: `pnpm run check` passed (**required** — includes lint with **zero warnings**, typecheck, test:int, guard:safety)
-  - [ ] **Child code changes**: `pnpm run bemoat:check` passed when the child supports its local `lint` and `typecheck` scripts; otherwise `pnpm run bemoat:guard:safety`, `pnpm run bemoat:test:int`, and the child-owned code checks that exist passed
+- [ ] Focused proof for this semantic checkpoint passed; directly coupled tests/proof are included
 - [ ] Each independently proven semantic unit has a focused commit and the task branch has been pushed and read back at the exact checkpoint SHA
 - [ ] No unrelated refactors in the commit
 
@@ -154,7 +155,7 @@ Stop instead of committing if the task is ambiguous, forbidden files are require
       for it to be edited
 - [ ] Acceptance criteria audit included in the PR body and/or canonical Task
       Issue `## HANDOFF` per [role-handoff-contract.md](./role-handoff-contract.md)
-- [ ] **Validation tier** same as before commit:
+- [ ] **Full required validation tier before PR/final delivery** (see [AGENTS.md § Validation](../../AGENTS.md#validation-before-pr-and-merge)):
   - [ ] Starter docs-only → `pnpm run guard:safety`
   - [ ] Child docs-only → `pnpm run bemoat:guard:safety`
   - [ ] Starter code changes → `pnpm run check` (**required**)
