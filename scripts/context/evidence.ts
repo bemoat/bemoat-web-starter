@@ -7,9 +7,13 @@ import { readProtectedPolicy } from './policy.ts'
 import { resolveApprovedBase } from './approved-base.ts'
 import { isFullSha, repositoryEvidence, runContextCommand } from './runtime.ts'
 import type { ContextCommandResult, ContextCommandRunner } from './runtime.ts'
-import { normalizeContextEvidence, type NormalizedContextEvidence, type SetupBaseRecoveryEvidence } from './model.ts'
+import { normalizeContextEvidence, type NormalizedContextEvidence, type RoleEvidence, type SetupBaseRecoveryEvidence } from './model.ts'
 import { readHistoricalBlockerResolutionProofs } from './blocker-resolution-history.ts'
 import { readHistoricalNoPrFounderGateReplayProofs } from './founder-gate-history.ts'
+import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
+import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
+import type { NoPrImplementationBaseAncestryProof } from './model.ts'
+import type { HandoffRecord } from '../handoff/schema.ts'
 
 function readSetupBaseRecoveryEvidence({
   cwd,
@@ -72,6 +76,119 @@ function readSetupBaseRecoveryEvidence({
 export { readGithubEvidence, readLocalGitEvidence, readProtectedPolicy, runContextCommand }
 export type { ContextCommandResult, ContextCommandRunner }
 
+function readNoPrImplementationBaseAncestryProofs({
+  repo,
+  issueNumber,
+  branch,
+  head,
+  baseBranch,
+  baseSha,
+  localGit,
+  handoffs,
+  run,
+  cwd,
+  env,
+}: {
+  repo: string
+  issueNumber: string
+  branch: string
+  head: string
+  baseBranch: string
+  baseSha: string
+  localGit: ReturnType<typeof readLocalGitEvidence>
+  handoffs: ReturnType<typeof parseRoleEvidence>['handoffs']
+  run: ContextCommandRunner
+  cwd: string
+  env: NodeJS.ProcessEnv
+}): NoPrImplementationBaseAncestryProof[] {
+  if (!localGit.durable || !localGit.clean || localGit.detached || !localGit.pushed ||
+      localGit.originRepository !== repo || localGit.branch !== branch || localGit.head?.toLowerCase() !== head.toLowerCase() ||
+      localGit.upstream !== `origin/${branch}` || !/^[0-9a-f]{40}$/i.test(baseSha)) return []
+
+  const proofs: NoPrImplementationBaseAncestryProof[] = []
+  for (const source of handoffs) {
+    let record
+    try {
+      record = parseHandoffBody(JSON.stringify(extractHandoffPayload(source.body)))
+    } catch {
+      continue
+    }
+    const nativeId = String(source.id)
+    if (record.schema_version !== 2 || record.record_type !== 'HANDOFF' ||
+        record.objective_mode !== 'implementation' || record.route !== 'IMPLEMENT' || record.pr !== null ||
+        record.repository !== repo || record.issue_number !== issueNumber || record.branch !== branch ||
+        record.exact_head.toLowerCase() !== head.toLowerCase() || record.protected_base.branch !== baseBranch ||
+        record.local_durability.durable !== true || renderHandoffComment(record) !== source.body ||
+        !/^[1-9]\d*$/.test(nativeId) || source.url !== `https://github.com/${repo}/issues/${issueNumber}#issuecomment-${nativeId}` ||
+        !/^[0-9a-f]{40}$/i.test(record.protected_base.sha)) continue
+
+    const historicalBaseSha = record.protected_base.sha.toLowerCase()
+    const currentBaseSha = baseSha.toLowerCase()
+    if (historicalBaseSha === currentBaseSha) continue
+
+    const result = run('gh', ['api', `repos/${repo}/compare/${historicalBaseSha}...${currentBaseSha}`], { cwd, env })
+    if (result.status !== 0 || result.error || !result.stdout.trim()) continue
+    let facts: {
+      status?: unknown
+      ahead_by?: unknown
+      behind_by?: unknown
+      base_commit?: { sha?: unknown }
+      merge_base_commit?: { sha?: unknown }
+    }
+    try {
+      facts = JSON.parse(result.stdout) as typeof facts
+    } catch {
+      continue
+    }
+    if (facts.status !== 'ahead' || !Number.isSafeInteger(facts.ahead_by) ||
+        (facts.ahead_by as number) <= 0 || facts.behind_by !== 0 ||
+        typeof facts.base_commit?.sha !== 'string' || facts.base_commit.sha.toLowerCase() !== historicalBaseSha ||
+        typeof facts.merge_base_commit?.sha !== 'string' || facts.merge_base_commit.sha.toLowerCase() !== historicalBaseSha) continue
+    proofs.push({
+      handoffCommentId: nativeId,
+      historicalBaseSha,
+      currentBaseSha,
+      mergeBaseSha: historicalBaseSha,
+      aheadBy: facts.ahead_by as number,
+      behindBy: 0,
+    })
+  }
+  return proofs
+}
+
+export function isPrReadyImplementationEvidence(record: HandoffRecord, source: RoleEvidence, evidence: NormalizedContextEvidence): boolean {
+  const proofs = record.verified_evidence.filter(({ kind }) => kind === 'validation-proof')
+  let validProof = false
+  if (proofs.length === 1) {
+    try {
+      const proof = JSON.parse(proofs[0]!.value) as Record<string, unknown>
+      validProof = proof.status === 'PASS' && proof.tier === 'code' &&
+        proof.command === 'pnpm run bemoat:check' && proof.exact_head === record.exact_head
+    } catch {
+      validProof = false
+    }
+  }
+  const historicalBaseSha = record.protected_base.sha.toLowerCase()
+  const currentBaseSha = evidence.protectedBase.sha.toLowerCase()
+  const ancestry = evidence.noPrImplementationBaseAncestryProofs?.filter((proof) => proof.handoffCommentId === String(source.id)) ?? []
+  const compatibleBase = historicalBaseSha === currentBaseSha || (
+    ancestry.length === 1 && ancestry[0]!.historicalBaseSha.toLowerCase() === historicalBaseSha &&
+    ancestry[0]!.currentBaseSha.toLowerCase() === currentBaseSha &&
+    ancestry[0]!.mergeBaseSha.toLowerCase() === historicalBaseSha &&
+    Number.isSafeInteger(ancestry[0]!.aheadBy) && ancestry[0]!.aheadBy > 0 && ancestry[0]!.behindBy === 0
+  )
+  return record.schema_version === 2 && record.route === 'IMPLEMENT' && record.objective_mode === 'implementation' &&
+    record.pr === null && record.local_durability.required && record.local_durability.durable &&
+    record.protected_base.branch === evidence.protectedBase.branch && /^[0-9a-f]{40}$/i.test(record.protected_base.sha) &&
+    evidence.policy.path === 'docs/mission-control/mission-control-guide.md' && evidence.policy.policyId === 'bemoat-mission-control' &&
+    Boolean(evidence.policy.version) &&
+    /^[0-9a-f]{40}$/i.test(evidence.policy.sourceSha) && evidence.localGit.clean && !evidence.localGit.detached &&
+    evidence.localGit.pushed && evidence.localGit.durable && evidence.localGit.head?.toLowerCase() === record.exact_head.toLowerCase() &&
+    evidence.localGit.upstream === `origin/${evidence.localGit.branch}` &&
+    evidence.localGit.originRepository === evidence.repository.nameWithOwner && validProof && compatibleBase &&
+    renderHandoffComment(record) === source.body && isExactIssueCommentUrl(source.url, source, evidence)
+}
+
 export function collectContextEvidence({
   cwd = process.cwd(),
   env = process.env,
@@ -121,6 +238,22 @@ export function collectContextEvidence({
     }
   const roleEvidence = parseRoleEvidence(github.comments)
   const activePr = github.activePrs.length === 0 ? null : github.activePrs.length === 1 ? github.activePrs[0] : github.activePrs
+  const noPrImplementationBaseAncestryProofs = repo && approvedBase.branch && approvedBase.sha &&
+    localGit.branch !== '<detached>' && localGit.head && github.activePrs.length === 0
+    ? readNoPrImplementationBaseAncestryProofs({
+      repo,
+      issueNumber,
+      branch: localGit.branch,
+      head: localGit.head,
+      baseBranch: approvedBase.branch,
+      baseSha: policyResult.sha ?? approvedBase.sha,
+      localGit,
+      handoffs: roleEvidence.handoffs,
+      run,
+      cwd,
+      env,
+    })
+    : []
   const sourceIssue = localGit.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
   const activePrRecoveryTarget = github.activePrs.length === 1 &&
     !github.activePrs[0]!.merged && github.activePrs[0]!.state.toUpperCase() !== 'MERGED' &&
@@ -207,6 +340,7 @@ export function collectContextEvidence({
       invalidFounderDecisionRepairs: roleEvidence.invalidFounderDecisionRepairs,
     },
     ...(historicalBlockerResolutionProofs.length > 0 ? { historicalBlockerResolutionProofs } : {}),
+    ...(noPrImplementationBaseAncestryProofs.length > 0 ? { noPrImplementationBaseAncestryProofs } : {}),
     evidenceErrors: [...new Set([
       ...errors,
       ...approvedBase.errors,

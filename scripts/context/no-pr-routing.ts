@@ -4,7 +4,9 @@ import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../h
 import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-decision-folding.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
-import { consumedHistoricalNoPrFounderGate } from './founder-gate-history.ts'
+import { consumedHistoricalNoPrFounderGate, hasConflictingTerminalHandoff } from './founder-gate-history.ts'
+import { isPrReadyImplementationEvidence } from './evidence.ts'
+import { hasInvalidImplementationHandoffCandidate } from './issue-parser.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,12 +43,8 @@ function hasInvalidNoPrFounderGateEvidence(evidence: NormalizedContextEvidence, 
     if (!gateMarker) return false
     if (!isRecord(payload)) return true
 
-    try {
-      const record = parseHandoffBody(JSON.stringify(payload))
-      return record.pr === null && !isExactCurrentNoPrFounderGate(source, record, evidence)
-    } catch {
-      return true
-    }
+    try { const record = parseHandoffBody(JSON.stringify(payload)); return record.pr === null && !isExactCurrentNoPrFounderGate(source, record, evidence) }
+    catch { return true }
   })
 }
 
@@ -71,9 +69,7 @@ function applicableNoPrHandoffs(evidence: NormalizedContextEvidence): Applicable
       ) {
         applicable.push({ source, record })
       }
-    } catch {
-      continue
-    }
+    } catch { continue }
   }
 
   return applicable
@@ -242,7 +238,15 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
       'Resolve duplicate current-head HANDOFF identity evidence before continuing.',
     )
   }
-
+  const handoffSources = routingEvidence.durableContext.handoffs ??
+    (routingEvidence.durableContext.latestHandoff ? [routingEvidence.durableContext.latestHandoff] : [])
+  if (hasInvalidImplementationHandoffCandidate(handoffSources, handoffs.map(({ source }) => source), (source) => {
+    const matching = handoffs.find((handoff) => handoff.source === source)
+    return Boolean(matching && isPrReadyImplementationEvidence(matching.record, source, evidence))
+  })) return stop(
+    `EVIDENCE_CONFLICT: no-PR implementation HANDOFF is malformed, stale, or not uniquely bound to the current identity at ${evidence.localGit.head}.`,
+    'Resolve the ineligible no-PR implementation HANDOFF evidence before continuing.',
+  )
   const folded = foldNoPrFounderDecision(routingEvidence, handoffs)
   if (folded.conflict) return stop(folded.conflict.reason, folded.conflict.description)
   handoffs = folded.handoffs
@@ -362,6 +366,18 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     (record.route === 'IMPLEMENT' && record.objective_mode === 'read_only') ||
     (record.route === 'STOP' && record.schema_version === 3),
   )
+  const prReadyCandidate = handoffs[0]
+  if (handoffs.length === 1 && prReadyCandidate && isPrReadyImplementationEvidence(prReadyCandidate.record, prReadyCandidate.source, evidence)) {
+    if (hasConflictingTerminalHandoff(handoffSources, evidence)) return stop(
+      `EVIDENCE_CONFLICT: malformed current-head or stale no-PR STOP or COMPLETE HANDOFF history competes with the current PR_READY candidate at ${evidence.localGit.head}.`,
+      'Resolve malformed or stale terminal HANDOFF history before continuing.',
+    )
+    return {
+      route: 'PR_READY',
+      reasons: [`Unique durable no-PR implementation HANDOFF is verified for ${evidence.localGit.branch}@${evidence.localGit.head}; only PR creation is authorized.`],
+      nextAction: { type: 'OPEN_PR', command: 'gh pr create', description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.' },
+    }
+  }
   if (!onlyRecomputableHistory || !hasConsistentHistoricalBase(handoffs)) {
     return stop(
       `EVIDENCE_CONFLICT: current-head no-PR HANDOFF evidence cannot be uniquely reconciled at ${evidence.localGit.head}.`,

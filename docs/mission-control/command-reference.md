@@ -12,6 +12,22 @@ This command is read-only. It binds the Issue to the repository, protected
 base, policy path/SHA, PR, exact-head CI, review, and local durability
 evidence, then returns one route. Help must not create or modify any state.
 
+A uniquely verified schema-v2 no-PR `IMPLEMENT` HANDOFF may route to
+`PR_READY` with `next_action.type: OPEN_PR` and `command: gh pr create`. This
+route requires one canonical native HANDOFF for the queried repository, Issue,
+branch, and exact currently pushed head; implementation mode; a passing
+code-tier validation proof bound to that head; a clean durable canonical
+upstream; no active PR; and no competing, malformed, stale, or incompatible
+HANDOFF history. Its recorded protected-base branch must equal the live
+approved base. If the recorded base SHA differs from live main, Context
+requires native GitHub comparison evidence proving the recorded SHA is a
+strict ancestor of the current approved base. The immutable HANDOFF SHA is not
+rewritten. `PR_READY` authorizes only opening exactly one PR from that branch
+to the approved base; it grants no source-edit or other Git mutation
+authority. After PR creation, the prior `pr: null` HANDOFF remains historical
+pre-PR evidence and does not supersede the strict identity checks for current
+PR HANDOFFs.
+
 ## STOP blocker resolution evidence
 
 An authorized Founder may append one `## BLOCKER_RESOLUTION` Issue comment for

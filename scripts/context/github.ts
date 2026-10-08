@@ -119,7 +119,6 @@ function requiredRulesetRequirements(rulesets: Record<string, unknown>[]): { req
   }
   return { requiredChecks: [...requiredChecks].sort(), requiredApprovals }
 }
-
 function readNativeProtection({
   repo,
   baseBranch,
@@ -160,7 +159,6 @@ function readNativeProtection({
     error: active.length > 0 ? null : 'no active native ruleset applies to the protected base',
   }
 }
-
 function checkEvidence(statusChecks: unknown, requiredChecks: string[]): HeadVerificationEvidence['checks'] {
   const checks = Array.isArray(statusChecks) ? statusChecks : []
   const terminal = new Set(['SUCCESS', 'FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'SKIPPED', 'NEUTRAL'])
@@ -191,13 +189,12 @@ function candidateNumber(value: unknown): string | null {
   if (!isPositiveInteger(value)) return null
   return String(value)
 }
-
 export function readGithubEvidence({
   cwd = process.cwd(),
   env = process.env,
   repo,
   issueNumber,
-  branch: _branch,
+  branch,
   protectedBaseBranch,
   protectedBaseSha = null,
   run,
@@ -226,7 +223,6 @@ export function readGithubEvidence({
       authorAssociation: typeof comment.authorAssociation === 'string' ? comment.authorAssociation : null,
     }
   }) : []
-
   let issue: IssueEvidence | null = null
   if (!issuePayload) {
     errors.push(`BLOCKED_EXTERNAL: Issue #${issueNumber} evidence is unavailable${issueResult.error ? ` (${issueResult.error})` : ''}`)
@@ -252,28 +248,32 @@ export function readGithubEvidence({
       }
     }
   }
-
   const candidates = new Map<string, Record<string, unknown>>()
+  const issueOwnedCandidates = new Set<string>()
   const queryArgs: string[][] = [
     ['pr', 'list', '--repo', repo, '--state', 'all', '--search', `repo:${repo} #${issueNumber}`, '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '100'],
     ['pr', 'list', '--repo', repo, '--state', 'all', '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '100'],
+    ...(branch ? [['pr', 'list', '--repo', repo, '--state', 'open', '--head', branch, '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '1000']] : []),
   ]
   let successfulList = false
+  let branchListSucceeded = !branch
   for (const args of queryArgs) {
+    const branchQuery = args.includes('--head')
     const result = readJson<unknown[]>(run, 'gh', args, { cwd, env })
     if (!Array.isArray(result.value)) continue
     successfulList = true
+    if (branchQuery) branchListSucceeded = true
     for (const value of result.value) {
-      if (!isRecord(value) || !prOwnsIssue(value, repo, issueNumber)) continue
+      const issueOwned = isRecord(value) && prOwnsIssue(value, repo, issueNumber)
+      if (!isRecord(value) || (!issueOwned && (!branch || asString(value.headRefName) !== branch))) continue
       const number = candidateNumber(value.number)
-      if (!number) {
-        errors.push('EVIDENCE_CONFLICT: Issue-bound PR identity is missing or malformed')
-        continue
-      }
+      if (!number) { errors.push('EVIDENCE_CONFLICT: Issue-bound or branch-associated PR identity is missing or malformed'); continue }
       candidates.set(number, value)
+      if (issueOwned) issueOwnedCandidates.add(number)
     }
   }
   if (!successfulList) errors.push('BLOCKED_EXTERNAL: active PR lookup is unavailable')
+  if (!branchListSucceeded) errors.push(`BLOCKED_EXTERNAL: active PR lookup for branch ${branch} is unavailable`)
 
   const legacy = readJson<Record<string, unknown>>(run, 'gh', ['api', `repos/${repo}/branches/${protectedBaseBranch}/protection`], { cwd, env })
   let protection: ProtectionEvidence
@@ -323,6 +323,11 @@ export function readGithubEvidence({
     if (!merged && pr.mergeCommit != null) { errors.push(`EVIDENCE_CONFLICT: PR #${number} state and merge commit evidence disagree`); continue }
     if (normalizedState === 'CLOSED' && !merged) continue
     if (merged && (!mergeCommitSha || !isFullSha(mergeCommitSha))) { errors.push(`EVIDENCE_CONFLICT: PR #${number} merge commit identity is missing or malformed`); continue }
+
+    if (!merged && branch && headBranch === branch && !issueOwnedCandidates.has(number)) {
+      errors.push(`EVIDENCE_CONFLICT: active PR #${number} uses the current Issue branch ${branch} but is not canonically linked to Issue #${issueNumber}`)
+      continue
+    }
 
     if (!merged && protectedBaseSha && (baseBranch !== protectedBaseBranch || baseSha.toLowerCase() !== protectedBaseSha.toLowerCase())) {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} base does not match live protected ${protectedBaseBranch}@${protectedBaseSha}`)

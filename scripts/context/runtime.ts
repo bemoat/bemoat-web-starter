@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process'
-
 import type { ActivePullRequestEvidence, ContextDecision, NormalizedContextEvidence, RepositoryEvidence, RoleEvidence } from './model.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { hasCurrentHandoffReviewVerdict } from './semantic-review-evidence.ts'
+import { isPriorNoPrImplementationHandoff } from './issue-parser.ts'
 
 export interface ContextCommandResult {
   status: number
@@ -10,7 +10,6 @@ export interface ContextCommandResult {
   stderr: string
   error: Error | null
 }
-
 export type ContextCommandRunner = (
   command: string,
   args: readonly string[],
@@ -305,6 +304,8 @@ export function resolveApplicableHandoffs(
 
   for (const candidate of candidates) {
     const payload = extractHandoffPayload(candidate.body)
+    if (isPriorNoPrImplementationHandoff(candidate, payload, { repository: evidence.repository.nameWithOwner,
+      issueNumber: evidence.issue.number, branch: activePr.headBranch, head: activePr.headSha, baseBranch: activePr.baseBranch })) continue
     const status = handoffIdentityStatus(payload, evidence, activePr)
     if (status === 'malformed-current') {
       malformedCurrent.push(candidate)
