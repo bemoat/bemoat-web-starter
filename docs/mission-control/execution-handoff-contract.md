@@ -341,6 +341,12 @@ captured initial SHA to the exact bound SHA; for this state that is the
 same-value `e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3` to itself CAS. Fetch must
 not roll the tracking ref back.
 
+For this exact state, fresh Context records the canonical target worktree path
+from the target checkout and includes it as `--target-worktree` in the
+recovery's displayed command. Run that displayed command from a separate clean
+exact-live protected-main source. If Context cannot resolve the target to an
+existing canonical path, it must not emit this recovery candidate.
+
 ### Wrong-Issue workspace acquisition
 
 When a new or resumed Execution session starts in a wrong-Issue workspace, apply

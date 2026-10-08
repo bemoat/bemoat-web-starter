@@ -189,6 +189,7 @@ describe('Issue #585 clean stale protected-base setup recovery', () => {
         liveUpstreamHead: issue594LiveMain,
         localUpstreamHead: issue594LiveMain,
         ancestry: 'STRICT_ANCESTOR',
+        targetWorktree: '/target',
       },
     })
     harness.head = issue594TargetHead

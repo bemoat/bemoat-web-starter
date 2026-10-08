@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs'
+
 import { parseRoleEvidence } from './issue-parser.ts'
 import { readGithubEvidence } from './github.ts'
 import { readIssueBranchRecoveryCandidates, readLocalGitEvidence } from './local-git.ts'
@@ -43,6 +45,13 @@ function readSetupBaseRecoveryEvidence({
 
   const ancestry = run('git', ['merge-base', '--is-ancestor', 'HEAD', match[1]!], { cwd })
   const trackingHead = tracking.stdout.trim().toLowerCase()
+  let targetWorktree: string | null = null
+  try {
+    targetWorktree = realpathSync(cwd)
+  } catch {
+    // Context can still prove the ordinary same-worktree recovery state; the
+    // separate-target exception remains unavailable without a canonical path.
+  }
   const trackingAlreadyAtLiveBase =
     baseBranch === 'main' && localGit.head!.toLowerCase() === '46fe5363697cb24f0db5a6d4338a5540665bb697' &&
     baseSha === 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3' && trackingHead === baseSha &&
@@ -51,6 +60,7 @@ function readSetupBaseRecoveryEvidence({
   return {
     liveUpstreamHead: match[1]!.toLowerCase(),
     localUpstreamHead: trackingHead,
+    targetWorktree,
     ancestry: ancestry.error || (ancestry.status !== 0 && ancestry.status !== 1)
       ? 'UNPROVEN_UNTIL_FETCH'
       : ancestry.status === 0

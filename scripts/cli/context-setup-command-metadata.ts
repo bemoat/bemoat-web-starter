@@ -19,7 +19,7 @@ export function contextSetupCommands(dependencies: CommandMetadataDependencies) 
         flag('expected_local_head', '--expected-local-head <sha>', 'full_sha', 'Exact target local HEAD caller-supplied from read-only target Context evidence and revalidated internally.', [], true),
       ],
       optional_flags: [
-        flag('target_worktree', '--target-worktree <absolute-path>', 'path', 'Absolute path to one separate stale protected-branch target; omit for unchanged same-worktree recovery.'),
+        flag('target_worktree', '--target-worktree <absolute-path>', 'path', 'Absolute path to one separate stale protected-branch target; required for the bounded #594 state, whose Context recovery command supplies its verified canonical target path; omit for unchanged same-worktree recovery.'),
         flag('json', '--json', 'boolean', 'Emit canonical machine-readable result.'),
       ],
       trusted_derived_values: ['canonical source and target roots/origins, approved protected base, exact GitHub base, exact ls-remote ref, Issue state, PR state, source and target worktree state, target tracking ref, and post-recovery readback'],

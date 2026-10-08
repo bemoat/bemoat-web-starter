@@ -1,8 +1,44 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { parseCommandInvocation } from '../../scripts/cli/command-invocation.ts'
 import { resolveSetupRecoveryRoots, verifySetupRecoveryWorktrees } from '../../scripts/context/setup-recovery-worktree.ts'
-import type { ContextCommandRunner } from '../../scripts/context/runtime.ts'
+import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
+import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
+
+const cliHarness = vi.hoisted(() => ({
+  run: null as ContextCommandRunner | null,
+  evidence: null as NormalizedContextEvidence | null,
+  calls: [] as Array<{ command: string; args: string[]; cwd: string }>,
+  head: '',
+  tracking: '',
+}))
+
+vi.mock('../../scripts/context/runtime.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../scripts/context/runtime.ts')>()
+  return {
+    ...actual,
+    runContextCommand: (command: string, args: readonly string[], options?: { cwd?: string }) => {
+      if (!cliHarness.run) throw new Error('CLI recovery command runner fixture missing')
+      return cliHarness.run(command, args, options)
+    },
+  }
+})
+
+vi.mock('../../scripts/context/evidence.ts', () => ({
+  collectContextEvidence: () => {
+    if (!cliHarness.evidence) throw new Error('CLI recovery evidence fixture missing')
+    const current = structuredClone(cliHarness.evidence)
+    current.localGit.head = cliHarness.head
+    current.localGit.pushed = cliHarness.head === current.protectedBase.sha
+    current.localGit.durable = current.localGit.pushed
+    current.localGit.reasons = current.localGit.pushed ? [] : ['LOCAL_STATE_NOT_DURABLE: current HEAD is not proven pushed to its live upstream']
+    if (current.setupBaseRecovery) current.setupBaseRecovery.localUpstreamHead = cliHarness.tracking
+    return current
+  },
+}))
 
 const repository = 'bemoat/bemoat-web-starter'
 const localHead = 'a'.repeat(40)
@@ -234,5 +270,164 @@ describe('Issue #592 explicit target setup recovery command contract', () => {
     expect(verifySetupRecoveryWorktrees({ ...args, run: sourceRunner({ targetHead: baseSha }) })).toBeNull()
     expect(verifySetupRecoveryWorktrees({ ...args, run: sourceRunner({ targetHead: localHead }) })).not.toBeNull()
     expect(verifySetupRecoveryWorktrees({ ...args, run: sourceRunner({ targetHead: baseSha, targetTracking: baseSha }) })).not.toBeNull()
+  })
+})
+
+const issue594PolicySha = 'd587ff2c6ac4a314b193e321613c3299c83b6da5'
+
+function cliResponse(stdout = '', status = 0): ContextCommandResult {
+  return { status, stdout, stderr: status === 0 ? '' : 'failed', error: null }
+}
+
+function cliEvidence(targetWorktree: string): NormalizedContextEvidence {
+  return {
+    repository: { owner: 'bemoat', name: 'bemoat-web-starter', nameWithOwner: repository, url: `https://github.com/${repository}` },
+    protectedBase: { branch: 'main', sha: issue594LiveMain, source: 'live GitHub ref', url: `https://github.com/${repository}/tree/main` },
+    policy: { path: 'docs/mission-control/mission-control-guide.md', policyId: 'bemoat-mission-control', version: '1.7.0', sourceSha: issue594PolicySha, trustedFounderLogin: 'bemoat', url: `https://github.com/${repository}/blob/main/docs/mission-control/mission-control-guide.md` },
+    issue: { number: '594', title: 'fix(context): recover stale protected target after shared tracking-ref advance', state: 'OPEN', url: `https://github.com/${repository}/issues/594`, objective: 'Recover the exact benign protected target.', scope: 'Exact #588 recurrence only.', acceptanceCriteria: ['Recognize the exact tracking-ref-ahead state.'], dependencies: [], taskSize: 'medium', missionControlMode: 'required', workflowProfile: 'STANDARD' },
+    localGit: { branch: 'main', head: issue594TargetHead, upstream: 'origin/main', originRepository: repository, clean: true, detached: false, pushed: false, durable: false, reasons: ['LOCAL_STATE_NOT_DURABLE: current HEAD is not proven pushed to its live upstream'] },
+    activePr: null,
+    currentHeadVerification: null,
+    durableContext: { latestHandoff: null, handoffs: [], historicalResults: [] },
+    setupBaseRecovery: { liveUpstreamHead: issue594LiveMain, localUpstreamHead: issue594LiveMain, ancestry: 'STRICT_ANCESTOR', targetWorktree },
+    evidenceErrors: [],
+  }
+}
+
+function cliRunner({ source, trackingDrift = false }: { source: string; trackingDrift?: boolean }): ContextCommandRunner {
+  return (command, args, options = {}) => {
+    const cwd = options.cwd ?? ''
+    const key = args.join(' ')
+    cliHarness.calls.push({ command, args: [...args], cwd })
+    if (command === 'gh' && key === `api repos/${repository}/git/ref/heads/main`) {
+      return cliResponse(JSON.stringify({ object: { sha: issue594LiveMain } }))
+    }
+    if (command !== 'git') return cliResponse('', 1)
+    if (key === 'rev-parse --show-toplevel') return cliResponse(`${cwd}\n`)
+    if (key === 'status --short') return cliResponse('')
+    if (key === 'remote get-url origin') return cliResponse(`https://github.com/${repository}.git\n`)
+    if (key === 'symbolic-ref --quiet --short HEAD') return cliResponse('main\n')
+    if (key === 'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') return cliResponse('origin/main\n')
+    if (key === 'rev-parse HEAD') return cliResponse(`${cwd === source ? issue594LiveMain : cliHarness.head}\n`)
+    if (key === 'rev-parse --verify --quiet refs/remotes/origin/main') {
+      return cliResponse(`${trackingDrift ? 'c'.repeat(40) : cliHarness.tracking}\n`)
+    }
+    if (key === 'ls-remote --heads origin refs/heads/main') return cliResponse(`${issue594LiveMain}\trefs/heads/main\n`)
+    if (key === 'fetch --no-tags --no-recurse-submodules --refmap= origin refs/heads/main:') return cliResponse()
+    if (key === 'rev-parse --verify --quiet FETCH_HEAD') return cliResponse(`${issue594LiveMain}\n`)
+    if (key === `merge-base --is-ancestor HEAD ${issue594LiveMain}`) return cliResponse('', 0)
+    if (key === `merge-base --is-ancestor ${issue594LiveMain} HEAD`) return cliResponse('', 1)
+    if (key === `merge --ff-only ${issue594LiveMain}`) {
+      cliHarness.head = issue594LiveMain
+      return cliResponse()
+    }
+    if (key === `update-ref refs/remotes/origin/main ${issue594LiveMain} ${issue594LiveMain}`) {
+      cliHarness.tracking = issue594LiveMain
+      return cliResponse()
+    }
+    return cliResponse('', 1)
+  }
+}
+
+async function runRegisteredTargetRecovery({ source, target, trackingDrift = false }: {
+  source: string
+  target: string
+  trackingDrift?: boolean
+}): Promise<{ stdout: string; exitCode: typeof process.exitCode }> {
+  cliHarness.evidence = cliEvidence(target)
+  cliHarness.head = issue594TargetHead
+  cliHarness.tracking = issue594LiveMain
+  cliHarness.calls = []
+  cliHarness.run = cliRunner({ source, trackingDrift })
+  const originalArgv = process.argv
+  const originalExitCode = process.exitCode
+  const originalLifecycleEvent = process.env.npm_lifecycle_event
+  let stdout = ''
+  const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    stdout += String(chunk)
+    return true
+  })
+  const cwd = vi.spyOn(process, 'cwd').mockReturnValue(source)
+  process.argv = [process.execPath, 'scripts/agent-context-recover-setup.ts', '594',
+    '--expected-repository', repository,
+    '--expected-base-branch', 'main',
+    '--expected-base-sha', issue594LiveMain,
+    '--expected-local-head', issue594TargetHead,
+    '--target-worktree', target,
+    '--json',
+  ]
+  delete process.env.npm_lifecycle_event
+  process.exitCode = undefined
+  try {
+    await vi.resetModules()
+    await import('../../scripts/agent-context-recover-setup.ts')
+    return { stdout, exitCode: process.exitCode }
+  } finally {
+    process.argv = originalArgv
+    process.exitCode = originalExitCode
+    if (originalLifecycleEvent === undefined) delete process.env.npm_lifecycle_event
+    else process.env.npm_lifecycle_event = originalLifecycleEvent
+    write.mockRestore()
+    cwd.mockRestore()
+  }
+}
+
+describe('registered setup recovery target-worktree lifecycle', () => {
+  let root = ''
+  afterEach(() => {
+    if (root) rmSync(root, { recursive: true, force: true })
+    root = ''
+    cliHarness.run = null
+    cliHarness.evidence = null
+  })
+
+  it('wires the exact #594 recovery through the public target-worktree entrypoint and all source/target boundaries', async () => {
+    root = mkdtempSync(join(tmpdir(), 'bemoat-594-target-cli-'))
+    const sourcePath = join(root, 'source')
+    const targetPath = join(root, 'target')
+    mkdirSync(sourcePath)
+    mkdirSync(targetPath)
+    const source = realpathSync(sourcePath)
+    const target = realpathSync(targetPath)
+
+    const result = await runRegisteredTargetRecovery({ source, target })
+    const envelope = JSON.parse(result.stdout.trim())
+    const boundaries = cliHarness.calls.filter(({ command, args }) => command === 'git' && args.join(' ') === 'rev-parse --show-toplevel')
+    const mutations = cliHarness.calls.filter(({ command, args }) => command === 'git' && ['fetch', 'merge', 'update-ref'].includes(args[0] ?? ''))
+
+    expect(result.exitCode).toBe(0)
+    expect(envelope).toMatchObject({
+      command: 'bemoat:context:recover-setup', outcome: 'SUCCESS', classification: 'SUCCESS',
+      mutation_performed: true, issue_number: '594', exact_head: issue594LiveMain,
+      details: { route: 'STOP', objective_edit_authority_granted: false },
+    })
+    expect(boundaries.filter(({ cwd }) => cwd === target)).toHaveLength(4)
+    expect(boundaries.filter(({ cwd }) => cwd === source)).toHaveLength(4)
+    expect(mutations.map(({ args }) => args.join(' '))).toEqual([
+      'fetch --no-tags --no-recurse-submodules --refmap= origin refs/heads/main:',
+      `merge --ff-only ${issue594LiveMain}`,
+      `update-ref refs/remotes/origin/main ${issue594LiveMain} ${issue594LiveMain}`,
+    ])
+  })
+
+  it('stops before recovery mutation when the explicit target tracking ref drifts', async () => {
+    root = mkdtempSync(join(tmpdir(), 'bemoat-594-target-drift-'))
+    const sourcePath = join(root, 'source')
+    const targetPath = join(root, 'target')
+    mkdirSync(sourcePath)
+    mkdirSync(targetPath)
+    const source = realpathSync(sourcePath)
+    const target = realpathSync(targetPath)
+
+    const result = await runRegisteredTargetRecovery({ source, target, trackingDrift: true })
+    const envelope = JSON.parse(result.stdout.trim())
+    const mutations = cliHarness.calls.filter(({ command, args }) => command === 'git' && ['fetch', 'merge', 'update-ref'].includes(args[0] ?? ''))
+
+    expect(result.exitCode).not.toBe(0)
+    expect(envelope).toMatchObject({
+      command: 'bemoat:context:recover-setup', outcome: 'STOP',
+      mutation_performed: false, issue_number: '594',
+    })
+    expect(mutations).toEqual([])
   })
 })

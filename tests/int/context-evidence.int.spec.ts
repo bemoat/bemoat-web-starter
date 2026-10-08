@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -298,26 +298,44 @@ describe('bemoat:context neutral evidence adapters', () => {
       return response('')
     }
 
-    const evidence = collectContextEvidence({
-      cwd: '/target', issueNumber: '594',
-      env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
-      run,
-    })
-    const decision = routeContext(evidence)
+    const cwd = mkdtempSync(join(tmpdir(), 'bemoat-594-context-target-'))
+    try {
+      const evidence = collectContextEvidence({
+        cwd, issueNumber: '594',
+        env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
+        run,
+      })
+      const decision = routeContext(evidence)
 
-    expect(evidence).toMatchObject({
-      repository: { nameWithOwner: repository },
-      policy: { sourceSha: policySha, version: '1.7.0' },
-      issue: { number: '594', title: 'fix(context): recover stale protected target after shared tracking-ref advance' },
-      localGit: { branch: 'main', head: targetHead, upstream: 'origin/main', clean: true, detached: false },
-      protectedBase: { branch: 'main', sha: liveMain },
-      setupBaseRecovery: { liveUpstreamHead: liveMain, localUpstreamHead: liveMain, ancestry: 'STRICT_ANCESTOR' },
-      evidenceErrors: [],
-    })
-    expect(decision).toMatchObject({
-      route: 'STOP',
-      nextAction: { type: 'COMMAND', command: 'bemoat:context:recover-setup' },
-    })
+      expect(evidence).toMatchObject({
+        repository: { nameWithOwner: repository },
+        policy: { sourceSha: policySha, version: '1.7.0' },
+        issue: { number: '594', title: 'fix(context): recover stale protected target after shared tracking-ref advance' },
+        localGit: { branch: 'main', head: targetHead, upstream: 'origin/main', clean: true, detached: false },
+        protectedBase: { branch: 'main', sha: liveMain },
+        setupBaseRecovery: { liveUpstreamHead: liveMain, localUpstreamHead: liveMain, ancestry: 'STRICT_ANCESTOR', targetWorktree: realpathSync(cwd) },
+        evidenceErrors: [],
+      })
+      expect(decision).toMatchObject({
+        route: 'STOP',
+        nextAction: { type: 'COMMAND', command: 'bemoat:context:recover-setup' },
+        recovery: {
+          args: expect.arrayContaining([
+            '594', '--expected-repository', repository, '--expected-base-branch', 'main',
+            '--expected-base-sha', liveMain, '--expected-local-head', targetHead,
+            '--target-worktree', realpathSync(cwd), '--json',
+          ]),
+          binding: {
+            repository, issue_number: '594',
+            protected_base: { branch: 'main', sha: liveMain },
+            target_worktree: realpathSync(cwd),
+            local_state: { branch: 'main', head: targetHead, upstream: 'origin/main', clean: true, detached: false },
+          },
+        },
+      })
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
   })
 
   it.each([

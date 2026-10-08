@@ -138,6 +138,7 @@ function verifyFreshContextRecoveryRoute(evidence: NormalizedContextEvidence): {
     actual.binding.issue_number !== candidate.binding.issue_number ||
     actual.binding.protected_base_branch !== candidate.binding.protected_base_branch ||
     actual.binding.protected_base.sha !== candidate.binding.protected_base.sha ||
+    actual.binding.target_worktree !== candidate.binding.target_worktree ||
     actual.binding.local_state.head !== candidate.binding.local_state.head ||
     actual.binding.local_state.branch !== candidate.binding.local_state.branch ||
     actual.binding.local_state.upstream !== candidate.binding.local_state.upstream

@@ -1,3 +1,5 @@
+import { isAbsolute } from 'node:path'
+
 import type { ContextDecision, ContextSetupBaseRecovery, NormalizedContextEvidence } from './model.ts'
 
 type SetupRecoveryDecision = Omit<ContextDecision, 'evidenceUrls'>
@@ -6,14 +8,15 @@ export function setupBaseRecoveryCandidate(evidence: NormalizedContextEvidence):
   const proof = evidence.setupBaseRecovery
   const base = evidence.protectedBase
   const local = evidence.localGit
+  const exactSeparateTargetRecovery = local.head?.toLowerCase() === '46fe5363697cb24f0db5a6d4338a5540665bb697' &&
+    base.branch === 'main' && base.sha.toLowerCase() === 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3' &&
+    proof?.localUpstreamHead.toLowerCase() === base.sha.toLowerCase() && proof.ancestry === 'STRICT_ANCESTOR' &&
+    typeof proof.targetWorktree === 'string' && isAbsolute(proof.targetWorktree)
   if (
     evidence.evidenceErrors.length > 0 || evidence.issue.state.toUpperCase() !== 'OPEN' ||
     evidence.activePr !== null || !base.branch || !/^[0-9a-f]{40}$/i.test(base.sha) ||
     !proof || proof.ancestry === 'NOT_ANCESTOR' || proof.liveUpstreamHead.toLowerCase() !== base.sha.toLowerCase() ||
-    (proof.localUpstreamHead.toLowerCase() !== (local.head ?? '').toLowerCase() &&
-      !(local.head?.toLowerCase() === '46fe5363697cb24f0db5a6d4338a5540665bb697' &&
-        base.branch === 'main' && base.sha.toLowerCase() === 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3' &&
-        proof.localUpstreamHead.toLowerCase() === base.sha.toLowerCase() && proof.ancestry === 'STRICT_ANCESTOR')) ||
+    (proof.localUpstreamHead.toLowerCase() !== (local.head ?? '').toLowerCase() && !exactSeparateTargetRecovery) ||
     !local.head || local.head.toLowerCase() === base.sha.toLowerCase() ||
     local.branch !== base.branch || local.upstream !== `origin/${base.branch}` ||
     local.originRepository !== evidence.repository.nameWithOwner || !local.clean || local.detached ||
@@ -26,18 +29,23 @@ export function setupBaseRecoveryCandidate(evidence: NormalizedContextEvidence):
     '--expected-base-branch', base.branch,
     '--expected-base-sha', base.sha.toLowerCase(),
     '--expected-local-head', local.head.toLowerCase(),
-    '--json',
   ]
+  if (exactSeparateTargetRecovery) args.push('--target-worktree', proof.targetWorktree!)
+  args.push('--json')
+  const displayArgs = args.map((arg) => /^[A-Za-z0-9_./:@+-]+$/.test(arg)
+    ? arg
+    : `'${arg.replace(/'/g, `'\\''`)}'`)
   return {
     type: 'RECOVER_STALE_PROTECTED_BASE',
     command: 'bemoat:context:recover-setup',
     args,
-    display_command: `pnpm run bemoat:context:recover-setup -- ${args.join(' ')}`,
+    display_command: `pnpm run bemoat:context:recover-setup -- ${displayArgs.join(' ')}`,
     binding: {
       repository: evidence.repository.nameWithOwner,
       issue_number: evidence.issue.number,
       protected_base_branch: base.branch,
       protected_base: { branch: base.branch, sha: base.sha.toLowerCase() },
+      ...(exactSeparateTargetRecovery ? { target_worktree: proof.targetWorktree! } : {}),
       local_state: {
         branch: local.branch,
         head: local.head.toLowerCase(),
@@ -58,7 +66,9 @@ export function setupBaseRecoveryRoute(evidence: NormalizedContextEvidence): Set
     nextAction: {
       type: 'COMMAND',
       command: recovery.command,
-      description: `Run the exact bound setup recovery, then immediately rerun registered CLI Discovery and fresh bemoat:context ${evidence.issue.number} --json. Recovery grants no objective-edit authority.`,
+      description: recovery.binding.target_worktree
+        ? `Run the displayed recovery command from a separate clean exact-live protected-main source; --target-worktree is bound to ${recovery.binding.target_worktree}. Then immediately rerun registered CLI Discovery and fresh target bemoat:context ${evidence.issue.number} --json. Recovery grants no objective-edit authority.`
+        : `Run the exact bound setup recovery, then immediately rerun registered CLI Discovery and fresh bemoat:context ${evidence.issue.number} --json. Recovery grants no objective-edit authority.`,
     },
     recovery,
   }
