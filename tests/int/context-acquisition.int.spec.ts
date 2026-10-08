@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { collectContextEvidence, readLocalGitEvidence, type ContextCommandResult, type ContextCommandRunner } from '../../scripts/context/evidence.ts'
+import { readHistoricalNoPrFounderGateReplayProofs } from '../../scripts/context/founder-gate-history.ts'
+import { parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
+import type { NormalizedContextEvidence, PolicyEvidence, RoleEvidence } from '../../scripts/context/model.ts'
+import { parseProtectedPolicyContent } from '../../scripts/context/policy.ts'
 import { readHistoricalBlockerResolutionProofs } from '../../scripts/context/blocker-resolution-history.ts'
-import type { PolicyEvidence, RoleEvidence } from '../../scripts/context/model.ts'
 
 const repo = 'example/project'
 const branch = 'fix/context'
@@ -35,6 +40,87 @@ function localRunner(overrides: Record<string, ContextCommandResult> = {}): Cont
 }
 
 describe('Context evidence acquisition at the process boundary', () => {
+  it('acquires the exact #582 consumed-gate replay from native comments and current GitHub compare responses', () => {
+    // Oracle: #606 Founder-approved historical replay protocol §§1–7 requires
+    // the exact immutable #582 gate, its repaired malformed predecessor, same
+    // repository/Issue/branch identity, historical and current policy snapshots,
+    // and strict A→B plus protected-base ancestry. This fixture contains the
+    // three native #582 comments verbatim and policy snapshots at A and B.
+    const fixture = (name: string) => join(process.cwd(), 'tests/fixtures/context/historical-founder-gate-582', name)
+    const comments = ['6014391169.json', '6037687449.json', '6039589978.json'].map((name) =>
+      JSON.parse(readFileSync(fixture(name), 'utf8')) as RoleEvidence,
+    )
+    const parsed = parseRoleEvidence(comments)
+    expect(parsed.handoffs.map((item) => String(item.id))).toEqual(['6014391169'])
+    const historicalHead = '8889e1898d5d20833143bc568f325175ee46956b'
+    const historicalBase = '46fe5363697cb24f0db5a6d4338a5540665bb697'
+    const currentHead = '963b2e9a91bf3c5b9b1d3e641e42233ba1b4d0f2'
+    const currentBase = 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3'
+    const historicalPolicySha = '35f3ab438724a79c377a964747cb5bd5d9d040c5'
+    const currentPolicySha = 'd587ff2c6ac4a314b193e321613c3299c83b6da5'
+    const historicalPolicyContent = readFileSync(fixture('policy-at-A.md'), 'utf8')
+    const currentPolicyContent = readFileSync(fixture('policy-at-B.md'), 'utf8')
+    const currentPolicy = parseProtectedPolicyContent({
+      repo: 'bemoat/bemoat-web-starter', branch: 'main', sha: currentPolicySha, content: currentPolicyContent,
+    })!
+    const evidence: NormalizedContextEvidence = {
+      repository: { owner: 'bemoat', name: 'bemoat-web-starter', nameWithOwner: 'bemoat/bemoat-web-starter', url: 'https://github.com/bemoat/bemoat-web-starter' },
+      protectedBase: { branch: 'main', sha: currentBase, source: 'live GitHub ref', url: 'https://github.com/bemoat/bemoat-web-starter/tree/main' },
+      policy: currentPolicy,
+      issue: { number: '582', title: 'fix(context): preserve durable Mission Control identity across repository transfer', state: 'OPEN', url: 'https://github.com/bemoat/bemoat-web-starter/issues/582', objective: null, scope: null, acceptanceCriteria: [], dependencies: [], taskSize: 'core', missionControlMode: 'required', workflowProfile: 'STANDARD' },
+      localGit: { branch: 'fix/582-repository-transfer-identity', head: currentHead, upstream: 'origin/fix/582-repository-transfer-identity', originRepository: 'bemoat/bemoat-web-starter', clean: true, detached: false, pushed: true, durable: true, reasons: [] },
+      activePr: null,
+      currentHeadVerification: null,
+      durableContext: {
+        latestHandoff: parsed.latestHandoff,
+        handoffs: parsed.handoffs,
+        historicalResults: parsed.historicalResults,
+        founderDecisions: parsed.founderDecisions,
+        invalidFounderDecisions: parsed.invalidFounderDecisions,
+        founderDecisionRepairs: parsed.founderDecisionRepairs,
+        invalidFounderDecisionRepairs: parsed.invalidFounderDecisionRepairs,
+      },
+      evidenceErrors: [],
+    }
+    const compareFacts = new Map([
+      [`${historicalBase}...${currentBase}`, { status: 'ahead', ahead_by: 8, behind_by: 0, base_commit: { sha: historicalBase }, merge_base_commit: { sha: historicalBase } }],
+      [`${historicalHead}...${historicalBase}`, { status: 'ahead', ahead_by: 27, behind_by: 0, base_commit: { sha: historicalHead }, merge_base_commit: { sha: historicalHead } }],
+      [`${historicalHead}...${currentHead}`, { status: 'ahead', ahead_by: 28, behind_by: 0, base_commit: { sha: historicalHead }, merge_base_commit: { sha: historicalHead } }],
+    ])
+    const calls: string[] = []
+    const run: ContextCommandRunner = (_command, args) => {
+      const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+      calls.push(endpoint)
+      if (endpoint === `repos/bemoat/bemoat-web-starter/contents/docs/mission-control/mission-control-guide.md?ref=${historicalBase}`) {
+        return ok(JSON.stringify({ type: 'file', path: 'docs/mission-control/mission-control-guide.md', sha: historicalPolicySha, encoding: 'base64', content: Buffer.from(historicalPolicyContent).toString('base64') }))
+      }
+      const compare = endpoint.match(/\/compare\/(.+)$/)?.[1]
+      if (compare && compareFacts.has(compare)) {
+        // GitHub's live compare response has base_commit and merge_base_commit,
+        // but no head_commit property. Keep this production response shape exact.
+        return ok(JSON.stringify(compareFacts.get(compare)))
+      }
+      return failed(`unexpected GitHub endpoint ${endpoint}`)
+    }
+
+    const proofs = readHistoricalNoPrFounderGateReplayProofs({ evidence, run, cwd: '/repo', env: process.env })
+
+    expect(currentPolicy.allowHistoricalNoPrFounderGateReplay).toBe(true)
+    expect(parsed.founderDecisions).toHaveLength(1)
+    expect(parsed.founderDecisionRepairs).toHaveLength(1)
+    expect(calls).toEqual(expect.arrayContaining([
+      `repos/bemoat/bemoat-web-starter/contents/docs/mission-control/mission-control-guide.md?ref=${historicalBase}`,
+      ...[...compareFacts.keys()].map((pair) => `repos/bemoat/bemoat-web-starter/compare/${pair}`),
+    ]))
+    expect(proofs).toHaveLength(1)
+    expect(proofs[0]).toMatchObject({
+      repository: 'bemoat/bemoat-web-starter', issue_number: '582',
+      branch: 'fix/582-repository-transfer-identity', historical_head: historicalHead, current_head: currentHead,
+      source_gate: { comment_id: '6014391169' }, source_decision: { comment_id: '6037687449' },
+      source_repair: { comment_id: '6039589978' },
+    })
+  })
+
   it('acquires a transient historical proof from exact snapshot blobs and verified compare facts', () => {
     const repo = 'boat1994/bemoat-web-starter'
     const historicalSha = '1'.repeat(40)
