@@ -47,15 +47,14 @@ function compare(
     ahead_by?: unknown
     behind_by?: unknown
     base_commit?: { sha?: unknown }
-    head_commit?: { sha?: unknown }
     merge_base_commit?: { sha?: unknown }
   }>(run, 'gh', ['api', `repos/${repo}/compare/${base}...${head}`], { cwd, env }).value
   const isAhead = facts?.status === 'ahead' && Number.isSafeInteger(facts.ahead_by) &&
     (facts.ahead_by as number) > 0 && facts.behind_by === 0 && facts.base_commit?.sha === base &&
-    facts.head_commit?.sha === head && facts.merge_base_commit?.sha === base
+    facts.merge_base_commit?.sha === base
   const isIdentical = allowIdentical && facts?.status === 'identical' && facts.ahead_by === 0 &&
     facts.behind_by === 0 && base === head && facts.base_commit?.sha === base &&
-    facts.head_commit?.sha === head && facts.merge_base_commit?.sha === base
+    facts.merge_base_commit?.sha === base
   if (!isAhead && !isIdentical) return null
   if (isIdentical) return { status: 'identical', mergeBaseSha: base, aheadBy: 0, behindBy: 0 }
   return { status: 'ahead', mergeBaseSha: base, aheadBy: facts.ahead_by as number, behindBy: 0 }
