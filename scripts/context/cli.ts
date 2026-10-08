@@ -68,7 +68,7 @@ export function renderContextHelp(format = 'text') {
         { classification: 'EVIDENCE_CONFLICT', next_action: { type: 'STOP', command: null, reason: 'Required evidence is contradictory or ambiguous.' } },
       ],
       route_rules: [
-        { route: 'PR_READY', next_action: { type: 'OPEN_PR', command: 'gh pr create', reason: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.' } },
+        { route: 'PR_READY', next_action: { type: 'OPEN_PR', command: 'gh pr create', description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.' } },
       ],
     }) + '\n'
   }

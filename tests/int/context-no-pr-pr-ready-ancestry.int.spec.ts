@@ -55,12 +55,13 @@ function makeRecord(baseSha: string, headSha: string): HandoffRecord {
   }
 }
 
-function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation }: {
+function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr = false }: {
   cwd: string
   baseSha: string
   liveBaseSha: string
   headSha: string
   compareMutation?: 'diverged' | 'behind' | 'zero-ahead' | 'wrong-base' | 'wrong-merge-base'
+  activePr?: boolean
 }): { run: ContextCommandRunner; compareCalls: string[]; ancestry: Record<string, unknown> } {
   const mergeBase = git(cwd, 'merge-base', baseSha, liveBaseSha)
   const aheadBy = Number(git(cwd, 'rev-list', '--count', `${baseSha}..${liveBaseSha}`))
@@ -125,7 +126,27 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
         comments: [comment],
       }))
     }
-    if (args[0] === 'pr' && args[1] === 'list') return response('[]')
+    if (args[0] === 'pr' && args[1] === 'list') return response(activePr ? JSON.stringify([{
+      number: 620,
+      url: `https://github.com/${repository}/pull/620`,
+      headRefName: branch,
+      title: 'Issue 618 implementation',
+      body: 'Closes #618',
+      closingIssuesReferences: [{ number: Number(issueNumber) }],
+    }]) : '[]')
+    if (args[0] === 'pr' && args[1] === 'view') return response(JSON.stringify({
+      number: 620,
+      state: 'OPEN',
+      isDraft: false,
+      url: `https://github.com/${repository}/pull/620`,
+      baseRefName: 'main',
+      baseRefOid: liveBaseSha,
+      headRefName: branch,
+      headRefOid: headSha,
+      mergeCommit: null,
+      statusCheckRollup: [],
+    }))
+    if (key === `api --paginate --slurp repos/${repository}/pulls/620/reviews?per_page=100`) return response('[[]]')
     if (key === `api repos/${repository}/branches/main/protection`) return response('{}')
     return response('')
   }
@@ -133,7 +154,7 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
   return { run, compareCalls, ancestry }
 }
 
-function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation']) {
+function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation'], activePr = false) {
   const cwd = mkdtempSync(join(tmpdir(), 'bemoat-618-pr-ready-ancestry-'))
   try {
     git(cwd, 'init', '-b', 'main')
@@ -161,7 +182,7 @@ function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRu
     git(cwd, 'config', `branch.${branch}.merge`, `refs/heads/${branch}`)
     git(cwd, 'update-ref', `refs/remotes/origin/${branch}`, headSha)
 
-    const { run, compareCalls, ancestry } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation })
+    const { run, compareCalls, ancestry } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr })
     const evidence = collectContextEvidence({
       cwd,
       issueNumber,
@@ -199,6 +220,32 @@ describe('Context PR_READY after protected main advances', () => {
       },
     })
     expect(compareCalls).toEqual([`repos/${repository}/compare/${baseSha}...${liveBaseSha}`])
+  })
+
+  it('routes fresh active-PR evidence through ordinary REVIEW while retaining the historical null-PR HANDOFF', () => {
+    // Founder lifecycle authority: after PR creation, fresh Context must detect
+    // the active PR and resume ordinary VERIFY / REVIEW / FOUNDER_GATE routing.
+    // The immutable pre-PR HANDOFF remains pr:null and records the prior base.
+    const { evidence, decision, compareCalls, baseSha, liveBaseSha, headSha } = runAncestryScenario(undefined, true)
+
+    expect(evidence).toMatchObject({
+      activePr: {
+        number: '620',
+        baseBranch: 'main',
+        baseSha: liveBaseSha,
+        headBranch: branch,
+        headSha,
+      },
+      protectedBase: { branch: 'main', sha: liveBaseSha },
+      currentHeadVerification: { exactHead: headSha },
+      evidenceErrors: [],
+    })
+    const historicalHandoff = evidence.durableContext.handoffs?.[0]
+    expect(historicalHandoff).toBeDefined()
+    expect(historicalHandoff?.body).toContain('"pr": null')
+    expect(historicalHandoff?.body).toContain(`"sha": "${baseSha}"`)
+    expect(decision).toMatchObject({ route: 'REVIEW', nextAction: { type: 'COMMAND' } })
+    expect(compareCalls).toEqual([])
   })
 
   it.each([

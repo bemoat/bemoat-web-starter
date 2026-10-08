@@ -55,10 +55,12 @@ export function hasInvalidImplementationHandoffCandidate(
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return /^##\s+HANDOFF\b/im.test(source.body)
     const record = payload as Record<string, unknown>
     if (record.schema_version !== 2 || record.record_type !== 'HANDOFF' || record.route !== 'IMPLEMENT') return false
-    const hasValidationProof = Array.isArray(record.verified_evidence) && record.verified_evidence.some((entry) =>
-      Boolean(entry) && typeof entry === 'object' && (entry as Record<string, unknown>).kind === 'validation-proof')
-    return (record.objective_mode !== 'read_only' || hasValidationProof) &&
-      (!applicable.includes(source) || !validate(source, record))
+    const implementationEvidence = Array.isArray(record.verified_evidence) && record.verified_evidence.some((entry) =>
+      Boolean(entry) && typeof entry === 'object' && ['focused-tests', 'validation-proof'].includes(String((entry as Record<string, unknown>).kind)))
+    if (record.objective_mode === 'read_only') {
+      return implementationEvidence && applicable.includes(source) && !validate(source, record)
+    }
+    return !applicable.includes(source) || !validate(source, record)
   })
 }
 

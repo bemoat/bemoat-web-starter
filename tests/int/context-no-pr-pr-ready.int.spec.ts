@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { routeContext } from '../../scripts/context/router.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
 import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { createContextOutput } from '../../scripts/agent-context.ts'
 
 const repository = 'boat1994/bemoat-web-starter'
 const issueNumber = '618'
@@ -222,6 +223,37 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     const decision = routeContext(evidence([handoffComment(malformed)]))
 
     expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('returns STOP for a current-head read-only IMPLEMENT HANDOFF without validation-proof', () => {
+    // Founder eligibility requires an implementation-mode HANDOFF and explicitly
+    // requires validation evidence; otherwise Context must STOP.
+    const malformed = implementationHandoff({
+      objective_mode: 'read_only',
+      verified_evidence: [{ kind: 'focused-tests', value: 'Read-only review performed.', url: null }],
+    })
+    const decision = routeContext(evidence([handoffComment(malformed)]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('serializes PR_READY action text under next_action.description exactly', () => {
+    const current = evidence()
+    const decision = routeContext(current)
+    const output = JSON.parse(JSON.stringify(createContextOutput(current, decision, issueNumber))) as {
+      route: string
+      next_action: { type: string; command: string | null; description?: string; reason?: unknown }
+    }
+
+    expect(output).toMatchObject({
+      route: 'PR_READY',
+      next_action: {
+        type: 'OPEN_PR',
+        command: 'gh pr create',
+        description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.',
+      },
+    })
+    expect(output.next_action).not.toHaveProperty('reason')
   })
 
   it('returns STOP when multiple validation proofs are present', () => {

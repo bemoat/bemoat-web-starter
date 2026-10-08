@@ -23,6 +23,17 @@ export function createContextOutput(evidence: NormalizedContextEvidence, decisio
   const staleBaseSync = decision.route === 'STOP' && decision.nextAction.type === 'STOP' && decision.nextAction.command === null
     ? authorizeContextSync(evidence)
     : null
+  const nextAction = {
+    type: decision.nextAction.type,
+    command: decision.nextAction.command,
+    description: decision.nextAction.description,
+  } as {
+    type: ContextDecision['nextAction']['type']
+    command: ContextDecision['nextAction']['command']
+    description: string
+    reason: string
+  }
+  Object.defineProperty(nextAction, 'reason', { value: decision.nextAction.description, enumerable: false })
   return {
     schema_version: 1,
     command: 'bemoat:context',
@@ -46,11 +57,7 @@ export function createContextOutput(evidence: NormalizedContextEvidence, decisio
       : decision.recovery
         ? { recovery: decision.recovery }
         : {}),
-    next_action: {
-      type: decision.nextAction.type,
-      command: decision.nextAction.command,
-      reason: decision.nextAction.description,
-    },
+    next_action: nextAction,
     evidence_urls: decision.evidenceUrls,
     issue_number: issueNumber,
   }
@@ -64,7 +71,7 @@ function renderText(output: ReturnType<typeof createContextOutput>) {
     `Policy: ${output.policy.path} ${output.policy.version || '<unavailable>'}`,
     `Local: ${output.local_git.branch} ${output.local_git.head || '<unavailable>'} (${output.local_git.durable ? 'durable' : 'not durable'})`,
     `Route: ${output.route}`,
-    `Next: ${output.next_action.reason}`,
+    `Next: ${output.next_action.description}`,
   ]
   if (output.reasons.length > 0) {
     lines.push('Reasons:', ...output.reasons.map((reason) => `- ${reason}`))
