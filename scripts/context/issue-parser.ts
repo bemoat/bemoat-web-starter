@@ -43,6 +43,25 @@ export function isPriorNoPrImplementationHandoff(source: RoleEvidence, payload: 
   }
 }
 
+export function hasInvalidImplementationHandoffCandidate(
+  sources: RoleEvidence[],
+  applicable: RoleEvidence[],
+  validate: (source: RoleEvidence, payload: Record<string, unknown>) => boolean,
+): boolean {
+  return sources.some((source) => {
+    const match = source.body.match(/```json\s*([\s\S]*?)```/i)
+    let payload: unknown = null
+    try { payload = match ? JSON.parse(match[1] ?? '') : null } catch { /* malformed HANDOFF stays fail-closed */ }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return /^##\s+HANDOFF\b/im.test(source.body)
+    const record = payload as Record<string, unknown>
+    if (record.schema_version !== 2 || record.record_type !== 'HANDOFF' || record.route !== 'IMPLEMENT') return false
+    const hasValidationProof = Array.isArray(record.verified_evidence) && record.verified_evidence.some((entry) =>
+      Boolean(entry) && typeof entry === 'object' && (entry as Record<string, unknown>).kind === 'validation-proof')
+    return (record.objective_mode !== 'read_only' || hasValidationProof) &&
+      (!applicable.includes(source) || !validate(source, record))
+  })
+}
+
 function sections(body: string): Map<string, string[]> {
   const result = new Map<string, string[]>()
   let current: string | null = null

@@ -147,6 +147,7 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
 
   it.each([
     ['duplicate native comment identity', [handoffComment(implementationHandoff(), commentId), handoffComment(implementationHandoff(), commentId)]],
+    ['two distinct matching current-head HANDOFFs', [handoffComment(implementationHandoff()), handoffComment(implementationHandoff(), commentId + 1)]],
     ['competing current-head STOP', [handoffComment(implementationHandoff()), handoffComment({
       ...implementationHandoff(),
       schema_version: 3,
@@ -182,8 +183,7 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
       localGit: { ...evidence().localGit, ...localGit },
     }))
 
-    expect(decision.route).not.toBe('PR_READY')
-    expect(decision.nextAction.type).not.toBe('OPEN_PR')
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
   it.each([
@@ -196,16 +196,42 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
   ] as const)('does not return PR_READY for %s evidence', (_story, overrides) => {
     const decision = routeContext(evidence([handoffComment(implementationHandoff(overrides))]))
 
-    expect(decision.route).not.toBe('PR_READY')
-    expect(decision.nextAction.type).not.toBe('OPEN_PR')
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it.each([
+    ['wrong HANDOFF route', { route: 'VERIFY', next_action: { route: 'VERIFY', description: 'Verify the implementation.' } }],
+    ['wrong objective mode', { objective_mode: 'read_only' }],
+  ] as const)('returns STOP for %s', (_story, overrides) => {
+    const decision = routeContext(evidence([handoffComment(implementationHandoff(overrides))]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('returns STOP when the current policy identity is not the canonical Mission Control policy', () => {
+    const current = evidence()
+    const decision = routeContext(evidence(undefined, {
+      policy: { ...current.policy, policyId: 'other-policy' },
+    }))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
   it('does not return PR_READY when validation proof is missing', () => {
     const malformed = implementationHandoff({ verified_evidence: [{ kind: 'focused-tests', value: 'Tests passed.', url: null }] })
     const decision = routeContext(evidence([handoffComment(malformed)]))
 
-    expect(decision.route).not.toBe('PR_READY')
-    expect(decision.nextAction.type).not.toBe('OPEN_PR')
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('returns STOP when multiple validation proofs are present', () => {
+    const original = implementationHandoff()
+    const decision = routeContext(evidence([handoffComment({
+      ...original,
+      verified_evidence: [...original.verified_evidence, ...original.verified_evidence],
+    })]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
   it.each([
@@ -218,8 +244,7 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     })
     const decision = routeContext(evidence([handoffComment(malformed)]))
 
-    expect(decision.route).not.toBe('PR_READY')
-    expect(decision.nextAction.type).not.toBe('OPEN_PR')
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
   it.each([
@@ -230,12 +255,42 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     const canonical = handoffComment(implementationHandoff())
     const decision = routeContext(evidence([{ ...canonical, ...patch }]))
 
-    expect(decision.route).not.toBe('PR_READY')
-    expect(decision.nextAction.type).not.toBe('OPEN_PR')
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
   it('continues ordinary exact-head Context routing after the PR is created', () => {
     const current = evidence()
+    const advancedBase = 'd'.repeat(40)
+    const decision = routeContext({
+      ...current,
+      protectedBase: { ...current.protectedBase, sha: advancedBase },
+      activePr: {
+        number: '620',
+        state: 'OPEN',
+        draft: false,
+        url: `https://github.com/${repository}/pull/620`,
+        baseBranch: 'main',
+        baseSha: advancedBase,
+        headBranch: branch,
+        headSha: head,
+        merged: false,
+        mergeCommitSha: null,
+      },
+      currentHeadVerification: {
+        exactHead: head,
+        checks: { status: 'PENDING', complete: false, failed: false, pending: true, required: true },
+        reviews: { required: true, approved: false, exactHead: false, approvedCount: 0, exactHeadApprovedCount: 0 },
+        protection: { available: true, requiredChecks: ['CI'], requiredApprovals: 1 },
+      },
+    })
+
+    expect(decision).toMatchObject({ route: 'VERIFY', nextAction: { type: 'COMMAND' } })
+  })
+
+  it('does not treat a malformed pre-PR HANDOFF as harmless history on an active PR', () => {
+    const canonical = handoffComment(implementationHandoff())
+    const malformedHandoff = { ...canonical, body: `${canonical.body} ` }
+    const current = evidence([malformedHandoff])
     const decision = routeContext({
       ...current,
       activePr: {
@@ -258,6 +313,6 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
       },
     })
 
-    expect(decision).toMatchObject({ route: 'VERIFY', nextAction: { type: 'COMMAND' } })
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 })

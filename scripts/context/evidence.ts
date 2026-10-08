@@ -180,7 +180,8 @@ export function isPrReadyImplementationEvidence(record: HandoffRecord, source: R
   return record.schema_version === 2 && record.route === 'IMPLEMENT' && record.objective_mode === 'implementation' &&
     record.pr === null && record.local_durability.required && record.local_durability.durable &&
     record.protected_base.branch === evidence.protectedBase.branch && /^[0-9a-f]{40}$/i.test(record.protected_base.sha) &&
-    evidence.policy.path === 'docs/mission-control/mission-control-guide.md' && Boolean(evidence.policy.policyId && evidence.policy.version) &&
+    evidence.policy.path === 'docs/mission-control/mission-control-guide.md' && evidence.policy.policyId === 'bemoat-mission-control' &&
+    Boolean(evidence.policy.version) &&
     /^[0-9a-f]{40}$/i.test(evidence.policy.sourceSha) && evidence.localGit.clean && !evidence.localGit.detached &&
     evidence.localGit.pushed && evidence.localGit.durable && evidence.localGit.head?.toLowerCase() === record.exact_head.toLowerCase() &&
     evidence.localGit.upstream === `origin/${evidence.localGit.branch}` &&

@@ -55,11 +55,12 @@ function makeRecord(baseSha: string, headSha: string): HandoffRecord {
   }
 }
 
-function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha }: {
+function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation }: {
   cwd: string
   baseSha: string
   liveBaseSha: string
   headSha: string
+  compareMutation?: 'diverged' | 'behind' | 'zero-ahead' | 'wrong-base' | 'wrong-merge-base'
 }): { run: ContextCommandRunner; compareCalls: string[]; ancestry: Record<string, unknown> } {
   const mergeBase = git(cwd, 'merge-base', baseSha, liveBaseSha)
   const aheadBy = Number(git(cwd, 'rev-list', '--count', `${baseSha}..${liveBaseSha}`))
@@ -71,6 +72,11 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha }: {
     base_commit: { sha: baseSha },
     merge_base_commit: { sha: mergeBase },
   }
+  if (compareMutation === 'diverged') ancestry.status = 'diverged'
+  if (compareMutation === 'behind') ancestry.behind_by = 1
+  if (compareMutation === 'zero-ahead') ancestry.ahead_by = 0
+  if (compareMutation === 'wrong-base') ancestry.base_commit.sha = headSha
+  if (compareMutation === 'wrong-merge-base') ancestry.merge_base_commit.sha = headSha
   const compareCalls: string[] = []
   const commentId = 6061118688
   const comment = {
@@ -127,6 +133,47 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha }: {
   return { run, compareCalls, ancestry }
 }
 
+function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation']) {
+  const cwd = mkdtempSync(join(tmpdir(), 'bemoat-618-pr-ready-ancestry-'))
+  try {
+    git(cwd, 'init', '-b', 'main')
+    git(cwd, 'config', 'user.email', 'context-test@example.invalid')
+    git(cwd, 'config', 'user.name', 'Context test')
+    mkdirSync(join(cwd, 'docs/mission-control'), { recursive: true })
+    writeFileSync(join(cwd, 'docs/mission-control/mission-control-guide.md'), policy)
+    git(cwd, 'add', 'docs/mission-control/mission-control-guide.md')
+    git(cwd, 'commit', '-m', 'protected baseline')
+    const baseSha = git(cwd, 'rev-parse', 'HEAD')
+
+    git(cwd, 'switch', '-c', branch)
+    writeFileSync(join(cwd, 'implementation.ts'), 'export const complete = true\n')
+    git(cwd, 'add', 'implementation.ts')
+    git(cwd, 'commit', '-m', 'Issue 618 implementation')
+    const headSha = git(cwd, 'rev-parse', 'HEAD')
+    git(cwd, 'switch', 'main')
+    writeFileSync(join(cwd, 'main-advance.txt'), 'compatible descendant\n')
+    git(cwd, 'add', 'main-advance.txt')
+    git(cwd, 'commit', '-m', 'advance protected main')
+    const liveBaseSha = git(cwd, 'rev-parse', 'HEAD')
+    git(cwd, 'switch', branch)
+    git(cwd, 'remote', 'add', 'origin', `https://github.com/${repository}.git`)
+    git(cwd, 'config', `branch.${branch}.remote`, 'origin')
+    git(cwd, 'config', `branch.${branch}.merge`, `refs/heads/${branch}`)
+    git(cwd, 'update-ref', `refs/remotes/origin/${branch}`, headSha)
+
+    const { run, compareCalls, ancestry } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation })
+    const evidence = collectContextEvidence({
+      cwd,
+      issueNumber,
+      env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
+      run,
+    })
+    return { evidence, decision: routeContext(evidence), compareCalls, ancestry, baseSha, liveBaseSha, headSha }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+}
+
 describe('Context PR_READY after protected main advances', () => {
   // Authority: the Founder protocol permits PR_READY after main advances only
   // when the immutable HANDOFF base is a strict ancestor of live approved main.
@@ -134,60 +181,36 @@ describe('Context PR_READY after protected main advances', () => {
   // from their actual merge-base/ahead/behind relationship through public
   // collectContextEvidence, then routes that collected evidence.
   it('accepts the exact durable #618 HANDOFF when main advanced by a compatible descendant commit', () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'bemoat-618-pr-ready-ancestry-'))
-    try {
-      git(cwd, 'init', '-b', 'main')
-      git(cwd, 'config', 'user.email', 'context-test@example.invalid')
-      git(cwd, 'config', 'user.name', 'Context test')
-      mkdirSync(join(cwd, 'docs/mission-control'), { recursive: true })
-      writeFileSync(join(cwd, 'docs/mission-control/mission-control-guide.md'), policy)
-      git(cwd, 'add', 'docs/mission-control/mission-control-guide.md')
-      git(cwd, 'commit', '-m', 'protected baseline')
-      const baseSha = git(cwd, 'rev-parse', 'HEAD')
+    const { evidence, decision, compareCalls, ancestry, baseSha, liveBaseSha, headSha } = runAncestryScenario()
 
-      git(cwd, 'switch', '-c', branch)
-      writeFileSync(join(cwd, 'implementation.ts'), 'export const complete = true\n')
-      git(cwd, 'add', 'implementation.ts')
-      git(cwd, 'commit', '-m', 'Issue 618 implementation')
-      const headSha = git(cwd, 'rev-parse', 'HEAD')
-      git(cwd, 'switch', 'main')
-      writeFileSync(join(cwd, 'main-advance.txt'), 'compatible descendant\n')
-      git(cwd, 'add', 'main-advance.txt')
-      git(cwd, 'commit', '-m', 'advance protected main')
-      const liveBaseSha = git(cwd, 'rev-parse', 'HEAD')
-      git(cwd, 'switch', branch)
-      git(cwd, 'remote', 'add', 'origin', `https://github.com/${repository}.git`)
-      git(cwd, 'config', `branch.${branch}.remote`, 'origin')
-      git(cwd, 'config', `branch.${branch}.merge`, `refs/heads/${branch}`)
-      git(cwd, 'update-ref', `refs/remotes/origin/${branch}`, headSha)
+    expect(ancestry).toMatchObject({ status: 'ahead', ahead_by: 1, behind_by: 0, base_commit: { sha: baseSha }, merge_base_commit: { sha: baseSha } })
+    expect(evidence).toMatchObject({
+      localGit: { branch, head: headSha, clean: true, pushed: true, durable: true },
+      protectedBase: { branch: 'main', sha: liveBaseSha },
+      durableContext: { handoffs: [expect.objectContaining({ id: String(6061118688) })] },
+      evidenceErrors: [],
+    })
+    expect(decision).toMatchObject({
+      route: 'PR_READY',
+      nextAction: {
+        type: 'OPEN_PR',
+        command: 'gh pr create',
+        description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.',
+      },
+    })
+    expect(compareCalls).toEqual([`repos/${repository}/compare/${baseSha}...${liveBaseSha}`])
+  })
 
-      const { run, compareCalls, ancestry } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha })
-      const evidence = collectContextEvidence({
-        cwd,
-        issueNumber,
-        env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
-        run,
-      })
-      const decision = routeContext(evidence)
+  it.each([
+    ['diverged comparison', 'diverged'],
+    ['behind comparison', 'behind'],
+    ['comparison with no strict advancement', 'zero-ahead'],
+    ['wrong comparison base', 'wrong-base'],
+    ['wrong merge base', 'wrong-merge-base'],
+  ] as const)('returns STOP for %s native ancestry evidence', (_label, mutation) => {
+    const { decision, compareCalls, baseSha, liveBaseSha } = runAncestryScenario(mutation)
 
-      expect(ancestry).toMatchObject({ status: 'ahead', ahead_by: 1, behind_by: 0, base_commit: { sha: baseSha }, merge_base_commit: { sha: baseSha } })
-      expect(evidence).toMatchObject({
-        localGit: { branch, head: headSha, clean: true, pushed: true, durable: true },
-        protectedBase: { branch: 'main', sha: liveBaseSha },
-        durableContext: { handoffs: [expect.objectContaining({ id: String(6061118688) })] },
-        evidenceErrors: [],
-      })
-      expect(decision).toMatchObject({
-        route: 'PR_READY',
-        nextAction: {
-          type: 'OPEN_PR',
-          command: 'gh pr create',
-          description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.',
-        },
-      })
-      expect(compareCalls).toEqual([`repos/${repository}/compare/${baseSha}...${liveBaseSha}`])
-    } finally {
-      rmSync(cwd, { recursive: true, force: true })
-    }
+    expect(compareCalls).toEqual([`repos/${repository}/compare/${baseSha}...${liveBaseSha}`])
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 })
