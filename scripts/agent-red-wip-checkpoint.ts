@@ -21,7 +21,9 @@ import {
   redWipMutationPerformed,
   validateCanonicalOriginTransport,
   validateRedWipSuiteReport,
+  validateRedWipRunnerTaskReport,
   type RedWipSuiteReport,
+  type RedWipRunnerTaskReport,
   type RedWipApproval,
   type RedWipEvidence,
 } from './context/red-wip-checkpoint.ts'
@@ -34,8 +36,8 @@ type VitestJsonReport = { testResults?: VitestFileResult[]; numFailedTests?: num
 const mutationState = createRedWipMutationState()
 let plannedCommit: { parentSha: string; subject: string } | null = null
 
-function run(command: string, args: string[], options: { allowFailure?: boolean; cwd?: string } = {}) {
-  const result = spawnSync(command, args, { cwd: options.cwd, encoding: 'utf8' })
+function run(command: string, args: string[], options: { allowFailure?: boolean; cwd?: string; env?: NodeJS.ProcessEnv } = {}) {
+  const result = spawnSync(command, args, { cwd: options.cwd, env: options.env, encoding: 'utf8' })
   if (result.error) throw new Error(`${command} ${args.join(' ')} failed to start: ${result.error.message}`)
   if (result.status !== 0 && !options.allowFailure) {
     throw new Error(`${command} ${args.join(' ')} failed: ${(result.stderr || result.stdout || '').trim()}`)
@@ -171,8 +173,12 @@ function collectCandidate(approval: RedWipApproval, issueNumber: string, explici
 function runIntegrationSuite(approval: RedWipApproval) {
   const directory = mkdtempSync(join(tmpdir(), 'bemoat-red-wip-'))
   const output = join(directory, 'vitest.json')
+  const taskOutput = join(directory, 'vitest-task-errors.json')
   try {
-    const result = run('pnpm', ['run', 'bemoat:test:int', '--', '--reporter=json', `--outputFile=${output}`], { allowFailure: true })
+    const result = run('pnpm', ['run', 'bemoat:test:int', '--', '--reporter=json', '--reporter=./scripts/context/red-wip-checkpoint.ts', `--outputFile=${output}`], {
+      allowFailure: true,
+      env: { ...process.env, BEMOAT_RED_WIP_TASK_REPORT: taskOutput },
+    })
     let report: VitestJsonReport
     try { report = JSON.parse(readFileSync(output, 'utf8')) as VitestJsonReport } catch {
       throw new Error(`integration suite did not produce machine-readable results: ${(result.stderr || result.stdout).trim()}`)
@@ -204,6 +210,12 @@ function runIntegrationSuite(approval: RedWipApproval) {
       numFailedTests: failed, numPassedTests: passed, numFailedTestSuites: report.numFailedTestSuites,
       unhandledErrors: report.unhandledErrors, suites,
     }
+    let taskReport: RedWipRunnerTaskReport
+    try { taskReport = JSON.parse(readFileSync(taskOutput, 'utf8')) as RedWipRunnerTaskReport } catch {
+      throw new Error('integration runner did not produce its full Vitest task error report')
+    }
+    const taskReasons = validateRedWipRunnerTaskReport(approval, taskReport)
+    if (taskReasons.length) throw new Error(taskReasons.join('; '))
     const reasons = validateRedWipSuiteReport(approval, suiteReport)
     if (reasons.length) throw new Error(reasons.join('; '))
     const failures = suites.flatMap((suite) => suite.assertions.filter((assertion) => assertion.status === 'failed')

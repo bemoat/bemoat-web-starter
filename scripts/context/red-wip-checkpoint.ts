@@ -26,6 +26,30 @@ export type RedWipSuiteReport = {
   }>
 }
 
+export type RedWipRunnerTaskReport = {
+  unhandledErrors: string[]
+  tasks: Array<{
+    type: string
+    name: string
+    fullName: string
+    state: string
+    errors: string[]
+    children: RedWipRunnerTaskReport['tasks']
+  }>
+}
+
+type VitestTaskLike = {
+  type?: string
+  name?: string
+  relativeModuleId?: string
+  task?: VitestTaskLike
+  result?: { state?: string; errors?: unknown[] } | (() => { state?: string; errors?: unknown[] })
+  errors?: () => unknown[]
+  children?: { array?: () => VitestTaskLike[] }
+  tasks?: VitestTaskLike[]
+  state?: () => string
+}
+
 export const CANONICAL_RED_WIP_ORIGIN = 'https://github.com/bemoat/bemoat-web-starter.git'
 
 export function validateCanonicalOriginTransport(input: {
@@ -161,6 +185,85 @@ export function validateRedWipSuiteReport(approval: RedWipApproval, report: RedW
   if (failures.length !== report.numFailedTests) reasons.push('integration report assertion failure count is contradictory')
   reasons.push(...validateRedWipFailureSet(approval, failures, report.numFailedTests, report.numPassedTests))
   return [...new Set(reasons)]
+}
+
+export function validateRedWipRunnerTaskReport(approval: RedWipApproval, report: RedWipRunnerTaskReport): string[] {
+  if (!report || !Array.isArray(report.tasks) || !Array.isArray(report.unhandledErrors) ||
+      report.tasks.some((task) => !task || !['module', 'suite', 'test'].includes(task.type) || typeof task.name !== 'string' ||
+        typeof task.fullName !== 'string' || typeof task.state !== 'string' || !Array.isArray(task.errors) || !Array.isArray(task.children))) {
+    return ['integration runner returned an incomplete or malformed task error report']
+  }
+  const reasons: string[] = []
+  if (report.unhandledErrors.length) reasons.push('integration runner reported unhandled runtime or collection errors')
+  const approved = new Map(approval.expected_failures.map(({ test_name, expected_message }) => [test_name, expected_message]))
+  const allowedFailedTests: string[] = []
+  const visit = (task: RedWipRunnerTaskReport['tasks'][number]) => {
+    if (task.errors.length) {
+      if (task.type !== 'test') {
+        reasons.push('integration runner reported a module or suite hook, setup, collection, or runtime error')
+      } else {
+        const expectedMessage = approved.get(task.fullName)
+        if (task.state !== 'failed' || expectedMessage === undefined || task.errors.length !== 1 || !task.errors[0].includes(expectedMessage)) {
+          reasons.push('integration runner reported an error outside the exact Issue-approved assertion set')
+        } else {
+          allowedFailedTests.push(task.fullName)
+        }
+      }
+    }
+    task.children.forEach(visit)
+  }
+  report.tasks.forEach(visit)
+  if (allowedFailedTests.length !== approved.size || new Set(allowedFailedTests).size !== allowedFailedTests.length ||
+      [...approved.keys()].some((name) => !allowedFailedTests.includes(name))) {
+    reasons.push('integration runner task errors do not exactly match the Issue-approved assertion set')
+  }
+  return [...new Set(reasons)]
+}
+
+function serializeVitestError(error: unknown): string {
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const candidate = error as { stack?: unknown; message?: unknown }
+    if (typeof candidate.stack === 'string') return candidate.stack
+    if (typeof candidate.message === 'string') return candidate.message
+  }
+  return JSON.stringify(error) ?? String(error)
+}
+
+function serializeVitestTask(task: VitestTaskLike, parentNames: string[] = []): RedWipRunnerTaskReport['tasks'][number] {
+  const rawTask = task.task ?? task
+  const type = task.type ?? rawTask.type ?? 'unknown'
+  const name = task.name ?? task.relativeModuleId ?? rawTask.name ?? ''
+  const names = type === 'suite' ? [...parentNames, name] : parentNames
+  const rawResult = typeof rawTask.result === 'function' ? rawTask.result() : rawTask.result
+  const collectionErrors = task.errors?.() ?? []
+  const resultErrors = Array.isArray(rawResult?.errors) ? rawResult.errors : []
+  const children = task.children?.array?.() ?? (type === 'suite' ? task.tasks ?? [] : [])
+  const state = rawResult?.state === 'fail' || rawResult?.state === 'failed' ? 'failed' :
+    rawResult?.state === 'pass' || rawResult?.state === 'passed' ? 'passed' :
+      rawResult?.state === 'skip' || rawResult?.state === 'skipped' ? 'skipped' :
+        typeof task.state === 'function' ? task.state() : 'unknown'
+  return {
+    type: type === 'module' ? 'module' : type,
+    name,
+    fullName: type === 'test' ? [...parentNames, name].join(' ') : '',
+    state,
+    errors: [...new Set([...collectionErrors, ...resultErrors].map(serializeVitestError))],
+    children: children.map((child) => serializeVitestTask(child, names)),
+  }
+}
+
+export default class RedWipVitestReporter {
+  async onTestRunEnd(testModules: readonly VitestTaskLike[], unhandledErrors: readonly unknown[]) {
+    const output = process.env.BEMOAT_RED_WIP_TASK_REPORT
+    if (!output) throw new Error('BEMOAT_RED_WIP_TASK_REPORT must name the full runner task report output')
+    const report: RedWipRunnerTaskReport = {
+      unhandledErrors: unhandledErrors.map(serializeVitestError),
+      tasks: testModules.map((module) => serializeVitestTask(module)),
+    }
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(output, JSON.stringify(report))
+  }
 }
 
 export function redWipCommitSubject(approval: RedWipApproval): string {

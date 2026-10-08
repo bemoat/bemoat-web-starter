@@ -9,6 +9,7 @@ import {
   parseRedWipApproval,
   validateCanonicalOriginTransport,
   validateRedWipSuiteReport,
+  validateRedWipRunnerTaskReport,
   createRedWipMutationState,
   redWipMutationPerformed,
   validateRedWipCandidate,
@@ -17,6 +18,7 @@ import {
   type RedWipApproval,
   type RedWipEvidence,
   type RedWipSuiteReport,
+  type RedWipRunnerTaskReport,
 } from '../../scripts/context/red-wip-checkpoint.ts'
 
 const sha = '1'.repeat(40)
@@ -137,6 +139,30 @@ describe('authorized RED WIP checkpoint boundary', () => {
     expect(validateRedWipSuiteReport(approval(), nested)).toEqual([])
   })
 
+  it('rejects a nested hook error beside the exact approved assertion failures', () => {
+    const suiteReport = {
+      numFailedTests: 1, numPassedTests: 10, numFailedTestSuites: 2,
+      suites: [{ file: testPath, status: 'failed', assertions: [{ status: 'failed', name: testName, message: expectedMessage }] }],
+    }
+    const taskReport: RedWipRunnerTaskReport = {
+      unhandledErrors: [],
+      tasks: [{
+        type: 'module', name: testPath, fullName: '', state: 'failed', errors: [],
+        children: [{
+          type: 'suite', name: 'outer', fullName: '', state: 'failed', errors: [],
+          children: [
+            { type: 'test', name: testName, fullName: testName, state: 'failed', errors: [expectedMessage], children: [] },
+            { type: 'suite', name: 'nested', fullName: '', state: 'failed', errors: ['nested beforeAll hook failed'], children: [] },
+          ],
+        }],
+      }],
+    }
+    const mutationState = createRedWipMutationState()
+    expect(validateRedWipSuiteReport(approval(), suiteReport)).toEqual([])
+    expect(validateRedWipRunnerTaskReport(approval(), taskReport)).not.toEqual([])
+    expect(redWipMutationPerformed(mutationState)).toBe(false)
+  })
+
   it('rejects suite setup failures beside an otherwise approved RED assertion set', () => {
     const suite: RedWipSuiteReport = {
       numFailedTests: 1, numPassedTests: 10, numFailedTestSuites: 5,
@@ -244,7 +270,11 @@ const command = args.shift()
 if (command === 'bemoat:guard:safety') process.exit(0)
 if (command === 'bemoat:test:int') {
   const reportArg = args.find((arg) => arg.startsWith('--outputFile='))
-  if (reportArg) { fs.writeFileSync(reportArg.slice('--outputFile='.length), process.env.FIXTURE_REPORT); process.exit(1) }
+  if (reportArg) {
+    fs.writeFileSync(reportArg.slice('--outputFile='.length), process.env.FIXTURE_REPORT)
+    fs.writeFileSync(process.env.BEMOAT_RED_WIP_TASK_REPORT, process.env.FIXTURE_TASK_REPORT)
+    process.exit(1)
+  }
   process.exit(0)
 }
 if (command === 'bemoat:context') {
@@ -252,7 +282,7 @@ if (command === 'bemoat:context') {
   try { count = Number(fs.readFileSync(process.env.FIXTURE_CONTEXT_COUNT, 'utf8')) } catch {}
   count += 1
   fs.writeFileSync(process.env.FIXTURE_CONTEXT_COUNT, String(count))
-  process.stdout.write(count === 1 ? '{"route":"STOP","next_action":{"type":"COMMAND","command":"bemoat:checkpoint:red-wip"}}\\n' : '{"route":"STOP","next_action":{"type":"STOP","command":null}}\\n')
+  process.stdout.write(count < 3 ? '{"route":"STOP","next_action":{"type":"COMMAND","command":"bemoat:checkpoint:red-wip"}}\\n' : '{"route":"STOP","next_action":{"type":"STOP","command":null}}\\n')
   process.exit(0)
 }
 if (command === 'bemoat:checkpoint:red-wip') {
@@ -345,6 +375,27 @@ const result = call(args); write(result); process.exit(result.status ?? 1)
         numFailedTests: failures.length, numPassedTests: 10, numFailedTestSuites: 5,
         testResults: [{ name: testPath, status: 'failed', assertionResults: failures.map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }],
       })
+      const taskReport = (includeNestedHookError: boolean) => {
+        const childTasks: RedWipRunnerTaskReport['tasks'][number]['children'] = failures.map((item) => ({
+          type: 'test', name: item.name, fullName: item.name, state: 'failed', errors: [item.message],
+          children: [] as RedWipRunnerTaskReport['tasks'][number]['children'],
+        }))
+        if (includeNestedHookError) childTasks.push({
+          type: 'suite', name: 'nested suite with hook failure', fullName: '', state: 'failed',
+          errors: ['nested beforeAll hook failed'], children: [] as RedWipRunnerTaskReport['tasks'][number]['children'],
+        })
+        return JSON.stringify({
+          unhandledErrors: [],
+          tasks: [{ type: 'module', name: testPath, fullName: '', state: 'failed', errors: [], children: childTasks }],
+        })
+      }
+      env.FIXTURE_TASK_REPORT = taskReport(true)
+      const hookError = runCandidate()
+      expect(hookError.status).not.toBe(0)
+      expect(JSON.parse(hookError.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
+      expect(JSON.parse(hookError.stdout).details.reason).toContain('module or suite hook')
+      expect(git(['rev-parse', 'HEAD'])).toBe(greenHead)
+      env.FIXTURE_TASK_REPORT = taskReport(false)
       const result = runCandidate()
       expect(result.status, `${result.stderr || result.stdout}\n${git(['status', '--porcelain=v1', '--untracked-files=all'])}`).toBe(0)
       expect(JSON.parse(result.stdout)).toMatchObject({
