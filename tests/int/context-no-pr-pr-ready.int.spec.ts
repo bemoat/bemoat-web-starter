@@ -237,6 +237,61 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
     expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
 
+  it('does not treat a writer-generated read-only validation proof as PR_READY implementation proof', () => {
+    // The public HANDOFF writer emits tier "read-only" with the guard:safety
+    // command for objective_mode=read_only. Founder eligibility requires an
+    // implementation-mode HANDOFF and passing code-tier validation; only
+    // PR_READY is excluded here because ordinary read-only reconstruction is
+    // separately supported by Mission Control policy.
+    const readOnly = implementationHandoff({
+      objective_mode: 'read_only',
+      verified_evidence: [{
+        kind: 'validation-proof',
+        value: JSON.stringify({
+          status: 'PASS',
+          tier: 'read-only',
+          command: 'pnpm run bemoat:guard:safety',
+          exact_head: head,
+        }),
+        url: null,
+      }],
+    })
+    const decision = routeContext(evidence([handoffComment(readOnly)]))
+
+    expect(decision.route).not.toBe('PR_READY')
+    expect(decision.nextAction.type).not.toBe('OPEN_PR')
+  })
+
+  const staleHistoryCases: Array<[string, HandoffRecord]> = [
+    ['stale STOP', {
+      ...implementationHandoff(),
+      schema_version: 3,
+      objective_mode: 'read_only',
+      exact_head: 'f'.repeat(40),
+      route: 'STOP' as const,
+      next_action: { route: 'STOP' as const, description: 'Resolve the historical blocker.' },
+      verified_evidence: [{ kind: 'stop-blocker' as const, value: 'historical-blocker', url: null }],
+    }],
+    ['stale COMPLETE', {
+      ...implementationHandoff(),
+      objective_mode: 'read_only',
+      exact_head: 'f'.repeat(40),
+      route: 'COMPLETE' as const,
+      next_action: { route: 'COMPLETE' as const, description: 'Historical objective completed.' },
+    }],
+  ]
+
+  it.each(staleHistoryCases)('returns STOP when an otherwise eligible candidate has %s history', (_story, stale) => {
+    // Founder eligibility explicitly excludes stale STOP/COMPLETE history and
+    // requires STOP when any eligibility condition is unmet.
+    const decision = routeContext(evidence([
+      handoffComment(implementationHandoff()),
+      handoffComment(stale, commentId + 1),
+    ]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
   it('serializes PR_READY action text under next_action.description exactly', () => {
     const current = evidence()
     const decision = routeContext(current)

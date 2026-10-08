@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
+import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { foldNoPrFounderDecision } from './founder-decision-folding.ts'
 import type { HistoricalNoPrFounderGateReplayProof, NormalizedContextEvidence, RoleEvidence } from './model.ts'
 import { parseProtectedPolicyContent } from './policy.ts'
@@ -12,6 +12,20 @@ const GUIDE_PATH = 'docs/mission-control/mission-control-guide.md'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function hasStaleTerminalHandoff(sources: RoleEvidence[], evidence: NormalizedContextEvidence): boolean {
+  return sources.some((source) => {
+    const payload = extractHandoffPayload(source.body)
+    if (!isRecord(payload)) return false
+    let record: HandoffRecord
+    try { record = parseHandoffBody(JSON.stringify(payload)) } catch { return false }
+    return (record.route === 'STOP' || record.route === 'COMPLETE') && record.pr === null &&
+      record.repository === evidence.repository.nameWithOwner && record.issue_number === evidence.issue.number &&
+      record.branch === evidence.localGit.branch && record.exact_head.toLowerCase() !== evidence.localGit.head?.toLowerCase() &&
+      record.protected_base.branch === evidence.protectedBase.branch && record.local_durability.durable &&
+      renderHandoffComment(record) === source.body && isExactIssueCommentUrl(source.url, source, evidence)
+  })
 }
 
 function sha(value: unknown): value is string {

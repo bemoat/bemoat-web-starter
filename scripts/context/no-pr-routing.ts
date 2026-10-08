@@ -4,7 +4,7 @@ import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../h
 import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-decision-folding.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
-import { consumedHistoricalNoPrFounderGate } from './founder-gate-history.ts'
+import { consumedHistoricalNoPrFounderGate, hasStaleTerminalHandoff } from './founder-gate-history.ts'
 import { isPrReadyImplementationEvidence } from './evidence.ts'
 import { hasInvalidImplementationHandoffCandidate } from './issue-parser.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
@@ -43,12 +43,8 @@ function hasInvalidNoPrFounderGateEvidence(evidence: NormalizedContextEvidence, 
     if (!gateMarker) return false
     if (!isRecord(payload)) return true
 
-    try {
-      const record = parseHandoffBody(JSON.stringify(payload))
-      return record.pr === null && !isExactCurrentNoPrFounderGate(source, record, evidence)
-    } catch {
-      return true
-    }
+    try { const record = parseHandoffBody(JSON.stringify(payload)); return record.pr === null && !isExactCurrentNoPrFounderGate(source, record, evidence) }
+    catch { return true }
   })
 }
 
@@ -73,9 +69,7 @@ function applicableNoPrHandoffs(evidence: NormalizedContextEvidence): Applicable
       ) {
         applicable.push({ source, record })
       }
-    } catch {
-      continue
-    }
+    } catch { continue }
   }
 
   return applicable
@@ -373,10 +367,16 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     (record.route === 'STOP' && record.schema_version === 3),
   )
   const prReadyCandidate = handoffs[0]
-  if (handoffs.length === 1 && prReadyCandidate && isPrReadyImplementationEvidence(prReadyCandidate.record, prReadyCandidate.source, evidence)) return {
-    route: 'PR_READY',
-    reasons: [`Unique durable no-PR implementation HANDOFF is verified for ${evidence.localGit.branch}@${evidence.localGit.head}; only PR creation is authorized.`],
-    nextAction: { type: 'OPEN_PR', command: 'gh pr create', description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.' },
+  if (handoffs.length === 1 && prReadyCandidate && isPrReadyImplementationEvidence(prReadyCandidate.record, prReadyCandidate.source, evidence)) {
+    if (hasStaleTerminalHandoff(handoffSources, evidence)) return stop(
+      `EVIDENCE_CONFLICT: stale no-PR STOP or COMPLETE HANDOFF history competes with the current PR_READY candidate at ${evidence.localGit.head}.`,
+      'Resolve stale terminal HANDOFF history before continuing.',
+    )
+    return {
+      route: 'PR_READY',
+      reasons: [`Unique durable no-PR implementation HANDOFF is verified for ${evidence.localGit.branch}@${evidence.localGit.head}; only PR creation is authorized.`],
+      nextAction: { type: 'OPEN_PR', command: 'gh pr create', description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.' },
+    }
   }
   if (!onlyRecomputableHistory || !hasConsistentHistoricalBase(handoffs)) {
     return stop(

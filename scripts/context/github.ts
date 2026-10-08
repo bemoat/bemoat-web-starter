@@ -197,7 +197,7 @@ export function readGithubEvidence({
   env = process.env,
   repo,
   issueNumber,
-  branch: _branch,
+  branch,
   protectedBaseBranch,
   protectedBaseSha = null,
   run,
@@ -254,6 +254,7 @@ export function readGithubEvidence({
   }
 
   const candidates = new Map<string, Record<string, unknown>>()
+  const issueOwnedCandidates = new Set<string>()
   const queryArgs: string[][] = [
     ['pr', 'list', '--repo', repo, '--state', 'all', '--search', `repo:${repo} #${issueNumber}`, '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '100'],
     ['pr', 'list', '--repo', repo, '--state', 'all', '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '100'],
@@ -264,13 +265,12 @@ export function readGithubEvidence({
     if (!Array.isArray(result.value)) continue
     successfulList = true
     for (const value of result.value) {
-      if (!isRecord(value) || !prOwnsIssue(value, repo, issueNumber)) continue
+      const issueOwned = isRecord(value) && prOwnsIssue(value, repo, issueNumber)
+      if (!isRecord(value) || (!issueOwned && (!branch || asString(value.headRefName) !== branch))) continue
       const number = candidateNumber(value.number)
-      if (!number) {
-        errors.push('EVIDENCE_CONFLICT: Issue-bound PR identity is missing or malformed')
-        continue
-      }
+      if (!number) { errors.push('EVIDENCE_CONFLICT: Issue-bound or branch-associated PR identity is missing or malformed'); continue }
       candidates.set(number, value)
+      if (issueOwned) issueOwnedCandidates.add(number)
     }
   }
   if (!successfulList) errors.push('BLOCKED_EXTERNAL: active PR lookup is unavailable')
@@ -323,6 +323,11 @@ export function readGithubEvidence({
     if (!merged && pr.mergeCommit != null) { errors.push(`EVIDENCE_CONFLICT: PR #${number} state and merge commit evidence disagree`); continue }
     if (normalizedState === 'CLOSED' && !merged) continue
     if (merged && (!mergeCommitSha || !isFullSha(mergeCommitSha))) { errors.push(`EVIDENCE_CONFLICT: PR #${number} merge commit identity is missing or malformed`); continue }
+
+    if (!merged && branch && headBranch === branch && !issueOwnedCandidates.has(number)) {
+      errors.push(`EVIDENCE_CONFLICT: active PR #${number} uses the current Issue branch ${branch} but is not canonically linked to Issue #${issueNumber}`)
+      continue
+    }
 
     if (!merged && protectedBaseSha && (baseBranch !== protectedBaseBranch || baseSha.toLowerCase() !== protectedBaseSha.toLowerCase())) {
       errors.push(`EVIDENCE_CONFLICT: PR #${number} base does not match live protected ${protectedBaseBranch}@${protectedBaseSha}`)

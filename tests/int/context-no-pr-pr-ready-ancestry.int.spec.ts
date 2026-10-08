@@ -55,14 +55,15 @@ function makeRecord(baseSha: string, headSha: string): HandoffRecord {
   }
 }
 
-function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr = false }: {
+function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr = false, unlinkedPr = false }: {
   cwd: string
   baseSha: string
   liveBaseSha: string
   headSha: string
   compareMutation?: 'diverged' | 'behind' | 'zero-ahead' | 'wrong-base' | 'wrong-merge-base'
   activePr?: boolean
-}): { run: ContextCommandRunner; compareCalls: string[]; ancestry: Record<string, unknown> } {
+  unlinkedPr?: boolean
+}): { run: ContextCommandRunner; compareCalls: string[]; ancestry: Record<string, unknown>; unlinkedPrCalls: string[] } {
   const mergeBase = git(cwd, 'merge-base', baseSha, liveBaseSha)
   const aheadBy = Number(git(cwd, 'rev-list', '--count', `${baseSha}..${liveBaseSha}`))
   const behindBy = Number(git(cwd, 'rev-list', '--count', `${liveBaseSha}..${baseSha}`))
@@ -79,6 +80,7 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
   if (compareMutation === 'wrong-base') ancestry.base_commit.sha = headSha
   if (compareMutation === 'wrong-merge-base') ancestry.merge_base_commit.sha = headSha
   const compareCalls: string[] = []
+  const unlinkedPrCalls: string[] = []
   const commentId = 6061118688
   const comment = {
     url: `${issueUrl}#issuecomment-${commentId}`,
@@ -126,14 +128,28 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
         comments: [comment],
       }))
     }
-    if (args[0] === 'pr' && args[1] === 'list') return response(activePr ? JSON.stringify([{
-      number: 620,
-      url: `https://github.com/${repository}/pull/620`,
-      headRefName: branch,
-      title: 'Issue 618 implementation',
-      body: 'Closes #618',
-      closingIssuesReferences: [{ number: Number(issueNumber) }],
-    }]) : '[]')
+    if (args[0] === 'pr' && args[1] === 'list') {
+      if (unlinkedPr) {
+        if (args.includes('--search')) return response('[]')
+        unlinkedPrCalls.push(key)
+        return response(JSON.stringify([{
+          number: 621,
+          url: `https://github.com/${repository}/pull/621`,
+          headRefName: branch,
+          title: 'Unrelated improvement',
+          body: 'Changes for the current topic branch.',
+          closingIssuesReferences: [],
+        }]))
+      }
+      return response(activePr ? JSON.stringify([{
+        number: 620,
+        url: `https://github.com/${repository}/pull/620`,
+        headRefName: branch,
+        title: 'Issue 618 implementation',
+        body: 'Closes #618',
+        closingIssuesReferences: [{ number: Number(issueNumber) }],
+      }]) : '[]')
+    }
     if (args[0] === 'pr' && args[1] === 'view') return response(JSON.stringify({
       number: 620,
       state: 'OPEN',
@@ -151,10 +167,10 @@ function graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutati
     return response('')
   }
 
-  return { run, compareCalls, ancestry }
+  return { run, compareCalls, ancestry, unlinkedPrCalls }
 }
 
-function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation'], activePr = false) {
+function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRunner>[0]['compareMutation'], activePr = false, unlinkedPr = false) {
   const cwd = mkdtempSync(join(tmpdir(), 'bemoat-618-pr-ready-ancestry-'))
   try {
     git(cwd, 'init', '-b', 'main')
@@ -182,14 +198,14 @@ function runAncestryScenario(compareMutation?: Parameters<typeof graphEvidenceRu
     git(cwd, 'config', `branch.${branch}.merge`, `refs/heads/${branch}`)
     git(cwd, 'update-ref', `refs/remotes/origin/${branch}`, headSha)
 
-    const { run, compareCalls, ancestry } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr })
+    const { run, compareCalls, ancestry, unlinkedPrCalls } = graphEvidenceRunner({ cwd, baseSha, liveBaseSha, headSha, compareMutation, activePr, unlinkedPr })
     const evidence = collectContextEvidence({
       cwd,
       issueNumber,
       env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
       run,
     })
-    return { evidence, decision: routeContext(evidence), compareCalls, ancestry, baseSha, liveBaseSha, headSha }
+    return { evidence, decision: routeContext(evidence), compareCalls, ancestry, baseSha, liveBaseSha, headSha, unlinkedPrSeen: unlinkedPrCalls.length > 0 }
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
@@ -246,6 +262,18 @@ describe('Context PR_READY after protected main advances', () => {
     expect(historicalHandoff?.body).toContain(`"sha": "${baseSha}"`)
     expect(decision).toMatchObject({ route: 'REVIEW', nextAction: { type: 'COMMAND' } })
     expect(compareCalls).toEqual([])
+  })
+
+  it('does not return PR_READY when an active PR uses the verified branch but has no Issue link', () => {
+    // Founder eligibility requires that no active PR is already associated
+    // with the verified branch. Issue linkage is not required for that branch
+    // association, so this story asserts only the exclusion uniquely required
+    // by the PR_READY contract, not a guessed fallback route.
+    const { evidence, decision, unlinkedPrSeen } = runAncestryScenario(undefined, false, true)
+
+    expect(unlinkedPrSeen).toBe(true)
+    expect(evidence.activePr).toBeNull()
+    expect(decision.route).not.toBe('PR_READY')
   })
 
   it.each([
