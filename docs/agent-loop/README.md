@@ -61,7 +61,7 @@ After that trigger, agents **must complete the applicable branch-to-PR workflow*
 ## High-level loop
 
 ```text
-task → read AGENTS.md + agent-loop → git status & issue branch → intent checkpoint → human trigger → edit → test → show diff → commit → push → AC audit → open or update PR → publish applicable HANDOFF → notify user
+task → read AGENTS.md + agent-loop → git status & issue branch → intent checkpoint → human trigger → edit → semantic unit + focused proof → commit → push + exact SHA readback (repeat) → full validation → AC audit → open or update one PR → publish applicable HANDOFF → notify user
                                                                                                                                                                       ↓
                                                                                                                                                 CI → review → merge (human only)
 ```
@@ -73,10 +73,10 @@ task → read AGENTS.md + agent-loop → git status & issue branch → intent ch
 | **Branch** | Short-lived dedicated issue branch from `dev`; use the safest protected baseline only while the repo has no `dev` branch. First-time setup publishes and reads back the zero-delta topic ref before Context continuation. |
 | **Intent checkpoint** | After branch setup and a passing issue preflight, summarize issue goal, intended scope, out-of-scope work, files or areas to inspect, expected validation, and risks or assumptions. Wait for an explicit human trigger before editing. |
 | **Edit** | Follow `AGENTS.md`, allowed paths, and [checklist.md](./checklist.md). Smallest complete change. |
-| **Test** | Run the validation tier from `AGENTS.md`. In the starter, use the raw starter scripts such as `guard:safety` / `check`; in child projects, default to `bemoat:*` harness scripts and child-owned code checks. |
+| **Test** | Run focused proof for each proposed semantic checkpoint. Before PR creation/update and final objective completion, run the full required validation tier from `AGENTS.md`. In the starter, use raw starter scripts such as `guard:safety` / `check`; in child projects, default to `bemoat:*` harness scripts and child-owned code checks. |
 | **Show diff** | `git status` and diff summary before commit. |
-| **Commit** | One focused commit only if checks pass and only allowed files changed. See commit safety in `AGENTS.md`. |
-| **Push** | Push the branch to origin. |
+| **Commit** | Commit one coherent, independently understandable semantic unit with its coupled proof after its focused check passes. Do not split mechanically by file/function or leave a knowingly broken commit. See commit safety in `AGENTS.md`. |
+| **Push** | Push promptly after every checkpoint and read back the exact commit SHA from the remote task branch. Push/read back before long waits, handoffs, gates, and planned shutdowns. |
 | **AC audit** | Before PR creation/update and final reporting, copy or summarize the source issue acceptance criteria. Mark each item `Done`, `Not done`, `Not applicable`, or `Waiting for CI / human review`, and include brief evidence for completed items. Do not routinely edit the Issue checklist from Dev work; before merge, reconcile it only when live evidence uniquely supports the edit. |
 | **Open PR** | Open a new PR or **update the existing PR** if the branch already has one. Fill out the [pull request template](../../.github/pull_request_template.md). Include `Closes #<issue-number>`, summary, test plan, acceptance criteria audit, risks, and human-review notes. **Migration PRs:** draft only — see [migration-draft-pr.md](./migration-draft-pr.md). |
 | **Publish HANDOFF** | For profiles or review gates that require cross-agent coordination, publish the final protocol record using `bemoat:handoff` (with appropriate route). FAST work without an applicable review or handoff gate may omit HANDOFF. See [Handoff Protocol](../../AGENTS.md#handoff-protocol). |

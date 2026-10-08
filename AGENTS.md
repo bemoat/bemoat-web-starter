@@ -283,11 +283,16 @@ commit" or "docs only, no PR."
    review. Keep it in the same objective; it does not require a Global MC
    round-trip. Copy-only, trivial styling, mechanical renames, and routine
    low-risk work do not require this pass.
-7. Run the required validation tier.
+7. Run focused proof for each proposed semantic checkpoint. Run the full
+   required validation tier before PR creation/update and final objective
+   completion.
 8. Show `git status` and a diff summary.
-9. Commit exactly one focused change only if checks pass and only allowed files
-   changed.
-10. Push the issue branch.
+9. Commit each proven coherent, independently understandable semantic unit
+   with its directly coupled proof after its focused check passes. Do not split
+   commits mechanically by file/function or leave a knowingly broken commit.
+10. Push promptly after each checkpoint and read back the exact commit SHA from
+    the remote task branch; repeat before long waits, handoffs, gates, or
+    planned shutdowns.
 11. Audit the source issue acceptance criteria before PR creation/update and
     final reporting. Copy or summarize each criterion, mark it `Done`,
     `Not done`, `Not applicable`, or `Waiting for CI / human review`, and
@@ -322,8 +327,9 @@ Stop and report instead of editing, committing, pushing, or opening a PR when:
 
 ## Validation Before PR And Merge
 
-Run the correct validation before commit and PR. CI is the final source of
-truth on GitHub.
+Run focused proof before each semantic checkpoint commit and the correct full
+validation tier before PR creation/update and final objective completion. CI
+is the final source of truth on GitHub.
 
 | Change type | In `bemoat-web-starter` | In child projects | Notes |
 | --- | --- | --- | --- |
@@ -426,9 +432,12 @@ Design specifications (specs) and implementation plans must be organized accordi
 - Do not commit secrets, `.env` files, Cloudflare account IDs, D1 IDs, R2 bucket
   names, Worker names, domains, or customer integration credentials.
 - Do not commit unrelated refactors.
-- Do not commit if checks fail.
+- Do not commit a semantic checkpoint if its focused proof fails. Do not open
+  or update a PR, or report the objective complete, unless the full required
+  validation tier passes.
 - Do not commit if forbidden files changed.
-- Use exactly one focused commit unless the task explicitly requires more.
+- Use one focused commit per coherent, proven semantic unit; do not create
+  commits per file, function, assertion, or timer.
 - Review staged files before commit.
 
 ## UI Animation Policy
