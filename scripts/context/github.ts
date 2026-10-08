@@ -2,6 +2,9 @@ import { parseIssueBody } from './issue-parser.ts'
 import { prOwnsIssue } from './pr-issue-ownership.ts'
 import { hasUniqueCanonicalReviewIdentity, nativeReviewRows, reviewCounts } from './semantic-review-evidence.ts'
 import { readNativeReviewAncestryProofs } from './native-review-lineage.ts'
+import { readGithubJson as readJson } from './github-json.ts'
+import { readRedWipIssueApproval } from './red-wip-issue-approval.ts'
+import type { RedWipApproval } from './red-wip-checkpoint.ts'
 import type {
   ActivePullRequestEvidence,
   HeadVerificationEvidence,
@@ -26,32 +29,7 @@ export interface GithubEvidenceResult {
   exactHead: HeadVerificationEvidence | null
   protection: ProtectionEvidence
   errors: string[]
-}
-
-interface JsonResult<T> {
-  value: T | null
-  error: string | null
-}
-function readJson<T>(
-  run: ContextCommandRunner,
-  command: string,
-  args: readonly string[],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv },
-): JsonResult<T> {
-  const result = run(command, args, options)
-  if (result.status !== 0 || result.error) {
-    return {
-      value: null,
-      error: result.error?.message || result.stderr.trim() || result.stdout.trim() || `${command} returned no evidence`,
-    }
-  }
-  const text = result.stdout.trim()
-  if (!text) return { value: null, error: `${command} returned no evidence` }
-  try {
-    return { value: JSON.parse(text) as T, error: null }
-  } catch (error) {
-    return { value: null, error: `${command} returned invalid JSON: ${error instanceof Error ? error.message : String(error)}` }
-  }
+  redWipApproval: RedWipApproval | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -224,6 +202,7 @@ export function readGithubEvidence({
     }
   }) : []
   let issue: IssueEvidence | null = null
+  let redWipApproval: RedWipApproval | null = null
   if (!issuePayload) {
     errors.push(`BLOCKED_EXTERNAL: Issue #${issueNumber} evidence is unavailable${issueResult.error ? ` (${issueResult.error})` : ''}`)
   } else {
@@ -234,7 +213,9 @@ export function readGithubEvidence({
     if (!number || number !== issueNumber || !title || !state || !isRepositoryObjectUrl(url, repo, 'issues', issueNumber)) {
       errors.push('EVIDENCE_CONFLICT: Issue identity fields are missing or malformed')
     } else {
-      const parsed = parseIssueBody(typeof issuePayload.body === 'string' ? issuePayload.body : '')
+      const issueBody = typeof issuePayload.body === 'string' ? issuePayload.body : ''
+      const parsed = parseIssueBody(issueBody)
+      redWipApproval = readRedWipIssueApproval(issueBody, issueNumber)
       issue = {
         number,
         title,
@@ -396,5 +377,6 @@ export function readGithubEvidence({
     exactHead,
     protection,
     errors: [...new Set(errors)],
+    redWipApproval,
   }
 }

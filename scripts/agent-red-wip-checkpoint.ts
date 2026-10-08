@@ -15,6 +15,10 @@ import {
   validateRedWipCandidateState,
   validateRedWipPush,
   validateRedWipReadback,
+  validateRedWipFailureSet,
+  redWipCommitSubject,
+  createRedWipMutationState,
+  redWipMutationPerformed,
   type RedWipApproval,
   type RedWipEvidence,
 } from './context/red-wip-checkpoint.ts'
@@ -24,6 +28,8 @@ const ENTRYPOINT = 'scripts/agent-red-wip-checkpoint.ts'
 type VitestAssertion = { status: string; fullName: string; failureMessages?: string[] }
 type VitestFileResult = { name: string; assertionResults?: VitestAssertion[] }
 type VitestJsonReport = { testResults?: VitestFileResult[]; numFailedTests?: number; numPassedTests?: number }
+const mutationState = createRedWipMutationState()
+let plannedCommit: { parentSha: string; subject: string } | null = null
 
 function run(command: string, args: string[], options: { allowFailure?: boolean; cwd?: string } = {}) {
   const result = spawnSync(command, args, { cwd: options.cwd, encoding: 'utf8' })
@@ -58,7 +64,9 @@ function issueApproval(issueNumber: string): RedWipApproval {
 }
 
 function gitStatus() {
-  const records = git(['status', '--porcelain=v1', '--untracked-files=all']).split('\n').filter(Boolean)
+  // Keep porcelain's leading status column; git() trims it and would turn the
+  // first ordinary unstaged file into a falsely staged path.
+  const records = run('git', ['status', '--porcelain=v1', '--untracked-files=all']).stdout.split(/\r?\n/).filter(Boolean)
   const staged: string[] = []
   const unstaged: string[] = []
   const untracked: string[] = []
@@ -75,7 +83,7 @@ function gitStatus() {
 }
 
 function repositoryIdentity(): string {
-  const url = git(['remote', 'get-url', 'origin'])
+  const url = git(['config', '--get', 'remote.origin.url'])
   const match = url.match(/^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+\/[^/]+?)(?:\.git)?\/?$/i)
   if (!match) throw new Error('origin is not a canonical GitHub repository URL')
   return match[1].toLowerCase()
@@ -143,6 +151,9 @@ function runIntegrationSuite() {
     try { report = JSON.parse(readFileSync(output, 'utf8')) as VitestJsonReport } catch {
       throw new Error(`integration suite did not produce machine-readable results: ${(result.stderr || result.stdout).trim()}`)
     }
+    if (!Array.isArray(report.testResults) || !Number.isInteger(report.numFailedTests) || !Number.isInteger(report.numPassedTests)) {
+      throw new Error('integration suite returned an incomplete or malformed JSON report')
+    }
     const failures = (report.testResults ?? []).flatMap((file) => (file.assertionResults ?? [])
       .filter((assertion) => assertion.status === 'failed')
       .map((assertion) => ({
@@ -150,8 +161,8 @@ function runIntegrationSuite() {
         file: relative(process.cwd(), file.name).split('\\').join('/'),
         message: (assertion.failureMessages ?? []).join('\n'),
       })))
-    const failed = Number(report.numFailedTests ?? failures.length)
-    const passed = Number(report.numPassedTests ?? 0)
+    const failed = report.numFailedTests
+    const passed = report.numPassedTests
     if (result.status !== 0 && failed === 0) throw new Error('integration test process failed without a recognized failed assertion')
     if (result.status === 0 && failed !== 0) throw new Error('integration test result is contradictory')
     return { failures, totalFailed: failed, totalPassed: passed }
@@ -183,21 +194,8 @@ function verifyPush(approval: RedWipApproval, issueNumber: string, localSha: str
   })
   if (reasons.length) throw new Error(reasons.join('; '))
   const test = runIntegrationSuite()
-  const evidence: RedWipEvidence = {
-    explicitOptIn: true, issueNumber, repository: approval.repository, branch,
-    upstream, localHead: remoteSha, upstreamHead,
-    liveTopicHead: remoteSha, protectedBaseSha: approval.protected_base_sha,
-    liveProtectedBaseSha: liveBase, protectedBaseIsAncestor: true,
-    stagedPaths: [], unstagedPaths: [], untrackedPaths: [],
-    failures: test.failures, totalFailed: test.totalFailed, totalPassed: test.totalPassed,
-  }
-  const candidateReasons = validateRedWipCandidate(approval, evidence)
-  // The approved test is already committed during the hook, so validate its exact commit diff separately.
-  const exactFailure = test.totalFailed === 1 && test.failures.length === 1 &&
-    test.failures[0].name === approval.test_name && test.failures[0].file === approval.test_path &&
-    test.failures[0].message.includes(approval.expected_message) && test.totalPassed > 0
-  const otherReasons = candidateReasons.filter((reason) => !reason.includes('changes are not eligible') && !reason.includes('only the exact Issue-approved test path'))
-  if (!exactFailure || otherReasons.length) throw new Error(['integration suite did not match the one approved red assertion', ...otherReasons].join('; '))
+  const failureReasons = validateRedWipFailureSet(approval, test.failures, test.totalFailed, test.totalPassed)
+  if (failureReasons.length) throw new Error(failureReasons.join('; '))
 }
 
 function createCheckpoint(approval: RedWipApproval, issueNumber: string) {
@@ -205,20 +203,52 @@ function createCheckpoint(approval: RedWipApproval, issueNumber: string) {
   const evidence = collectCandidate(approval, issueNumber, true)
   const reasons = validateRedWipCandidate(approval, evidence)
   if (reasons.length) throw new Error(reasons.join('; '))
-  const subject = `WIP RED #${issueNumber}: ${approval.test_name}`
+  const subject = redWipCommitSubject(approval)
   run('git', ['add', '--', approval.test_path])
+  mutationState.staged = true
   const staged = gitStatus()
   if (staged.stagedPaths.length !== 1 || staged.stagedPaths[0] !== approval.test_path || staged.unstagedPaths.length || staged.untrackedPaths.length) {
     throw new Error('staging did not contain only the Issue-approved test path')
   }
+  plannedCommit = { parentSha: git(['rev-parse', 'HEAD']), subject }
   run('git', ['commit', '-m', subject])
+  mutationState.commitSha = git(['rev-parse', 'HEAD'])
   const head = git(['rev-parse', 'HEAD'])
   const branch = git(['branch', '--show-current'])
-  run('git', ['push', 'origin', `HEAD:refs/heads/${branch}`])
+  mutationState.pushAttempted = true
+  run('git', ['push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`])
+  mutationState.pushSucceeded = true
   const readback = liveRef(`refs/heads/${branch}`)
   const readbackReasons = validateRedWipReadback(head, readback)
   if (readbackReasons.length) throw new Error(readbackReasons.join('; '))
-  return head
+  mutationState.readbackSha = readback
+  const discovery = run('pnpm', ['run', COMMAND, '--', '--help', '--json'])
+  const discoveryPayload = parseJsonLine(discovery.stdout)
+  if (discoveryPayload.command !== COMMAND || discoveryPayload.mode !== 'help') throw new Error('post-push registered CLI Discovery did not confirm this command')
+  const context = run('pnpm', ['run', 'bemoat:context', '--', issueNumber, '--json'], { allowFailure: true })
+  const contextPayload = parseJsonLine(context.stdout)
+  if (context.status !== 0 || typeof contextPayload.route !== 'string' || !contextPayload.route) {
+    throw new Error(`post-push fresh Context did not return an actual route: ${(context.stderr || context.stdout).trim()}`)
+  }
+  return { head, discovery: discoveryPayload, context: contextPayload }
+}
+
+function parseJsonLine(output: string): Record<string, unknown> {
+  const line = output.trim().split(/\r?\n/).reverse().find((row) => row.startsWith('{'))
+  if (!line) throw new Error('expected machine-readable JSON output')
+  const value: unknown = JSON.parse(line)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('expected a JSON object result')
+  return value as Record<string, unknown>
+}
+
+function requireContextCommand(issueNumber: string) {
+  const output = run('pnpm', ['run', 'bemoat:context', '--', issueNumber, '--json'], { allowFailure: true })
+  const context = parseJsonLine(output.stdout)
+  const next = context.next_action as Record<string, unknown> | undefined
+  if (output.status !== 0 || next?.type !== 'COMMAND' || next.command !== COMMAND) {
+    throw new Error('fresh Context has not authorized this exact durability-only command')
+  }
+  return context
 }
 
 function renderHelp(invocation: Extract<ParsedInvocation, { mode: 'help' }>) {
@@ -248,22 +278,54 @@ function main() {
       process.stdout.write(`Verified one authorized WIP RED push for Issue #${issueNumber}.\n`)
       return
     }
-    const head = createCheckpoint(approval, issueNumber)
+    requireContextCommand(issueNumber)
+    const checkpoint = createCheckpoint(approval, issueNumber)
     const result = createResultEnvelopeV1({
       command, outcome: 'SUCCESS', classification: 'SUCCESS', mutation_performed: true,
-      issue_number: issueNumber, exact_head: head,
-      next_action: { type: 'COMPLETE', command: null, reason: 'The incomplete WIP RED checkpoint was pushed and exact remote SHA readback succeeded; no objective-edit authority is granted.' },
-      details: { checkpoint_status: 'WIP RED', objective_complete: false, objective_edit_authority_granted: false, remote_sha_readback: head },
+      issue_number: issueNumber, exact_head: checkpoint.head,
+      next_action: { type: 'STOP', command: null, reason: `WIP RED remains incomplete. Fresh Context route: ${checkpoint.context.route}.` },
+      details: {
+        checkpoint_status: 'WIP RED INCOMPLETE', objective_complete: false, objective_edit_authority_granted: false,
+        remote_sha_readback: checkpoint.head, actual_context_route: checkpoint.context.route,
+        fresh_context: checkpoint.context, cli_discovery: checkpoint.discovery,
+      },
     })
     if (invocation.format === 'json') process.stdout.write(`${JSON.stringify(result)}\n`)
-    else process.stdout.write(`WIP RED: Issue #${issueNumber} pushed at ${head}; objective remains incomplete.\n`)
+    else process.stdout.write(`WIP RED: Issue #${issueNumber} pushed at ${checkpoint.head}; objective remains incomplete.\n`)
   } catch (error) {
+    if (!mutationState.staged) {
+      try { mutationState.staged = gitStatus().stagedPaths.length > 0 } catch { /* status unavailable */ }
+    }
+    if (!mutationState.commitSha && plannedCommit) {
+      try {
+        const head = git(['rev-parse', 'HEAD'])
+        const parent = git(['rev-parse', `${head}^`])
+        const subject = git(['show', '-s', '--format=%s', head])
+        if (parent === plannedCommit.parentSha && subject === plannedCommit.subject) mutationState.commitSha = head
+      } catch { /* the commit point remains unproven */ }
+    }
+    if (mutationState.commitSha) {
+      try {
+        const branch = git(['branch', '--show-current'])
+        const remote = liveRef(`refs/heads/${branch}`)
+        mutationState.readbackSha = remote
+        if (remote === mutationState.commitSha) {
+          mutationState.pushSucceeded = true
+        }
+      } catch {
+        // An unavailable readback leaves the known local mutation state intact.
+      }
+    }
     const classification = error instanceof CliInvocationError ? error.classification : 'EVIDENCE_CONFLICT'
     const reason = error instanceof Error ? error.message : String(error)
     const result = createResultEnvelopeV1({
-      command, outcome: 'STOP', classification, mutation_performed: false,
+      command, outcome: 'STOP', classification, mutation_performed: redWipMutationPerformed(mutationState),
       issue_number: invocation?.mode === 'run' ? String(invocation.values.issue_number) : null,
-      next_action: { type: 'STOP', command: null, reason }, details: { reason, objective_edit_authority_granted: false },
+      next_action: { type: 'STOP', command: null, reason }, details: {
+        reason, objective_edit_authority_granted: false,
+        checkpoint_status: mutationState.pushSucceeded ? 'WIP RED INCOMPLETE' : mutationState.commitSha ? 'WIP RED LOCAL COMMIT INCOMPLETE' : 'NOT_PUSHED',
+        mutation_state: { ...mutationState },
+      },
     })
     if (invocation?.format === 'json' || process.argv.includes('--json')) process.stdout.write(`${JSON.stringify(result)}\n`)
     else process.stderr.write(`STOP: ${reason}\n`)

@@ -8,11 +8,26 @@ export type RedWipApproval = {
   branch: string
   protected_base_sha: string
   test_path: string
-  test_name: string
-  expected_message: string
+  expected_failures: Array<{ test_name: string; expected_message: string }>
 }
 
 export type RedWipFailure = { name: string; file: string; message: string }
+
+export type RedWipMutationState = {
+  staged: boolean
+  commitSha: string | null
+  pushAttempted: boolean
+  pushSucceeded: boolean
+  readbackSha: string | null
+}
+
+export function createRedWipMutationState(): RedWipMutationState {
+  return { staged: false, commitSha: null, pushAttempted: false, pushSucceeded: false, readbackSha: null }
+}
+
+export function redWipMutationPerformed(state: RedWipMutationState): boolean {
+  return state.staged || state.commitSha !== null || state.pushSucceeded || state.readbackSha !== null
+}
 
 export type RedWipEvidence = {
   explicitOptIn: boolean
@@ -61,21 +76,46 @@ export function parseRedWipApproval(issueBody: string, issueNumber: string): Red
   if (!/^tests\/int\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.int\.spec\.ts$/.test(value.test_path)) {
     throw new Error('Issue RED WIP approval path must be a canonical integration-test path.')
   }
-  if (!value.test_name.trim() || !value.expected_message.trim()) {
-    throw new Error('Issue RED WIP approval must name one exact assertion and expected failure.')
+  const names = value.expected_failures.map(({ test_name }) => test_name)
+  if (new Set(names).size !== names.length) {
+    throw new Error('Issue RED WIP approval must not contain duplicate assertion identities.')
   }
   return value
 }
 
 export function validateRedWipCandidate(approval: RedWipApproval, evidence: RedWipEvidence): string[] {
   const reasons = validateRedWipCandidateState(approval, evidence)
-  if (evidence.totalFailed !== 1 || evidence.failures.length !== 1) reasons.push('integration run must contain exactly one failed assertion')
-  const failure = evidence.failures[0]
-  if (failure && (failure.name !== approval.test_name || failure.file !== approval.test_path || !failure.message.includes(approval.expected_message))) {
-    reasons.push('the failed assertion does not exactly match Issue approval')
-  }
-  if (evidence.totalPassed < 1) reasons.push('integration run must prove the remaining suite passed')
+  reasons.push(...validateRedWipFailureSet(approval, evidence.failures, evidence.totalFailed, evidence.totalPassed))
   return reasons
+}
+
+export function validateRedWipFailureSet(
+  approval: RedWipApproval,
+  failures: RedWipFailure[],
+  totalFailed: number,
+  totalPassed: number,
+): string[] {
+  const reasons: string[] = []
+  const expected = new Map(approval.expected_failures.map(({ test_name, expected_message }) => [test_name, expected_message]))
+  const actualNames = failures.map(({ name }) => name)
+  if (totalFailed !== expected.size || failures.length !== expected.size) reasons.push('integration run must contain exactly the Issue-approved failed assertion set')
+  if (new Set(actualNames).size !== actualNames.length) reasons.push('integration report contains duplicate failed assertion identities')
+  if (actualNames.some((name) => !expected.has(name)) || [...expected.keys()].some((name) => !actualNames.includes(name))) {
+    reasons.push('integration failures do not exactly match Issue approval')
+  }
+  for (const failure of failures) {
+    const expectedMessage = expected.get(failure.name)
+    if (failure.file !== approval.test_path || expectedMessage === undefined || !failure.message.includes(expectedMessage)) {
+      reasons.push('a failed assertion does not exactly match Issue approval')
+    }
+  }
+  if (totalPassed < 1) reasons.push('integration run must prove the remaining suite passed')
+  return reasons
+}
+
+export function redWipCommitSubject(approval: RedWipApproval): string {
+  const names = approval.expected_failures.map(({ test_name }) => test_name).join(', ')
+  return `${RED_WIP_COMMIT_PREFIX} #${approval.issue_number}: ${names}`
 }
 
 export function validateRedWipCandidateState(approval: RedWipApproval, evidence: RedWipEvidence): string[] {
@@ -124,7 +164,7 @@ export function validateRedWipPush(input: {
   if (input.localRef !== `refs/heads/${input.branch}` || input.remoteRef !== `refs/heads/${input.branch}`) {
     reasons.push('pre-push local and remote refs must be the exact approved task branch')
   }
-  if (input.commitSubject !== `${RED_WIP_COMMIT_PREFIX} #${input.issueNumber}: ${approval.test_name}`) {
+  if (input.commitSubject !== redWipCommitSubject(approval)) {
     reasons.push('commit subject is not the exact approved WIP RED label')
   }
   if (!input.remoteSha || input.parentSha !== input.remoteSha) reasons.push('RED WIP commit is not directly based on the live remote topic head')
@@ -142,9 +182,13 @@ export function validateRedWipReadback(expectedSha: string, liveSha: string): st
 function isApproval(value: unknown): value is RedWipApproval {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
-  const requiredKeys = ['schema_version', 'issue_number', 'repository', 'branch', 'protected_base_sha', 'test_path', 'test_name', 'expected_message']
+  const requiredKeys = ['schema_version', 'issue_number', 'repository', 'branch', 'protected_base_sha', 'test_path', 'expected_failures']
   return Object.keys(record).length === requiredKeys.length && requiredKeys.every((key) => key in record) &&
     record.schema_version === 1 &&
-    requiredKeys.filter((key) => key !== 'schema_version')
-      .every((key) => typeof record[key] === 'string' && record[key].trim() !== '')
+    ['issue_number', 'repository', 'branch', 'protected_base_sha', 'test_path']
+      .every((key) => typeof record[key] === 'string' && record[key].trim() !== '') &&
+    Array.isArray(record.expected_failures) && record.expected_failures.length > 0 && record.expected_failures.every((failure) =>
+      typeof failure === 'object' && failure !== null && !Array.isArray(failure) && Object.keys(failure).length === 2 &&
+      typeof failure.test_name === 'string' && failure.test_name.trim() !== '' &&
+      typeof failure.expected_message === 'string' && failure.expected_message.trim() !== '')
 }

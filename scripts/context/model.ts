@@ -1,3 +1,5 @@
+import type { RedWipApproval } from './red-wip-checkpoint.ts'
+
 export type ContextRoute =
   | 'IMPLEMENT'
   | 'PR_READY'
@@ -272,6 +274,17 @@ export interface NormalizedContextEvidence {
   /** Read-only proof for one uniquely consumed old no-PR Founder gate. */
   historicalNoPrFounderGateReplayProofs?: HistoricalNoPrFounderGateReplayProof[]
   evidenceErrors: string[]
+  /** Internal exact Issue approval used only to recognize a narrow durability checkpoint candidate. */
+  redWipApproval?: RedWipApproval | null
+  /** Internal path-level Git proof for the narrow durability checkpoint candidate. */
+  redWipWorkingTree?: {
+    available: boolean
+    stagedPaths: string[]
+    unstagedPaths: string[]
+    untrackedPaths: string[]
+    protectedBaseAncestor: boolean
+    approvedPathRegularFile: boolean
+  }
 }
 
 export interface ContextDecision {

@@ -14,6 +14,7 @@ import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import type { NoPrImplementationBaseAncestryProof } from './model.ts'
 import type { HandoffRecord } from '../handoff/schema.ts'
+import { readRedWipWorkingTreeEvidence } from './red-wip-tree-evidence.ts'
 
 function readSetupBaseRecoveryEvidence({
   cwd,
@@ -235,6 +236,7 @@ export function collectContextEvidence({
       exactHead: null,
       protection: { available: false, source: 'unavailable' as const, requiredChecks: [], requiredApprovals: 0 },
       errors: ['EVIDENCE_CONFLICT: GitHub evidence cannot be read without repository identity'],
+      redWipApproval: null,
     }
   const roleEvidence = parseRoleEvidence(github.comments)
   const activePr = github.activePrs.length === 0 ? null : github.activePrs.length === 1 ? github.activePrs[0] : github.activePrs
@@ -341,6 +343,10 @@ export function collectContextEvidence({
     },
     ...(historicalBlockerResolutionProofs.length > 0 ? { historicalBlockerResolutionProofs } : {}),
     ...(noPrImplementationBaseAncestryProofs.length > 0 ? { noPrImplementationBaseAncestryProofs } : {}),
+    ...(github.redWipApproval ? {
+      redWipApproval: github.redWipApproval,
+      redWipWorkingTree: readRedWipWorkingTreeEvidence(cwd, github.redWipApproval, run),
+    } : { redWipApproval: null }),
     evidenceErrors: [...new Set([
       ...errors,
       ...approvedBase.errors,
