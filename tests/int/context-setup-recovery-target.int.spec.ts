@@ -7,6 +7,8 @@ import type { ContextCommandRunner } from '../../scripts/context/runtime.ts'
 const repository = 'bemoat/bemoat-web-starter'
 const localHead = 'a'.repeat(40)
 const baseSha = 'b'.repeat(40)
+const issue594TargetHead = '46fe5363697cb24f0db5a6d4338a5540665bb697'
+const issue594LiveMain = 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3'
 
 type WorktreeOverrides = {
   branch?: string; sourceHead?: string; sourceStatus?: string; sourceOrigin?: string; sourceRoot?: string;
@@ -153,6 +155,44 @@ describe('Issue #592 explicit target setup recovery command contract', () => {
       sourceCwd: '/source', targetCwd: '/target', expectedRepository: repository,
       expectedBaseBranch: 'main', expectedBaseSha: baseSha, separateTarget: true,
       expectedLocalHead: localHead, boundary: 'initial', run: sourceRunner(overrides),
+    })).not.toBeNull()
+  })
+
+  // Authority: Issue #594 acceptance criteria require recognizing the exact
+  // recurring #588 state: a clean canonical attached main target whose HEAD
+  // is 46fe536..., while origin/main and both live protected-main authorities
+  // equal e3f5f7f.... The Issue also requires target identity and cleanliness
+  // to remain bound. The current merged #592 contract's target equality rule
+  // is the behavior this characterization challenges.
+  it('accepts the exact benign protected-main tracking-ref-ahead target state', () => {
+    expect(verifySetupRecoveryWorktrees({
+      sourceCwd: '/source', targetCwd: '/target', expectedRepository: repository,
+      expectedBaseBranch: 'main', expectedBaseSha: issue594LiveMain, separateTarget: true,
+      expectedLocalHead: issue594TargetHead, boundary: 'initial',
+      run: sourceRunner({
+        targetHead: issue594TargetHead,
+        targetTracking: issue594LiveMain,
+        sourceHead: issue594LiveMain,
+        githubSha: issue594LiveMain,
+        remoteSha: issue594LiveMain,
+      }),
+    })).toBeNull()
+  })
+
+  // Authority: Issue #594 explicitly preserves STOP for every tracking SHA
+  // other than the exact live protected-base SHA on this new path.
+  it('rejects the recurring target shape when its tracking SHA is not exact live main', () => {
+    expect(verifySetupRecoveryWorktrees({
+      sourceCwd: '/source', targetCwd: '/target', expectedRepository: repository,
+      expectedBaseBranch: 'main', expectedBaseSha: issue594LiveMain, separateTarget: true,
+      expectedLocalHead: issue594TargetHead, boundary: 'initial',
+      run: sourceRunner({
+        targetHead: issue594TargetHead,
+        targetTracking: 'c'.repeat(40),
+        sourceHead: issue594LiveMain,
+        githubSha: issue594LiveMain,
+        remoteSha: issue594LiveMain,
+      }),
     })).not.toBeNull()
   })
 

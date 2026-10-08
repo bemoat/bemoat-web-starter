@@ -248,6 +248,78 @@ function routeContextStory(story: {
 }
 
 describe('bemoat:context neutral evidence adapters', () => {
+  // Authority: Issue #594 acceptance requires fresh Context to recognize the
+  // exact clean #588 recurrence when target HEAD is strictly behind, but the
+  // target tracking ref and both live protected-main authorities equal the
+  // exact live SHA. This exercises evidence collection and Context routing,
+  // rather than supplying setupBaseRecovery directly.
+  it('routes the exact benign #594 tracking-ref-ahead state to registered recovery', () => {
+    const targetHead = '46fe5363697cb24f0db5a6d4338a5540665bb697'
+    const liveMain = 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3'
+    const policySha = 'd587ff2c6ac4a314b193e321613c3299c83b6da5'
+    const repository = 'bemoat/bemoat-web-starter'
+    const policyContent = '---\npolicy_id: bemoat-mission-control\nversion: 1.7.0\ncanonical_repository: bemoat/bemoat-web-starter\ntrusted_founder_login: bemoat\n---\n\n# Mission Control\n'
+    const run: ContextCommandRunner = (command, args) => {
+      const key = args.join(' ')
+      if (command === 'git') {
+        const values: Record<string, string> = {
+          'branch --show-current': 'main\n',
+          'rev-parse HEAD': `${targetHead}\n`,
+          'status --short': '',
+          'rev-parse --abbrev-ref --symbolic-full-name @{upstream}': 'origin/main\n',
+          'remote get-url origin': `https://github.com/${repository}.git\n`,
+          'ls-remote --heads origin main': `${liveMain}\trefs/heads/main\n`,
+          'rev-parse --verify --quiet refs/remotes/origin/main': `${liveMain}\n`,
+          [`merge-base --is-ancestor HEAD ${liveMain}`]: '',
+        }
+        return response(values[key] ?? '')
+      }
+      if (key.includes('git/ref/heads/dev')) return { status: 1, stdout: '', stderr: 'Not Found', error: null }
+      if (key.includes('git/ref/heads/main')) return response(JSON.stringify({ object: { sha: liveMain } }))
+      if (key.includes('contents/docs/mission-control/mission-control-guide.md')) {
+        return response(JSON.stringify({
+          sha: policySha,
+          content: Buffer.from(policyContent).toString('base64'),
+          encoding: 'base64',
+        }))
+      }
+      if (key.includes(`/branches/main/protection`)) return response('{}')
+      if (key.startsWith('issue view 594')) {
+        return response(JSON.stringify({
+          number: 594,
+          title: 'fix(context): recover stale protected target after shared tracking-ref advance',
+          state: 'OPEN',
+          url: `https://github.com/${repository}/issues/594`,
+          body: '## Goal\n\nRecover the exact benign stale protected target.\n\n## Scope\n\nExact #588 recurrence only.\n\n## Acceptance Criteria\n- [ ] Recognize the exact tracking-ref-ahead state.\n\nTask size: medium\nMission Control mode: required\n',
+          comments: [],
+        }))
+      }
+      if (key.startsWith('pr list')) return response('[]')
+      return response('')
+    }
+
+    const evidence = collectContextEvidence({
+      cwd: '/target', issueNumber: '594',
+      env: { GH_REPO: repository, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
+      run,
+    })
+    const decision = routeContext(evidence)
+
+    expect(evidence).toMatchObject({
+      repository: { nameWithOwner: repository },
+      policy: { sourceSha: policySha, version: '1.7.0' },
+      issue: { number: '594', title: 'fix(context): recover stale protected target after shared tracking-ref advance' },
+      localGit: { branch: 'main', head: targetHead, upstream: 'origin/main', clean: true, detached: false },
+      protectedBase: { branch: 'main', sha: liveMain },
+      setupBaseRecovery: { liveUpstreamHead: liveMain, localUpstreamHead: liveMain, ancestry: 'STRICT_ANCESTOR' },
+      evidenceErrors: [],
+    })
+    expect(decision).toMatchObject({
+      route: 'STOP',
+      nextAction: { type: 'COMMAND', command: 'bemoat:context:recover-setup' },
+    })
+  })
+
   it.each([
     ['dirty', { 'status --short': ' M file\n' }],
     ['detached', { 'branch --show-current': '' }],

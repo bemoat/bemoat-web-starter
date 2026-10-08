@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
 import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { parseCommandInvocation } from '../../scripts/cli/command-invocation.ts'
 
 const harness = vi.hoisted(() => ({
   evidence: null as NormalizedContextEvidence | null,
@@ -35,6 +36,9 @@ import { recoverSetupBase } from '../../scripts/context/setup-recovery.ts'
 const repo = 'bemoat/bemoat-web-starter'
 const oldHead = 'a'.repeat(40)
 const liveHead = 'b'.repeat(40)
+const issue594TargetHead = '46fe5363697cb24f0db5a6d4338a5540665bb697'
+const issue594LiveMain = 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3'
+const issue594PolicySha = 'd587ff2c6ac4a314b193e321613c3299c83b6da5'
 
 function evidence(overrides: Partial<NormalizedContextEvidence> = {}): NormalizedContextEvidence {
   return {
@@ -97,13 +101,15 @@ function runner(options: {
   fetchStatus?: number; mergeStatus?: number; fetchedHead?: string; remoteAfter?: string; trackingBeforeFetch?: string;
   trackingAfterFetch?: string; ancestryStatus?: number; reverseAncestryStatus?: number; postStatus?: string;
   postUpstream?: string; liveRefDriftsAfterRead?: number; driftedLiveSha?: string; githubRefSha?: string;
-  remoteAfterMerge?: string; duplicateLiveRef?: boolean;
+  remoteAfterMerge?: string; duplicateLiveRef?: boolean; initialHead?: string; exactLiveHead?: string;
 } = {}) {
+  const initialHead = options.initialHead ?? oldHead
+  const exactLiveHead = options.exactLiveHead ?? liveHead
   const calls: string[] = []
-  const state = { head: oldHead, tracking: oldHead, fetchHead: '', live: liveHead, status: '', upstream: 'origin/main' }
+  const state = { head: initialHead, tracking: initialHead, fetchHead: '', live: exactLiveHead, status: '', upstream: 'origin/main' }
   let liveReads = 0
-  state.tracking = options.trackingBeforeFetch ?? oldHead
-  harness.head = oldHead
+  state.tracking = options.trackingBeforeFetch ?? initialHead
+  harness.head = initialHead
   harness.tracking = state.tracking
   const run: ContextCommandRunner = (_command, args) => {
     const key = args.join(' ')
@@ -119,14 +125,14 @@ function runner(options: {
     if (key === 'fetch --no-tags --no-recurse-submodules --refmap= origin refs/heads/main:') {
       if (options.fetchStatus) return response('', options.fetchStatus)
       state.fetchHead = options.fetchedHead ?? state.live
-      state.tracking = options.trackingAfterFetch ?? oldHead
+      state.tracking = options.trackingAfterFetch ?? initialHead
       harness.tracking = state.tracking
       return response()
     }
     if (key === 'rev-parse --verify --quiet FETCH_HEAD') return response(`${state.fetchHead}\n`)
-    if (key === `merge-base --is-ancestor HEAD ${liveHead}`) return response('', options.ancestryStatus ?? 0)
-    if (key === `merge-base --is-ancestor ${liveHead} HEAD`) return response('', options.reverseAncestryStatus ?? 1)
-    if (key === `merge --ff-only ${liveHead}`) {
+    if (key === `merge-base --is-ancestor HEAD ${exactLiveHead}`) return response('', options.ancestryStatus ?? 0)
+    if (key === `merge-base --is-ancestor ${exactLiveHead} HEAD`) return response('', options.reverseAncestryStatus ?? 1)
+    if (key === `merge --ff-only ${exactLiveHead}`) {
       if (options.mergeStatus) return response('', options.mergeStatus)
       state.head = state.fetchHead
       harness.head = state.head
@@ -135,9 +141,12 @@ function runner(options: {
       if (options.postUpstream) state.upstream = options.postUpstream
       return response()
     }
-    if (key === `update-ref refs/remotes/origin/main ${liveHead} ${oldHead}`) {
-      state.tracking = liveHead
-      harness.tracking = liveHead
+    if (
+      key === `update-ref refs/remotes/origin/main ${exactLiveHead} ${initialHead}` ||
+      key === `update-ref refs/remotes/origin/main ${exactLiveHead} ${exactLiveHead}`
+    ) {
+      state.tracking = exactLiveHead
+      harness.tracking = exactLiveHead
       return response()
     }
     if (key === 'rev-parse HEAD') return response(`${state.head}\n`)
@@ -147,7 +156,7 @@ function runner(options: {
     // collectContextEvidence runs these reads; their values are represented by
     // the authority-bound fixture above. Unused GitHub reads are harmless.
     if (_command === 'gh' && key === `api repos/${repo}/git/ref/heads/main`) {
-      return response(JSON.stringify({ object: { sha: options.githubRefSha ?? liveHead } }))
+      return response(JSON.stringify({ object: { sha: options.githubRefSha ?? exactLiveHead } }))
     }
     if (_command === 'gh') return response('{}')
     return response('', 1)
@@ -163,6 +172,77 @@ describe('Issue #585 clean stale protected-base setup recovery', () => {
     harness.collectCalls = 0
     harness.head = oldHead
     harness.tracking = oldHead
+  })
+
+  // Authority: Issue #594 acceptance requires the registered recovery behavior
+  // to fast-forward the exact recurring target HEAD to exact live main, while
+  // preserving clean state and using only --ff-only. This test exercises the
+  // recovery command's production path; it is expected to expose the current
+  // precondition rejection of HEAD != origin/main.
+  it('recovers the exact #594 benign tracking-ref-ahead target to clean live main', () => {
+    harness.evidence = evidence({
+      policy: { ...evidence().policy, version: '1.7.0', sourceSha: issue594PolicySha },
+      protectedBase: { ...evidence().protectedBase, sha: issue594LiveMain },
+      issue: { ...evidence().issue, number: '594', title: 'fix(context): recover stale protected target after shared tracking-ref advance', url: `https://github.com/${repo}/issues/594` },
+      localGit: { ...evidence().localGit, head: issue594TargetHead },
+      setupBaseRecovery: {
+        liveUpstreamHead: issue594LiveMain,
+        localUpstreamHead: issue594LiveMain,
+        ancestry: 'STRICT_ANCESTOR',
+      },
+    })
+    harness.head = issue594TargetHead
+    harness.tracking = issue594LiveMain
+    const git = runner({
+      initialHead: issue594TargetHead,
+      exactLiveHead: issue594LiveMain,
+      trackingBeforeFetch: issue594LiveMain,
+      trackingAfterFetch: issue594LiveMain,
+    })
+    const invocation = parseCommandInvocation('bemoat:context:recover-setup', [
+      '594', '--expected-repository', repo, '--expected-base-branch', 'main',
+      '--expected-base-sha', issue594LiveMain, '--expected-local-head', issue594TargetHead,
+      '--json',
+    ])
+    if (invocation.mode !== 'run') throw new Error('expected a registered recovery run invocation')
+    const source = { repository: repo, branch: 'main', head: issue594LiveMain, clean: true as const }
+    const sourceChecks: Array<{ boundary: string; initialTracking?: string }> = []
+    const result = recoverSetupBase({
+      cwd: '/target',
+      run: git.run,
+      verifySource: (boundary, initialTracking) => {
+        sourceChecks.push({ boundary, initialTracking })
+        return source.repository === repo && source.branch === 'main' &&
+          source.head === issue594LiveMain && source.clean
+          ? null
+          : 'Protected-main source no longer matches the exact clean canonical source binding.'
+      },
+      binding: {
+        issueNumber: String(invocation.values.issue_number),
+        expectedRepository: String(invocation.values.expected_repository),
+        expectedBaseBranch: String(invocation.values.expected_base_branch),
+        expectedBaseSha: String(invocation.values.expected_base_sha),
+        expectedLocalHead: String(invocation.values.expected_local_head),
+      },
+    })
+
+    expect(result).toMatchObject({
+      classification: 'SUCCESS', mutationPerformed: true, currentHead: issue594LiveMain,
+      route: 'STOP', nextAction: { type: 'COMMAND', command: 'bemoat:context' },
+    })
+    expect(git.state).toMatchObject({ head: issue594LiveMain, tracking: issue594LiveMain, status: '', upstream: 'origin/main' })
+    expect(git.calls).toContain(`merge --ff-only ${issue594LiveMain}`)
+    expect(git.calls).not.toContain(`update-ref refs/remotes/origin/main ${issue594TargetHead} ${issue594LiveMain}`)
+    expect(git.calls.filter((call) => call.startsWith('update-ref refs/remotes/origin/main '))).toEqual([
+      `update-ref refs/remotes/origin/main ${issue594LiveMain} ${issue594LiveMain}`,
+    ])
+    expect(sourceChecks.map(({ boundary }) => boundary)).toEqual([
+      'initial', 'before-fetch', 'before-merge', 'before-tracking-update',
+    ])
+    expect(sourceChecks.slice(1).map(({ initialTracking }) => initialTracking)).toEqual([
+      issue594LiveMain, issue594LiveMain, issue594LiveMain,
+    ])
+    expect(git.calls.some((call) => /\b(reset|rebase|stash|push|commit|checkout|switch)\b/.test(call))).toBe(false)
   })
 
   // Authority: Issue #585 acceptance criteria and execution-handoff-contract.md

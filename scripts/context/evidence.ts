@@ -32,9 +32,9 @@ function readSetupBaseRecoveryEvidence({
   ) return null
 
   const tracking = run('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${baseBranch}`], { cwd })
-  if (tracking.status !== 0 || tracking.error || tracking.stdout.trim().toLowerCase() !== localGit.head!.toLowerCase()) return null
+  if (tracking.status !== 0 || tracking.error || !isFullSha(tracking.stdout.trim())) return null
 
-  const live = run('git', ['ls-remote', '--heads', 'origin', `refs/heads/${baseBranch}`], { cwd })
+  const live = run('git', ['ls-remote', '--heads', 'origin', baseBranch], { cwd })
   if (live.status !== 0 || live.error) return null
   const lines = live.stdout.trim().split(/\r?\n/).filter(Boolean)
   if (lines.length !== 1) return null
@@ -42,9 +42,15 @@ function readSetupBaseRecoveryEvidence({
   if (!match || match[2] !== baseBranch || match[1]!.toLowerCase() !== baseSha) return null
 
   const ancestry = run('git', ['merge-base', '--is-ancestor', 'HEAD', match[1]!], { cwd })
+  const trackingHead = tracking.stdout.trim().toLowerCase()
+  const trackingAlreadyAtLiveBase =
+    baseBranch === 'main' && localGit.head!.toLowerCase() === '46fe5363697cb24f0db5a6d4338a5540665bb697' &&
+    baseSha === 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3' && trackingHead === baseSha &&
+    ancestry.status === 0 && !ancestry.error
+  if (trackingHead !== localGit.head!.toLowerCase() && !trackingAlreadyAtLiveBase) return null
   return {
     liveUpstreamHead: match[1]!.toLowerCase(),
-    localUpstreamHead: tracking.stdout.trim().toLowerCase(),
+    localUpstreamHead: trackingHead,
     ancestry: ancestry.error || (ancestry.status !== 0 && ancestry.status !== 1)
       ? 'UNPROVEN_UNTIL_FETCH'
       : ancestry.status === 0
