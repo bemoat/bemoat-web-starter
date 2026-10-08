@@ -20,7 +20,8 @@ starter-harness work when native development skills are unavailable.
    coupled proof, then push promptly and verify that the remote task branch
    contains the exact commit SHA. Do not split commits by file/function or
    wait until the whole objective is complete for its first durable checkpoint.
-10. Run the validation tier from `AGENTS.md`.
+10. Run focused proof before each semantic checkpoint. Run the full required
+    validation tier before PR creation/update and final objective completion.
 11. Review `git status` and the diff summary.
 12. Commit, push, open or update a PR, and comment on the source issue when the
     repository workflow requires it.

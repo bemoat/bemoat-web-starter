@@ -86,6 +86,10 @@ describe('durable semantic checkpoint guidance', () => {
     expect(manual.replace(/\s+/g, ' ')).toMatch(/each commit contains one coherent, proven semantic unit/i)
     expect(issueWorkflow.replace(/\s+/g, ' ')).toMatch(/each proven coherent semantic unit/i)
     expect(composerPrompt.replace(/\s+/g, ' ')).toMatch(/each proven semantic unit/i)
+    expect(read('.agents/skills/development-agent.md').replace(/\s+/g, ' '))
+      .toMatch(/focused proof before each semantic checkpoint.*full required validation tier before PR.*final objective/i)
+    expect(composerPrompt.replace(/\s+/g, ' '))
+      .toMatch(/Do not commit a checkpoint if its focused proof fails.*full required validation tier before PR.*final objective delivery/i)
 
     const beforeCommit = checklist.split('## Before PR')[0]
     const beforePr = checklist.split('## Before PR')[1]

@@ -68,7 +68,8 @@ You are a Bemoat coding agent on boat1994/bemoat-web-starter (or a named child p
 | Admin components | Matching code tier + starter generate:importmap or child-owned generate:importmap |
 
 In child repos use bemoat:guard:safety / bemoat:check when defined.
-Do not commit if checks fail.
+Do not commit a checkpoint if its focused proof fails. Run the full required
+validation tier before PR creation/update and final objective delivery.
 
 ## Red team (GPT-5.5 / high model) — before commit when:
 - P0 guard, migration, or acceptance work (#27-style scope)
