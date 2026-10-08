@@ -5,6 +5,7 @@ import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-d
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
 import { consumedHistoricalNoPrFounderGate } from './founder-gate-history.ts'
+import { isPrReadyImplementationEvidence } from './evidence.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -362,6 +363,20 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
     (record.route === 'IMPLEMENT' && record.objective_mode === 'read_only') ||
     (record.route === 'STOP' && record.schema_version === 3),
   )
+  if (handoffs.length === 1) {
+    const candidate = handoffs[0]!
+    if (isPrReadyImplementationEvidence(candidate.record, candidate.source, evidence)) {
+      return {
+        route: 'PR_READY',
+        reasons: [`Unique durable no-PR implementation HANDOFF is verified for ${evidence.localGit.branch}@${evidence.localGit.head}; only PR creation is authorized.`],
+        nextAction: {
+          type: 'OPEN_PR',
+          command: 'gh pr create',
+          description: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.',
+        },
+      }
+    }
+  }
   if (!onlyRecomputableHistory || !hasConsistentHistoricalBase(handoffs)) {
     return stop(
       `EVIDENCE_CONFLICT: current-head no-PR HANDOFF evidence cannot be uniquely reconciled at ${evidence.localGit.head}.`,

@@ -54,6 +54,7 @@ export const managedPaths = [
   'tests/int/build-script-contract-guard.int.spec.ts', 'tests/int/build-wrapper.int.spec.ts',
   'tests/int/branch-safety.int.spec.ts',
   'tests/int/context-no-pr-blocker-resolution.int.spec.ts', 'tests/int/context-no-pr-founder-decision.int.spec.ts',
+  'tests/int/context-no-pr-pr-ready.int.spec.ts', 'tests/int/context-no-pr-pr-ready-ancestry.int.spec.ts',
   'tests/int/blocker-resolution-validation-cli.int.spec.ts', 'tests/int/blocker-resolution-validation-canonical-body.int.spec.ts', 'tests/int/review-verdict-validation-cli.int.spec.ts', 'tests/int/founder-decision-repair-validation-cli.int.spec.ts',
   'tests/int/context-parser.int.spec.ts', 'tests/int/context-router.int.spec.ts', 'tests/int/context-stale-base.int.spec.ts', 'tests/int/context-evidence.int.spec.ts', 'tests/int/native-review-lineage.int.spec.ts', 'tests/int/context-acquisition.int.spec.ts', 'tests/int/approved-base.int.spec.ts', 'tests/int/context-cli.int.spec.ts', 'tests/int/context-skill.int.spec.ts', 'tests/int/context-sync.int.spec.ts', 'tests/int/context-bootstrap.int.spec.ts', 'tests/int/context-corrections.int.spec.ts', 'tests/int/context-setup-recovery.int.spec.ts', 'tests/int/context-setup-recovery-target.int.spec.ts', 'tests/int/issue-branch-bootstrap.int.spec.ts', 'tests/int/mission-control-publication-templates.int.spec.ts',
   'tests/int/mission-control-loader-router.int.spec.ts',

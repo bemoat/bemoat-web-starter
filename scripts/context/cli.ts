@@ -58,7 +58,7 @@ export function renderContextHelp(format = 'text') {
         { name: 'json', syntax: '--json', kind: 'flag', value_type: 'boolean', required: false, source: 'caller', multiple: false, values: [], description: 'Emit deterministic machine-readable context output.' },
         { name: 'target_worktree', syntax: '--target-worktree <absolute-path>', kind: 'option', value_type: 'path', required: false, source: 'caller', multiple: false, values: [], description: 'Evaluate one existing target worktree using this command source; omit for same-worktree mode.' },
       ],
-      reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base or a consumed no-PR Founder gate is replayed across strict same-branch ancestry'],
+      reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison for eligible no-PR implementation HANDOFFs, blocker resolutions, or consumed no-PR Founder gates that require strict ancestry'],
       writes: [],
       result_classifications: ['SUCCESS', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT'],
       stop_classifications: ['INVALID_INVOCATION', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT', 'INTERNAL_ERROR'],
@@ -67,12 +67,16 @@ export function renderContextHelp(format = 'text') {
         { classification: 'BLOCKED_EXTERNAL', next_action: { type: 'STOP', command: null, reason: 'Required external evidence is unavailable.' } },
         { classification: 'EVIDENCE_CONFLICT', next_action: { type: 'STOP', command: null, reason: 'Required evidence is contradictory or ambiguous.' } },
       ],
+      route_rules: [
+        { route: 'PR_READY', next_action: { type: 'OPEN_PR', command: 'gh pr create', reason: 'Open exactly one PR from the uniquely verified, already-pushed canonical Issue branch to the approved protected base. No source edits or other Git mutations are authorized.' } },
+      ],
     }) + '\n'
   }
   return [
     'HELP: bemoat:context',
     'Usage: pnpm run bemoat:context -- <issue-number> [--target-worktree <absolute-path>] [--json]',
     'Purpose: Reconstruct deterministic bounded task context without mutation.',
+    'A uniquely verified no-PR implementation HANDOFF may route PR_READY for exactly one PR creation.',
     'Writes: none',
     'Safe help invocation: pnpm run bemoat:context -- --help --json',
     '',

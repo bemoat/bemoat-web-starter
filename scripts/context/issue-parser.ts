@@ -1,5 +1,6 @@
 import type { RoleEvidence } from './model.ts'
 import { parseIssueDeclarations, deriveWorkflowProfile } from './issue-declarations.ts'
+import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
 
 interface ParsedIssueBody {
   objective: string | null
@@ -22,6 +23,24 @@ interface RoleEvidenceResult {
   invalidFounderDecisions: RoleEvidence[]
   founderDecisionRepairs: RoleEvidence[]
   invalidFounderDecisionRepairs: RoleEvidence[]
+}
+
+export function isPriorNoPrImplementationHandoff(source: RoleEvidence, payload: unknown, identity: {
+  repository: string; issueNumber: string; branch: string; head: string; baseBranch: string
+}): boolean {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || (payload as Record<string, unknown>).pr !== null) return false
+  try {
+    const record = parseHandoffBody(JSON.stringify(payload))
+    const id = String(source.id)
+    return record.schema_version === 2 && record.objective_mode === 'implementation' && record.route === 'IMPLEMENT' &&
+      record.pr === null && record.local_durability.durable && record.repository === identity.repository &&
+      record.issue_number === identity.issueNumber && record.branch === identity.branch &&
+      record.exact_head.toLowerCase() === identity.head.toLowerCase() && record.protected_base.branch === identity.baseBranch &&
+      renderHandoffComment(record) === source.body && /^[1-9]\d*$/.test(id) &&
+      source.url === `https://github.com/${identity.repository}/issues/${identity.issueNumber}#issuecomment-${id}`
+  } catch {
+    return false
+  }
 }
 
 function sections(body: string): Map<string, string[]> {

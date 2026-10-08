@@ -1,5 +1,6 @@
 export type ContextRoute =
   | 'IMPLEMENT'
+  | 'PR_READY'
   | 'VERIFY'
   | 'FIX'
   | 'REVIEW'
@@ -7,7 +8,7 @@ export type ContextRoute =
   | 'COMPLETE'
   | 'STOP'
 
-export type ContextActionType = 'COMMAND' | 'FOUNDER_GATE' | 'COMPLETE' | 'STOP'
+export type ContextActionType = 'COMMAND' | 'OPEN_PR' | 'FOUNDER_GATE' | 'COMPLETE' | 'STOP'
 
 export interface RepositoryEvidence {
   owner: string
@@ -243,6 +244,16 @@ export interface HistoricalNoPrFounderGateReplayProof {
   current_policy: { path: string; policy_id: string; version: string; source_sha: string }
 }
 
+/** Internal proof that an immutable no-PR HANDOFF base is an ancestor of the live approved base. */
+export interface NoPrImplementationBaseAncestryProof {
+  handoffCommentId: string
+  historicalBaseSha: string
+  currentBaseSha: string
+  mergeBaseSha: string
+  aheadBy: number
+  behindBy: 0
+}
+
 export interface NormalizedContextEvidence {
   repository: RepositoryEvidence
   protectedBase: ProtectedBaseEvidence
@@ -257,6 +268,7 @@ export interface NormalizedContextEvidence {
   /** Internal exact-ref/ancestry proof for stale protected-base setup recovery. */
   setupBaseRecovery?: SetupBaseRecoveryEvidence | null
   historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
+  noPrImplementationBaseAncestryProofs?: NoPrImplementationBaseAncestryProof[]
   /** Read-only proof for one uniquely consumed old no-PR Founder gate. */
   historicalNoPrFounderGateReplayProofs?: HistoricalNoPrFounderGateReplayProof[]
   evidenceErrors: string[]
