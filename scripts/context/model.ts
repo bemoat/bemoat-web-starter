@@ -65,6 +65,7 @@ export interface SetupBaseRecoveryEvidence {
   liveUpstreamHead: string
   localUpstreamHead: string
   ancestry: 'STRICT_ANCESTOR' | 'NOT_ANCESTOR' | 'UNPROVEN_UNTIL_FETCH'
+  targetWorktree?: string | null
 }
 
 export interface ContextSetupBaseRecovery {
@@ -77,6 +78,7 @@ export interface ContextSetupBaseRecovery {
     issue_number: string
     protected_base_branch: string
     protected_base: { branch: string; sha: string }
+    target_worktree?: string
     local_state: { branch: string; head: string; upstream: string; clean: true; detached: false }
   }
 }

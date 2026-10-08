@@ -54,12 +54,13 @@ function exactGithubRef({ cwd, run, repository, branch }: {
   }
 }
 
-function verifyPrestate({ evidence, binding, cwd, run }: {
+function verifyPrestate({ evidence, binding, cwd, run, allowTrackingAhead = false }: {
   evidence: NormalizedContextEvidence
   binding: Binding
   cwd: string
   run: ContextCommandRunner
-}): { ok: true; exactHead: string; baseBranch: string; baseSha: string } | { ok: false; classification: SetupRecoveryClassification; reason: string } {
+  allowTrackingAhead?: boolean
+}): { ok: true; exactHead: string; initialTracking: string; baseBranch: string; baseSha: string } | { ok: false; classification: SetupRecoveryClassification; reason: string } {
   const { localGit, protectedBase, issue, repository } = evidence
   const issueNumber = binding.issueNumber
   if (evidence.evidenceErrors.length > 0 || !isFullSha(protectedBase.sha) || !protectedBase.branch) {
@@ -88,8 +89,16 @@ function verifyPrestate({ evidence, binding, cwd, run }: {
     return { ok: false, classification: 'EVIDENCE_CONFLICT', reason: 'The exact live origin protected-base ref is missing, ambiguous, or differs from live GitHub.' }
   }
   const tracking = output(run('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${protectedBase.branch}`], { cwd }))
-  if (!tracking || tracking.toLowerCase() !== localGit.head.toLowerCase()) {
-    return { ok: false, classification: 'STATE_CONFLICT', reason: 'Local origin/<base> tracking ref differs from HEAD; local divergence is not eligible.' }
+  if (!tracking || !isFullSha(tracking)) {
+    return { ok: false, classification: 'STATE_CONFLICT', reason: 'Local origin/<base> tracking ref is unavailable or malformed.' }
+  }
+  const initialTracking = tracking.toLowerCase()
+  const targetTrackingAlreadyAtLive = allowTrackingAhead && localGit.branch === 'main' &&
+    localGit.head.toLowerCase() === '46fe5363697cb24f0db5a6d4338a5540665bb697' &&
+    protectedBase.sha.toLowerCase() === 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3' &&
+    initialTracking === protectedBase.sha.toLowerCase()
+  if (initialTracking !== localGit.head.toLowerCase() && !targetTrackingAlreadyAtLive) {
+    return { ok: false, classification: 'STATE_CONFLICT', reason: 'Local origin/<base> tracking ref differs from HEAD and is not the exact live-base target recovery shape.' }
   }
   if (
     localGit.head.toLowerCase() !== binding.expectedLocalHead.toLowerCase() &&
@@ -97,7 +106,7 @@ function verifyPrestate({ evidence, binding, cwd, run }: {
   ) {
     return { ok: false, classification: 'HEAD_DRIFT', reason: 'Local HEAD differs from the Context binding and is not already at the exact live base.' }
   }
-  return { ok: true, exactHead: localGit.head.toLowerCase(), baseBranch: protectedBase.branch, baseSha: protectedBase.sha.toLowerCase() }
+  return { ok: true, exactHead: localGit.head.toLowerCase(), initialTracking, baseBranch: protectedBase.branch, baseSha: protectedBase.sha.toLowerCase() }
 }
 
 function collect(issueNumber: string, cwd: string, run: ContextCommandRunner): NormalizedContextEvidence {
@@ -129,6 +138,7 @@ function verifyFreshContextRecoveryRoute(evidence: NormalizedContextEvidence): {
     actual.binding.issue_number !== candidate.binding.issue_number ||
     actual.binding.protected_base_branch !== candidate.binding.protected_base_branch ||
     actual.binding.protected_base.sha !== candidate.binding.protected_base.sha ||
+    actual.binding.target_worktree !== candidate.binding.target_worktree ||
     actual.binding.local_state.head !== candidate.binding.local_state.head ||
     actual.binding.local_state.branch !== candidate.binding.local_state.branch ||
     actual.binding.local_state.upstream !== candidate.binding.local_state.upstream
@@ -138,10 +148,11 @@ function verifyFreshContextRecoveryRoute(evidence: NormalizedContextEvidence): {
   return { ok: true }
 }
 
-function verifyFetchedBinding({ evidence, binding, baseBranch, cwd, run }: {
+function verifyFetchedBinding({ evidence, binding, baseBranch, initialTracking, cwd, run }: {
   evidence: NormalizedContextEvidence
   binding: Binding
   baseBranch: string
+  initialTracking: string
   cwd: string
   run: ContextCommandRunner
 }): { ok: true } | { ok: false; classification: SetupRecoveryClassification; reason: string } {
@@ -160,8 +171,8 @@ function verifyFetchedBinding({ evidence, binding, baseBranch, cwd, run }: {
   ) return { ok: false, classification: 'HEAD_DRIFT', reason: 'Bound Issue, branch, local HEAD, or live protected-base identity changed after fetch.' }
   const tracking = output(run('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${baseBranch}`], { cwd }))
   const remote = exactLiveRef({ cwd, run, branch: baseBranch })
-  if (tracking?.toLowerCase() !== binding.expectedLocalHead.toLowerCase() || remote !== binding.expectedBaseSha.toLowerCase()) {
-    return { ok: false, classification: 'HEAD_DRIFT', reason: 'The original tracking ref or exact live origin ref differs from the bound pre-fetch/local and protected-base SHAs.' }
+  if (tracking?.toLowerCase() !== initialTracking.toLowerCase() || remote !== binding.expectedBaseSha.toLowerCase()) {
+    return { ok: false, classification: 'HEAD_DRIFT', reason: 'The captured tracking ref or exact live origin ref differs from the bound pre-fetch/local and protected-base SHAs.' }
   }
   return { ok: true }
 }
@@ -175,16 +186,16 @@ export function recoverSetupBase({
   cwd?: string
   run?: ContextCommandRunner
   binding: Binding
-  verifySource?: (boundary: RecoveryMutationBoundary) => string | null
+  verifySource?: (boundary: RecoveryMutationBoundary, initialTracking?: string) => string | null
 }): SetupRecoveryResult {
-  const checkSource = (boundary: RecoveryMutationBoundary, mutationPerformed = false): SetupRecoveryResult | null => {
-    const reason = verifySource?.(boundary)
+  const checkSource = (boundary: RecoveryMutationBoundary, mutationPerformed = false, initialTracking?: string): SetupRecoveryResult | null => {
+    const reason = verifySource?.(boundary, initialTracking)
     return reason ? fail('EVIDENCE_CONFLICT', reason, mutationPerformed) : null
   }
   const sourceInitial = checkSource('initial')
   if (sourceInitial) return sourceInitial
   let evidence = collect(binding.issueNumber, cwd, run)
-  const verified = verifyPrestate({ evidence, binding, cwd, run })
+  const verified = verifyPrestate({ evidence, binding, cwd, run, allowTrackingAhead: verifySource !== undefined })
   if (verified.ok === false) return fail(verified.classification, verified.reason)
 
   if (verified.exactHead === verified.baseSha) {
@@ -211,7 +222,7 @@ export function recoverSetupBase({
   if (githubBeforeFetch !== verified.baseSha || originBeforeFetch !== verified.baseSha) {
     return fail('HEAD_DRIFT', 'Live protected-base identity moved before the exact fetch.')
   }
-  const sourceBeforeFetch = checkSource('before-fetch')
+  const sourceBeforeFetch = checkSource('before-fetch', false, verified.initialTracking)
   if (sourceBeforeFetch) return sourceBeforeFetch
   const fetched = run('git', ['fetch', '--no-tags', '--no-recurse-submodules', '--refmap=', 'origin', `refs/heads/${verified.baseBranch}:`], { cwd })
   if (fetched.status !== 0 || fetched.error) {
@@ -223,7 +234,7 @@ export function recoverSetupBase({
   }
 
   evidence = collect(binding.issueNumber, cwd, run)
-  const postFetch = verifyFetchedBinding({ evidence, binding, baseBranch: verified.baseBranch, cwd, run })
+  const postFetch = verifyFetchedBinding({ evidence, binding, baseBranch: verified.baseBranch, initialTracking: verified.initialTracking, cwd, run })
   if (postFetch.ok === false) return fail(postFetch.classification, postFetch.reason, true)
   const postFetchGate = verifyFreshContextRecoveryRoute(evidence)
   if (postFetchGate.ok === false) return fail(postFetchGate.classification, postFetchGate.reason, true)
@@ -237,7 +248,7 @@ export function recoverSetupBase({
   if (reverseAncestry.status !== 1 || reverseAncestry.error) return fail('EVIDENCE_CONFLICT', 'Could not prove the fetched base is not already an ancestor of local HEAD.', true)
 
   const beforeMerge = collect(binding.issueNumber, cwd, run)
-  const currentBinding = verifyFetchedBinding({ evidence: beforeMerge, binding, baseBranch: verified.baseBranch, cwd, run })
+  const currentBinding = verifyFetchedBinding({ evidence: beforeMerge, binding, baseBranch: verified.baseBranch, initialTracking: verified.initialTracking, cwd, run })
   const beforeMergeGate = verifyFreshContextRecoveryRoute(beforeMerge)
   if (beforeMergeGate.ok === false) return fail(beforeMergeGate.classification, beforeMergeGate.reason, true)
   const githubImmediatelyBeforeMerge = exactGithubRef({ cwd, run, repository: beforeMerge.repository.nameWithOwner, branch: verified.baseBranch })
@@ -246,7 +257,7 @@ export function recoverSetupBase({
   if (refImmediatelyBeforeMerge !== verified.baseSha || githubImmediatelyBeforeMerge !== verified.baseSha) {
     return fail('HEAD_DRIFT', 'Live protected base moved immediately before fast-forward.', true)
   }
-  const sourceBeforeMerge = checkSource('before-merge', true)
+  const sourceBeforeMerge = checkSource('before-merge', true, verified.initialTracking)
   if (sourceBeforeMerge) return sourceBeforeMerge
 
   const merged = run('git', ['merge', '--ff-only', verified.baseSha], { cwd })
@@ -255,9 +266,10 @@ export function recoverSetupBase({
   }
 
   const trackingRef = `refs/remotes/origin/${verified.baseBranch}`
-  const sourceBeforeTrackingUpdate = checkSource('before-tracking-update', true)
+  const sourceBeforeTrackingUpdateReason = verifySource?.('before-tracking-update', verified.initialTracking)
+  const sourceBeforeTrackingUpdate = sourceBeforeTrackingUpdateReason ? fail('EVIDENCE_CONFLICT', sourceBeforeTrackingUpdateReason, true) : null
   if (sourceBeforeTrackingUpdate) return sourceBeforeTrackingUpdate
-  const trackingAdvance = run('git', ['update-ref', trackingRef, verified.baseSha, verified.exactHead], { cwd })
+  const trackingAdvance = run('git', ['update-ref', trackingRef, verified.baseSha, verified.initialTracking], { cwd })
   if (trackingAdvance.status !== 0 || trackingAdvance.error) {
     return fail('HEAD_DRIFT', `Fast-forward completed but compare-and-swap tracking-ref advancement failed: ${trackingAdvance.error?.message || trackingAdvance.stderr.trim() || 'git update-ref failed'}; stop and reconstruct from the observed state.`, true)
   }

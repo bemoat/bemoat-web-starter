@@ -54,6 +54,7 @@ export function verifySetupRecoveryWorktrees({
   expectedBaseBranch,
   expectedBaseSha,
   expectedLocalHead,
+  initialTracking,
   separateTarget,
   boundary,
   run = runContextCommand,
@@ -64,6 +65,7 @@ export function verifySetupRecoveryWorktrees({
   expectedBaseBranch: string
   expectedBaseSha: string
   expectedLocalHead: string
+  initialTracking?: string
   separateTarget: boolean
   boundary: 'initial' | 'before-fetch' | 'before-merge' | 'before-tracking-update'
   run?: ContextCommandRunner
@@ -81,11 +83,17 @@ export function verifySetupRecoveryWorktrees({
   const normalizedTargetHead = targetHead?.toLowerCase()
   const normalizedTracking = targetTracking?.toLowerCase()
   const stalePair = normalizedTargetHead === expectedLocalHead.toLowerCase() && normalizedTracking === expectedLocalHead.toLowerCase()
+  const targetTrackingAtLiveBase = expectedBaseBranch === 'main' &&
+    expectedLocalHead.toLowerCase() === '46fe5363697cb24f0db5a6d4338a5540665bb697' &&
+    expectedBaseSha.toLowerCase() === 'e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3' &&
+    normalizedTargetHead === expectedLocalHead.toLowerCase() && normalizedTracking === expectedBaseSha.toLowerCase()
   const completedPair = normalizedTargetHead === expectedBaseSha.toLowerCase() && normalizedTracking === expectedBaseSha.toLowerCase()
-  const postMergePair = normalizedTargetHead === expectedBaseSha.toLowerCase() && normalizedTracking === expectedLocalHead.toLowerCase()
+  const postMergePair = normalizedTargetHead === expectedBaseSha.toLowerCase() && normalizedTracking === (initialTracking ?? expectedLocalHead).toLowerCase()
   const exactBindingPair = boundary === 'before-tracking-update'
     ? postMergePair
-    : stalePair || (boundary === 'initial' && completedPair)
+    : initialTracking
+      ? normalizedTargetHead === expectedLocalHead.toLowerCase() && normalizedTracking === initialTracking.toLowerCase()
+      : stalePair || (boundary === 'initial' && (completedPair || targetTrackingAtLiveBase))
   if (!isFullSha(targetHead) || !exactBindingPair) return 'Target HEAD and tracking ref do not match one exact bound recovery state.'
   if (targetStatus !== '') return 'Target is not clean or its status is unavailable.'
   if (targetBranch !== expectedBaseBranch) return 'Target is not attached to the bound protected branch.'

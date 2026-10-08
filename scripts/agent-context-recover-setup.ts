@@ -70,7 +70,7 @@ function main() {
 
     const targetWorktree = typeof invocation.values.target_worktree === 'string' ? invocation.values.target_worktree : null
     let cwd = process.cwd()
-    let verifySource: ((boundary: 'initial' | 'before-fetch' | 'before-merge' | 'before-tracking-update') => string | null) | undefined
+    let verifySource: ((boundary: 'initial' | 'before-fetch' | 'before-merge' | 'before-tracking-update', initialTracking?: string) => string | null) | undefined
     if (targetWorktree !== null) {
       let roots
       try {
@@ -84,13 +84,14 @@ function main() {
       const expectedBaseBranch = String(invocation.values.expected_base_branch)
       const expectedBaseSha = String(invocation.values.expected_base_sha)
       const expectedLocalHead = String(invocation.values.expected_local_head)
-      verifySource = (boundary) => verifySetupRecoveryWorktrees({
+      verifySource = (boundary, initialTracking) => verifySetupRecoveryWorktrees({
         sourceCwd: roots.sourceCwd,
         targetCwd: roots.targetCwd,
         expectedRepository,
         expectedBaseBranch,
         expectedBaseSha,
         expectedLocalHead,
+        initialTracking,
         separateTarget: roots.separateTarget,
         boundary,
       })

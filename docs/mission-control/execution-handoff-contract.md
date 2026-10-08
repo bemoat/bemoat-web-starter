@@ -324,6 +324,29 @@ the tracking ref, and verify the exact clean post-state. Success remains
 CLI Discovery and fresh target Context. This narrow source-target path does
 not change `bemoat:context:sync-base` or Context bootstrap behavior.
 
+Issue #594 adds one exact separate-target exception for the recurring shared
+tracking-ref state: target `HEAD` must be
+`46fe5363697cb24f0db5a6d4338a5540665bb697`, while its local
+`refs/remotes/origin/main` already equals the exact live GitHub and origin
+`main` SHA `e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3`. Fresh target Context and
+the recovery command must prove that target `HEAD` is a strict ancestor of
+that exact SHA and that the exact SHA is not an ancestor of target `HEAD`.
+Only the explicit `--target-worktree` path accepts this pair; all other
+tracking/HEAD mismatches remain `STOP`. Fetch still writes only `FETCH_HEAD`,
+and the fast-forward remains `git merge --ff-only <exact-bound-base-sha>`.
+At each existing source/target validation boundary, bind and re-read the
+target identity, initial `HEAD`, initial tracking SHA, GitHub base, and exact
+origin base. After the merge, compare-and-swap the tracking ref from its
+captured initial SHA to the exact bound SHA; for this state that is the
+same-value `e3f5f7f4408d810dea0993e2b5ae7a1739d1bbc3` to itself CAS. Fetch must
+not roll the tracking ref back.
+
+For this exact state, fresh Context records the canonical target worktree path
+from the target checkout and includes it as `--target-worktree` in the
+recovery's displayed command. Run that displayed command from a separate clean
+exact-live protected-main source. If Context cannot resolve the target to an
+existing canonical path, it must not emit this recovery candidate.
+
 ### Wrong-Issue workspace acquisition
 
 When a new or resumed Execution session starts in a wrong-Issue workspace, apply
