@@ -12,6 +12,33 @@ export type RedWipApproval = {
 }
 
 export type RedWipFailure = { name: string; file: string; message: string }
+export type RedWipSuiteReport = {
+  numFailedTests: number
+  numPassedTests: number
+  numFailedTestSuites: number
+  unhandledErrors?: unknown[]
+  suites: Array<{
+    file: string
+    status: string
+    assertions: Array<{ status: string; name: string; message: string }>
+    error?: string
+  }>
+}
+
+export const CANONICAL_RED_WIP_ORIGIN = 'https://github.com/bemoat/bemoat-web-starter.git'
+
+export function validateCanonicalOriginTransport(input: {
+  configuredFetchUrls: string[]
+  configuredPushUrls: string[]
+  effectiveFetchUrls: string[]
+  effectivePushUrls: string[]
+}): string[] {
+  const exactSingle = (urls: string[]) => urls.length === 1 && urls[0] === CANONICAL_RED_WIP_ORIGIN
+  return exactSingle(input.configuredFetchUrls) &&
+    (input.configuredPushUrls.length === 0 || exactSingle(input.configuredPushUrls)) &&
+    exactSingle(input.effectiveFetchUrls) && exactSingle(input.effectivePushUrls)
+    ? [] : ['origin fetch and push transports must resolve exactly to the canonical GitHub repository URL']
+}
 
 export type RedWipMutationState = {
   staged: boolean
@@ -111,6 +138,30 @@ export function validateRedWipFailureSet(
   }
   if (totalPassed < 1) reasons.push('integration run must prove the remaining suite passed')
   return reasons
+}
+
+export function validateRedWipSuiteReport(approval: RedWipApproval, report: RedWipSuiteReport): string[] {
+  const reasons: string[] = []
+  if (!Number.isInteger(report.numFailedTests) || !Number.isInteger(report.numPassedTests) || !Number.isInteger(report.numFailedTestSuites)) {
+    return ['integration suite returned an incomplete or malformed JSON report']
+  }
+  if (report.unhandledErrors?.length) reasons.push('integration report contains an unhandled runtime or collection error')
+  const failedSuites = report.suites.filter((suite) => suite.status === 'failed')
+  if (report.suites.some((suite) => suite.status !== 'passed' && suite.status !== 'failed')) {
+    reasons.push('integration report contains an ambiguous suite status')
+  }
+  if (failedSuites.length !== report.numFailedTestSuites) reasons.push('integration report suite failure count is contradictory')
+  const failures: RedWipFailure[] = []
+  for (const suite of report.suites) {
+    const suiteFailures = suite.assertions.filter((assertion) => assertion.status === 'failed')
+    if (suite.error?.trim()) reasons.push('integration report contains a suite setup, collection, or runtime error')
+    if (suite.status === 'failed' && suiteFailures.length === 0) reasons.push('a failed suite has no explicitly approved assertion failure')
+    if (suite.status === 'passed' && suiteFailures.length > 0) reasons.push('integration report suite status contradicts its failed assertions')
+    failures.push(...suiteFailures.map((assertion) => ({ name: assertion.name, file: suite.file, message: assertion.message })))
+  }
+  if (failures.length !== report.numFailedTests) reasons.push('integration report assertion failure count is contradictory')
+  reasons.push(...validateRedWipFailureSet(approval, failures, report.numFailedTests, report.numPassedTests))
+  return [...new Set(reasons)]
 }
 
 export function redWipCommitSubject(approval: RedWipApproval): string {

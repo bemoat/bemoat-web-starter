@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync, cpSync, chmodSync, mkdirSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync, cpSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -7,6 +7,10 @@ import { getCommandContract } from '../../scripts/cli/command-contract.ts'
 import { runCliBoundaryCase } from '../helpers/cli-boundary-harness'
 import {
   parseRedWipApproval,
+  validateCanonicalOriginTransport,
+  validateRedWipSuiteReport,
+  createRedWipMutationState,
+  redWipMutationPerformed,
   validateRedWipCandidate,
   validateRedWipPush,
   validateRedWipReadback,
@@ -117,6 +121,27 @@ describe('authorized RED WIP checkpoint boundary', () => {
     expect(() => parseRedWipApproval(`<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify({ ...approval(), expected_failures: [approval().expected_failures[0], approval().expected_failures[0]] })}\n-->`, issueNumber)).toThrow(/duplicate/i)
   })
 
+  it('accepts only the exact canonical fetch and push transport URLs', () => {
+    const canonical = 'https://github.com/bemoat/bemoat-web-starter.git'
+    expect(validateCanonicalOriginTransport({ configuredFetchUrls: [canonical], configuredPushUrls: [], effectiveFetchUrls: [canonical], effectivePushUrls: [canonical] })).toEqual([])
+    expect(validateCanonicalOriginTransport({ configuredFetchUrls: [canonical], configuredPushUrls: [], effectiveFetchUrls: ['file:///tmp/remote.git'], effectivePushUrls: ['file:///tmp/remote.git'] })).not.toEqual([])
+    expect(validateCanonicalOriginTransport({ configuredFetchUrls: [canonical], configuredPushUrls: ['file:///tmp/remote.git'], effectiveFetchUrls: [canonical], effectivePushUrls: ['file:///tmp/remote.git'] })).not.toEqual([])
+  })
+
+  it('rejects suite setup failures beside an otherwise approved RED assertion set', () => {
+    const suite = {
+      numFailedTests: 1, numPassedTests: 10, numFailedTestSuites: 2,
+      suites: [
+        { file: testPath, status: 'failed', assertions: [{ status: 'failed', name: testName, message: expectedMessage }] },
+        { file: 'tests/int/unrelated.int.spec.ts', status: 'failed', assertions: [] },
+      ],
+    }
+    const mutationState = createRedWipMutationState()
+    expect(validateRedWipSuiteReport(approval(), suite)).not.toEqual([])
+    expect(redWipMutationPerformed(mutationState)).toBe(false)
+    expect(validateRedWipSuiteReport(approval(), { ...suite, suites: suite.suites.slice(0, 1), numFailedTestSuites: 1 })).toEqual([])
+  })
+
   it.each([
     ['unexpected extra failure', { totalFailed: 2 }],
     ['wrong assertion', { failures: [{ name: 'different test', file: testPath, message: expectedMessage }] }],
@@ -182,6 +207,7 @@ describe('authorized RED WIP checkpoint boundary', () => {
     const env = {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
+      GIT_CONFIG_GLOBAL: join(root, 'global.gitconfig'),
       FIXTURE_ISSUE: issueNumber,
       FIXTURE_APPROVAL: `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->`,
       FIXTURE_REPORT: JSON.stringify({ numFailedTests: failures.length, numPassedTests: 10, testResults: [{ name: testPath, assertionResults: failures.map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }] }),
@@ -235,7 +261,7 @@ process.exit(97)
       git(['config', 'user.email', 'fixture@example.invalid'])
       git(['config', 'user.name', 'Fixture'])
       git(['remote', 'add', 'origin', 'https://github.com/bemoat/bemoat-web-starter.git'])
-      git(['config', `url.file://${bare}.insteadOf`, 'https://github.com/bemoat/bemoat-web-starter.git'])
+      git(['config', '--global', `url.file://${bare}.insteadOf`, 'https://github.com/bemoat/bemoat-web-starter.git'])
       git(['config', 'core.hooksPath', '.githooks'])
       writeFileSync(join(repo, testPath), 'fixture baseline\n')
       git(['add', '-A'])
@@ -247,6 +273,13 @@ process.exit(97)
       fixtureApproval.protected_base_sha = base
       env.FIXTURE_APPROVAL = `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->`
       env.FIXTURE_ISSUE_DATA = JSON.stringify({ number: Number(issueNumber), state: 'OPEN', body: env.FIXTURE_APPROVAL })
+      writeFileSync(join(repo, 'README.md'), `${readFileSync(join(repo, 'README.md'), 'utf8')}\nfixture ordinary green push\n`)
+      git(['add', 'README.md'])
+      git(['commit', '-m', 'fixture ordinary green checkpoint'])
+      const greenPush = spawnSync('git', ['push', 'origin', branch], { cwd: repo, env, encoding: 'utf8' })
+      expect(greenPush.status, greenPush.stderr || greenPush.stdout).toBe(0)
+      expect(greenPush.stderr + greenPush.stdout).toContain('running integration tests')
+      const greenHead = git(['rev-parse', 'HEAD'])
       writeFileSync(join(repo, testPath), 'fixture intentionally red change\n')
       const runCandidate = () => spawnSync('node', ['scripts/agent-red-wip-checkpoint.ts', issueNumber, '--json'], {
         cwd: repo, env: { ...env, BEMOAT_FACADE_COMMAND: 'bemoat:checkpoint:red-wip', BEMOAT_FACADE_ENTRYPOINT: 'scripts/agent-red-wip-checkpoint.ts', npm_lifecycle_event: 'bemoat:checkpoint:red-wip' }, encoding: 'utf8',
@@ -256,32 +289,21 @@ process.exit(97)
       expect(wrongOrigin.status).not.toBe(0)
       expect(JSON.parse(wrongOrigin.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
       git(['config', 'remote.origin.url', 'https://github.com/bemoat/bemoat-web-starter.git'])
-      writeFileSync(join(repo, 'fixture-secret.txt'), 'fixture secret path must be rejected\n')
-      const untrackedSecret = runCandidate()
-      expect(untrackedSecret.status).not.toBe(0)
-      expect(JSON.parse(untrackedSecret.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
-      unlinkSync(join(repo, 'fixture-secret.txt'))
-      unlinkSync(env.FIXTURE_CONTEXT_COUNT)
-      env.FIXTURE_REPORT = JSON.stringify({ numFailedTests: 3, numPassedTests: 10, testResults: [{ name: testPath, assertionResults: [...failures, { name: 'unexpected assertion', file: testPath, message: 'unapproved result' }].map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }] })
-      const extraFailure = runCandidate()
-      expect(extraFailure.status).not.toBe(0)
-      expect(JSON.parse(extraFailure.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
-      unlinkSync(env.FIXTURE_CONTEXT_COUNT)
-      env.FIXTURE_REPORT = JSON.stringify({ numFailedTests: failures.length, numPassedTests: 10, testResults: [{ name: testPath, assertionResults: failures.map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }] })
-      const result = runCandidate()
-      expect(result.status, `${result.stderr || result.stdout}\n${git(['status', '--porcelain=v1', '--untracked-files=all'])}`).toBe(0)
-      expect(JSON.parse(result.stdout)).toMatchObject({
-        outcome: 'SUCCESS', mutation_performed: true,
-        details: { checkpoint_status: 'WIP RED INCOMPLETE', objective_complete: false, actual_context_route: 'STOP' },
-      })
-      const pushed = spawnSync('git', ['ls-remote', 'origin', `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
-      expect(pushed).toBe(git(['rev-parse', 'HEAD']))
-      writeFileSync(join(repo, 'README.md'), `${readFileSync(join(repo, 'README.md'), 'utf8')}\nfixture ordinary green push\n`)
-      git(['add', 'README.md'])
-      git(['commit', '-m', 'fixture ordinary green checkpoint'])
-      const greenPush = spawnSync('git', ['push', 'origin', branch], { cwd: repo, env, encoding: 'utf8' })
-      expect(greenPush.status, greenPush.stderr || greenPush.stdout).toBe(0)
-      expect(greenPush.stderr + greenPush.stdout).toContain('running integration tests')
+      const redirectedOrigin = runCandidate()
+      expect(redirectedOrigin.status).not.toBe(0)
+      expect(JSON.parse(redirectedOrigin.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
+      expect(JSON.parse(redirectedOrigin.stdout).details.reason).toContain('transport')
+      expect(git(['rev-parse', 'HEAD'])).toBe(greenHead)
+      const remoteBefore = spawnSync('git', ['ls-remote', 'origin', `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
+      expect(remoteBefore).toBe(greenHead)
+
+      git(['-c', 'core.hooksPath=/dev/null', 'add', testPath])
+      git(['-c', 'core.hooksPath=/dev/null', 'commit', '-m', `WIP RED #${issueNumber}: approved story one, approved story two`])
+      const wipPush = spawnSync('git', ['push', 'origin', branch], { cwd: repo, env, encoding: 'utf8' })
+      expect(wipPush.status).not.toBe(0)
+      expect(wipPush.stderr + wipPush.stdout).toContain('redirected from canonical origin')
+      const remoteAfter = spawnSync('git', ['ls-remote', 'origin', `refs/heads/${branch}`], { cwd: repo, env, encoding: 'utf8' }).stdout.trim().split(/\s+/)[0]
+      expect(remoteAfter).toBe(greenHead)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

@@ -19,6 +19,9 @@ import {
   redWipCommitSubject,
   createRedWipMutationState,
   redWipMutationPerformed,
+  validateCanonicalOriginTransport,
+  validateRedWipSuiteReport,
+  type RedWipSuiteReport,
   type RedWipApproval,
   type RedWipEvidence,
 } from './context/red-wip-checkpoint.ts'
@@ -26,8 +29,8 @@ import {
 const COMMAND = 'bemoat:checkpoint:red-wip'
 const ENTRYPOINT = 'scripts/agent-red-wip-checkpoint.ts'
 type VitestAssertion = { status: string; fullName: string; failureMessages?: string[] }
-type VitestFileResult = { name: string; assertionResults?: VitestAssertion[] }
-type VitestJsonReport = { testResults?: VitestFileResult[]; numFailedTests?: number; numPassedTests?: number }
+type VitestFileResult = { name: string; status: string; assertionResults?: VitestAssertion[]; message?: string; errors?: unknown[] }
+type VitestJsonReport = { testResults?: VitestFileResult[]; numFailedTests?: number; numPassedTests?: number; numFailedTestSuites?: number; unhandledErrors?: unknown[] }
 const mutationState = createRedWipMutationState()
 let plannedCommit: { parentSha: string; subject: string } | null = null
 
@@ -45,6 +48,7 @@ function git(args: string[], options: { allowFailure?: boolean } = {}) {
 }
 
 function liveRef(ref: string): string {
+  verifyCanonicalOriginTransport()
   const rows = run('git', ['ls-remote', 'origin', ref]).stdout.trim().split(/\r?\n/).filter(Boolean)
   if (rows.length !== 1 || !rows[0].endsWith(`\t${ref}`)) throw new Error(`live origin ref is missing or ambiguous: ${ref}`)
   return rows[0].split(/\s+/)[0]
@@ -52,8 +56,9 @@ function liveRef(ref: string): string {
 
 function issueApproval(issueNumber: string): RedWipApproval {
   let issue: { number?: number; state?: string; body?: string }
+  const repository = repositoryIdentity()
   try {
-    issue = JSON.parse(run('gh', ['issue', 'view', issueNumber, '--repo', repositoryIdentity(), '--json', 'number,state,body']).stdout) as typeof issue
+    issue = JSON.parse(run('gh', ['issue', 'view', issueNumber, '--repo', repository, '--json', 'number,state,body']).stdout) as typeof issue
   } catch {
     throw new Error('canonical Issue evidence was unavailable or malformed')
   }
@@ -83,10 +88,31 @@ function gitStatus() {
 }
 
 function repositoryIdentity(): string {
-  const url = git(['config', '--get', 'remote.origin.url'])
-  const match = url.match(/^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+\/[^/]+?)(?:\.git)?\/?$/i)
-  if (!match) throw new Error('origin is not a canonical GitHub repository URL')
-  return match[1].toLowerCase()
+  verifyCanonicalOriginTransport()
+  return 'bemoat/bemoat-web-starter'
+}
+
+function gitConfigValues(key: string): string[] {
+  const result = run('git', ['config', '--get-all', key], { allowFailure: true })
+  if (result.status !== 0 && result.status !== 1) throw new Error(`could not read Git configuration ${key}`)
+  return result.status === 0 ? result.stdout.trim().split(/\r?\n/) : []
+}
+
+function effectiveRemoteUrls(push: boolean): string[] {
+  const args = ['remote', 'get-url', ...(push ? ['--push'] : []), '--all', 'origin']
+  const result = run('git', args, { allowFailure: true })
+  if (result.status !== 0) throw new Error('canonical origin effective transport URL is unavailable')
+  return result.stdout.trim().split(/\r?\n/).filter(Boolean)
+}
+
+function verifyCanonicalOriginTransport(): void {
+  const reasons = validateCanonicalOriginTransport({
+    configuredFetchUrls: gitConfigValues('remote.origin.url'),
+    configuredPushUrls: gitConfigValues('remote.origin.pushurl'),
+    effectiveFetchUrls: effectiveRemoteUrls(false),
+    effectivePushUrls: effectiveRemoteUrls(true),
+  })
+  if (reasons.length) throw new Error(reasons.join('; '))
 }
 
 function verifyBranchSafety() {
@@ -133,7 +159,7 @@ function collectCandidate(approval: RedWipApproval, issueNumber: string, explici
   }
   const stateReasons = validateRedWipCandidateState(approval, candidateState)
   if (stateReasons.length) throw new Error(stateReasons.join('; '))
-  const test = runIntegrationSuite()
+  const test = runIntegrationSuite(approval)
   return {
     ...candidateState,
     failures: test.failures,
@@ -142,7 +168,7 @@ function collectCandidate(approval: RedWipApproval, issueNumber: string, explici
   }
 }
 
-function runIntegrationSuite() {
+function runIntegrationSuite(approval: RedWipApproval) {
   const directory = mkdtempSync(join(tmpdir(), 'bemoat-red-wip-'))
   const output = join(directory, 'vitest.json')
   try {
@@ -151,20 +177,36 @@ function runIntegrationSuite() {
     try { report = JSON.parse(readFileSync(output, 'utf8')) as VitestJsonReport } catch {
       throw new Error(`integration suite did not produce machine-readable results: ${(result.stderr || result.stdout).trim()}`)
     }
-    if (!Array.isArray(report.testResults) || !Number.isInteger(report.numFailedTests) || !Number.isInteger(report.numPassedTests)) {
+    if (!Array.isArray(report.testResults) || !Number.isInteger(report.numFailedTests) || !Number.isInteger(report.numPassedTests) ||
+        !Number.isInteger(report.numFailedTestSuites) || (report.unhandledErrors !== undefined && !Array.isArray(report.unhandledErrors))) {
       throw new Error('integration suite returned an incomplete or malformed JSON report')
     }
-    const failures = (report.testResults ?? []).flatMap((file) => (file.assertionResults ?? [])
-      .filter((assertion) => assertion.status === 'failed')
-      .map((assertion) => ({
-        name: assertion.fullName,
-        file: relative(process.cwd(), file.name).split('\\').join('/'),
-        message: (assertion.failureMessages ?? []).join('\n'),
-      })))
+    const suites = report.testResults.map((file) => {
+      if (typeof file.name !== 'string' || typeof file.status !== 'string' || !Array.isArray(file.assertionResults)) {
+        throw new Error('integration suite returned an incomplete or malformed suite result')
+      }
+      return {
+        file: relative(process.cwd(), file.name).split('\\').join('/'), status: file.status,
+        ...(typeof file.message === 'string' ? { error: file.message } : {}),
+        ...(file.errors?.length ? { error: JSON.stringify(file.errors) } : {}),
+        assertions: file.assertionResults.map((assertion) => {
+          if (typeof assertion.status !== 'string' || typeof assertion.fullName !== 'string') throw new Error('integration suite returned a malformed assertion result')
+          return { status: assertion.status, name: assertion.fullName, message: (assertion.failureMessages ?? []).join('\n') }
+        }),
+      }
+    })
     const failed = report.numFailedTests
     const passed = report.numPassedTests
     if (result.status !== 0 && failed === 0) throw new Error('integration test process failed without a recognized failed assertion')
     if (result.status === 0 && failed !== 0) throw new Error('integration test result is contradictory')
+    const suiteReport: RedWipSuiteReport = {
+      numFailedTests: failed, numPassedTests: passed, numFailedTestSuites: report.numFailedTestSuites,
+      unhandledErrors: report.unhandledErrors, suites,
+    }
+    const reasons = validateRedWipSuiteReport(approval, suiteReport)
+    if (reasons.length) throw new Error(reasons.join('; '))
+    const failures = suites.flatMap((suite) => suite.assertions.filter((assertion) => assertion.status === 'failed')
+      .map((assertion) => ({ name: assertion.name, file: suite.file, message: assertion.message })))
     return { failures, totalFailed: failed, totalPassed: passed }
   } finally {
     rmSync(directory, { recursive: true, force: true })
@@ -193,7 +235,7 @@ function verifyPush(approval: RedWipApproval, issueNumber: string, localSha: str
     commitSubject: subject, changedPaths, pushedCommitCount,
   })
   if (reasons.length) throw new Error(reasons.join('; '))
-  const test = runIntegrationSuite()
+  const test = runIntegrationSuite(approval)
   const failureReasons = validateRedWipFailureSet(approval, test.failures, test.totalFailed, test.totalPassed)
   if (failureReasons.length) throw new Error(failureReasons.join('; '))
 }
@@ -216,6 +258,7 @@ function createCheckpoint(approval: RedWipApproval, issueNumber: string) {
   const head = git(['rev-parse', 'HEAD'])
   const branch = git(['branch', '--show-current'])
   mutationState.pushAttempted = true
+  verifyCanonicalOriginTransport()
   run('git', ['push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`])
   mutationState.pushSucceeded = true
   const readback = liveRef(`refs/heads/${branch}`)
