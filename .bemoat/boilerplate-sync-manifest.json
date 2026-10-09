@@ -60,6 +60,7 @@
     "scripts/context/blocker-resolution-history.ts",
     "scripts/context/review-verdict-validation.ts",
     "scripts/agent-handoff.ts",
+    "scripts/agent-red-wip-checkpoint.ts",
     "scripts/agent-validate-blocker-resolution.ts",
     "scripts/agent-validate-review-verdict.ts",
     "scripts/agent-validate-founder-decision-repair.ts",
@@ -142,6 +143,7 @@
     "tests/int/handoff-cli.int.spec.ts",
     "tests/int/handoff-skill.int.spec.ts",
     "tests/int/agent-checkpoint-guidance.int.spec.ts",
+    "tests/int/red-wip-checkpoint.int.spec.ts",
     "tests/int/guard-pack.int.spec.ts",
     "tests/int/guard-planning-contract.int.spec.ts",
     "tests/int/env-placeholder-guard-boundary.int.spec.ts",
@@ -207,7 +209,8 @@
     "bemoat:check",
     "bemoat:boilerplate:sync",
     "bemoat:boilerplate:check",
-    "bemoat:hooks:install"
+    "bemoat:hooks:install",
+    "bemoat:checkpoint:red-wip"
   ],
   "suggestedPackageScripts": [
     "branch:check",

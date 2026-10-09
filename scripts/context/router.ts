@@ -9,6 +9,7 @@ import { hasBlockingFinding, publicationEraReviewLineageForHandoff } from './sem
 import { hasStrictCrossHeadNativeReviewPredecessor } from './native-review-lineage.ts'
 import { resolveStopBlockers } from './blocker-resolution.ts'
 import { routeNoPrContext, routeWrongIssueActivePrContext } from './no-pr-routing.ts'
+import { redWipDurabilityCommand } from './red-wip-routing.ts'
 import { protectedBranchSetupState } from './setup-base-recovery-routing.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
@@ -118,6 +119,11 @@ function routeContextInternal(evidence: NormalizedContextEvidence, ignoredStaleB
     ...setupState.durabilityReasons,
   ]
   if (Array.isArray(evidence.activePr)) baseReasons.push('EVIDENCE_CONFLICT: competing active PRs cannot be uniquely resolved')
+
+  if (redWipDurabilityCommand(evidence, baseReasons, identityErrors, routeNoPrContext)) return decision(evidence, 'STOP', [
+    'LOCAL_STATE_NOT_DURABLE: working tree is dirty or has untracked files',
+    'The exact Issue-approved RED oracle is eligible only for a durability-only checkpoint; objective execution remains unavailable.',
+  ], { type: 'COMMAND', command: 'bemoat:checkpoint:red-wip', description: 'Run the exact Issue-bound bemoat:checkpoint:red-wip durability checkpoint. This preserves the current STOP and grants no objective-edit authority.' })
 
   if (baseReasons.length > 0) {
     return decision(evidence, 'STOP', baseReasons, {

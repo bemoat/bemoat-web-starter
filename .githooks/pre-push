@@ -3,13 +3,72 @@
 # Runs a fast child-safe subset only — bemoat:* scripts that sync adds when missing.
 set -eu
 
+push_input="$(cat)"
+wip_issue=""
+wip_local_sha=""
+wip_remote_sha=""
+wip_local_ref=""
+wip_remote_ref=""
+wip_line_count=0
+total_line_count=0
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "${local_ref:-}" ] || continue
+  total_line_count=$((total_line_count + 1))
+  subject="$(git show -s --format=%s "$local_sha")"
+  case "$subject" in
+    "WIP RED #"*)
+      case "$subject" in
+        "WIP RED #"[1-9][0-9]*": "*) ;;
+        *) echo "pre-push: malformed WIP RED commit subject." >&2; exit 1 ;;
+      esac
+      case "$local_ref" in
+        refs/heads/*) ;;
+        *) echo "pre-push: WIP RED commit must target a topic branch." >&2; exit 1 ;;
+      esac
+      issue_part="${subject#WIP RED #}"
+      wip_issue="${issue_part%%:*}"
+      wip_local_sha="$local_sha"
+      wip_remote_sha="$remote_sha"
+      wip_local_ref="$local_ref"
+      wip_remote_ref="$remote_ref"
+      wip_line_count=$((wip_line_count + 1))
+      pushed_count="$(git rev-list --count "$remote_sha..$local_sha")"
+      [ "$pushed_count" = "1" ] || { echo "pre-push: WIP RED exception requires exactly one new commit." >&2; exit 1; }
+      ;;
+  esac
+done <<EOF
+$push_input
+EOF
+
+if [ "$wip_line_count" -gt 0 ] && { [ "$wip_line_count" -ne 1 ] || [ "$total_line_count" -ne 1 ]; }; then
+  echo "pre-push: WIP RED exception requires exactly one pushed ref." >&2
+  exit 1
+fi
+if [ "$wip_line_count" -eq 1 ]; then
+  [ "${1:-}" = "origin" ] || { echo "pre-push: WIP RED checkpoint may only target canonical origin." >&2; exit 1; }
+  canonical_origin="https://github.com/bemoat/bemoat-web-starter.git"
+  configured_origin="$(git config --get-all remote.origin.url)"
+  configured_push="$(git config --get-all remote.origin.pushurl || true)"
+  effective_fetch="$(git remote get-url --all origin)"
+  effective_push="$(git remote get-url --push --all origin)"
+  [ "$configured_origin" = "$canonical_origin" ] || { echo "pre-push: WIP RED origin config is not the exact canonical GitHub URL." >&2; exit 1; }
+  [ -z "$configured_push" ] || [ "$configured_push" = "$canonical_origin" ] || { echo "pre-push: WIP RED push URL is not the exact canonical GitHub URL." >&2; exit 1; }
+  [ "$effective_fetch" = "$canonical_origin" ] && [ "$effective_push" = "$canonical_origin" ] || { echo "pre-push: WIP RED fetch or push transport was redirected from canonical origin." >&2; exit 1; }
+  [ "${2:-}" = "$canonical_origin" ] || { echo "pre-push: WIP RED push transport URL differs from canonical origin." >&2; exit 1; }
+fi
+
 echo "pre-push: checking branch safety..."
 bash scripts/check-branch-safety.sh
 
 echo "pre-push: running repository safety guard..."
 pnpm run bemoat:guard:safety
 
-echo "pre-push: running integration tests..."
-pnpm run bemoat:test:int
+if [ "$wip_line_count" -eq 1 ]; then
+  echo "pre-push: independently verifying the one approved WIP RED checkpoint..."
+  pnpm run bemoat:checkpoint:red-wip -- "$wip_issue" --verify-push --local-sha "$wip_local_sha" --remote-sha "$wip_remote_sha" --local-ref "$wip_local_ref" --remote-ref "$wip_remote_ref"
+else
+  echo "pre-push: running integration tests..."
+  pnpm run bemoat:test:int
+fi
 
 echo "pre-push: checks passed."

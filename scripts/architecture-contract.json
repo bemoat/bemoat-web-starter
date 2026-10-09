@@ -32,6 +32,13 @@
       "migration_status": "migrated"
     },
     {
+      "path": "scripts/agent-red-wip-checkpoint.ts",
+      "facade_disposition": "composition_root",
+      "internal_destination": "scripts/context/",
+      "owning_slice": 7,
+      "migration_status": "migrated"
+    },
+    {
       "path": "scripts/agent-validate-blocker-resolution.ts",
       "facade_disposition": "composition_root",
       "internal_destination": "scripts/context/",

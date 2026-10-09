@@ -10,6 +10,7 @@ import {
   resolveMergeReviewVerdictBinding,
 } from '../../scripts/context/merge-review-verdict.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffEvidence, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import type { RedWipApproval } from '../../scripts/context/red-wip-checkpoint.ts'
 
 const sha = 'a'.repeat(40)
 const headSha = 'b'.repeat(40)
@@ -626,6 +627,45 @@ function handoffReadyDecision(
 }
 
 describe('bemoat:context pure routing', () => {
+  it('selects only the explicit RED WIP command for exact approved same-Issue dirty-test evidence', () => {
+    // Oracle authority: #617's goal and acceptance criteria permit only an authorized,
+    // task-owned intentionally-red oracle as an incomplete durability checkpoint; the
+    // Founder direction requires same-Issue exact approval and leaves every other STOP intact.
+    const issueNumber = '617'
+    const approved = {
+      schema_version: 1, issue_number: issueNumber, repository: 'boat1994/bemoat-web-starter',
+      branch: 'fix/617-red-test-wip-recovery', protected_base_sha: sha,
+      test_path: 'tests/int/approved-red.int.spec.ts',
+      expected_failures: Array.from({ length: 7 }, (_, index) => ({ test_name: `approved story ${index + 1}`, expected_message: `expected outcome ${index + 1}` })),
+    } satisfies RedWipApproval
+    const candidate = {
+      ...baseEvidence({
+        issue: {
+          ...baseEvidence().issue, number: issueNumber, state: 'OPEN',
+          url: `https://github.com/boat1994/bemoat-web-starter/issues/${issueNumber}`,
+        },
+        localGit: {
+          ...baseEvidence().localGit, branch: approved.branch, upstream: `origin/${approved.branch}`,
+          clean: false, pushed: true, durable: false,
+          reasons: ['LOCAL_STATE_NOT_DURABLE: working tree is dirty or has untracked files'],
+        },
+      }),
+      redWipApproval: approved,
+      redWipWorkingTree: {
+        available: true, stagedPaths: [], unstagedPaths: [approved.test_path], untrackedPaths: [],
+        protectedBaseAncestor: true, approvedPathRegularFile: true,
+      },
+    } as unknown as NormalizedContextEvidence
+    const decision = routeContext(candidate)
+    expect(decision.route).toBe('STOP')
+    expect(decision.nextAction, JSON.stringify(decision)).toMatchObject({ type: 'COMMAND', command: 'bemoat:checkpoint:red-wip' })
+    expect(routeContext({ ...candidate, redWipApproval: null }).nextAction.type).toBe('STOP')
+    expect(routeContext({ ...candidate, evidenceErrors: ['EVIDENCE_CONFLICT: unrelated handoff'] }).nextAction.type).toBe('STOP')
+    expect(routeContext({ ...candidate, redWipWorkingTree: {
+      ...candidate.redWipWorkingTree!, stagedPaths: [], unstagedPaths: [approved.test_path, 'README.md'], untrackedPaths: [],
+    } }).nextAction.type).toBe('STOP')
+  })
+
   const validVerdict = {
     id: 100,
     body: `## REVIEW_VERDICT\n**Verdict:** ELIGIBLE FOR FOUNDER REVIEW\n**Task:** Issue #410\n**Repository:** \`boat1994/bemoat-web-starter\`\n**PR / base / head:** PR #411 · \`main\` · \`${headSha}\``,

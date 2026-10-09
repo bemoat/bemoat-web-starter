@@ -53,5 +53,12 @@ export function utilityRoutes(): UtilityRoute[] {
       'bemoat:hooks:install',
       'COMPLETE',
     ),
+    utilityRoute(
+      'NOT_STATEFUL/explicit-authorized-red-wip-checkpoint',
+      'explicit-authorized-red-wip-checkpoint',
+      'Preserve exactly one canonical Issue-approved intentionally red integration assertion as an incomplete WIP checkpoint; this utility is explicitly invoked and is never selected by bemoat:context.',
+      'bemoat:checkpoint:red-wip',
+      'WIP RED; exact remote SHA readback complete; objective remains incomplete and Context authority is unchanged.',
+    ),
   ]
 }

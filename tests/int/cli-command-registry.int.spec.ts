@@ -31,6 +31,7 @@ const EXPECTED_PACKAGE_SCRIPTS: Record<string, string> = {
   'bemoat:context': 'node scripts/agent-context.ts',
   'bemoat:context:sync-base': 'node scripts/agent-context-sync-base.ts',
   'bemoat:context:recover-setup': 'node scripts/agent-context-recover-setup.ts',
+  'bemoat:checkpoint:red-wip': 'node scripts/agent-red-wip-checkpoint.ts',
   'bemoat:handoff': 'node scripts/agent-handoff.ts',
   'bemoat:blocker-resolution:validate': 'node scripts/agent-validate-blocker-resolution.ts',
   'bemoat:founder-decision-repair:validate': 'node scripts/agent-validate-founder-decision-repair.ts',
@@ -52,6 +53,7 @@ const EXPECTED_COMMAND_TIERS: Record<string, 'A' | 'B' | 'C'> = {
   'bemoat:context': 'B',
   'bemoat:context:sync-base': 'A',
   'bemoat:context:recover-setup': 'A',
+  'bemoat:checkpoint:red-wip': 'A',
   'bemoat:handoff': 'A',
   'bemoat:blocker-resolution:validate': 'B',
   'bemoat:founder-decision-repair:validate': 'B',
@@ -227,10 +229,10 @@ describe('Task 1 command contract registry', () => {
       .sort()
 
     expect(packageCommands).toEqual(Object.keys(EXPECTED_PACKAGE_SCRIPTS).sort())
-    expect(packageCommands).toHaveLength(18)
+    expect(packageCommands).toHaveLength(19)
     expect(registryCommands).toEqual(packageCommands)
     expect(classifiedCommands).toEqual(packageCommands)
-    expect(new Set(classifiedCommands).size).toBe(18)
+    expect(new Set(classifiedCommands).size).toBe(19)
 
     for (const command of packageCommands) {
       expect(getCommandContract(command)).toBe(COMMAND_CONTRACT_REGISTRY.commands[command])
@@ -238,7 +240,7 @@ describe('Task 1 command contract registry', () => {
     expect(getCommandContract('bemoat:unregistered')).toBeNull()
   })
 
-  it('uses tier totals A=5 B=10 C=3', () => {
+  it('uses tier totals A=6 B=10 C=3', () => {
     const counts = { A: 0, B: 0, C: 0 }
 
     for (const [command, expectedTier] of Object.entries(EXPECTED_COMMAND_TIERS)) {
@@ -247,9 +249,9 @@ describe('Task 1 command contract registry', () => {
       counts[expectedTier] += 1
     }
 
-    expect(counts).toEqual({ A: 5, B: 10, C: 3 })
-    expect(Object.keys(EXPECTED_COMMAND_TIERS)).toHaveLength(18)
-    expect(Object.keys(COMMAND_CONTRACT_REGISTRY.commands)).toHaveLength(18)
+    expect(counts).toEqual({ A: 6, B: 10, C: 3 })
+    expect(Object.keys(EXPECTED_COMMAND_TIERS)).toHaveLength(19)
+    expect(Object.keys(COMMAND_CONTRACT_REGISTRY.commands)).toHaveLength(19)
     expectRegistryValid()
   })
 
