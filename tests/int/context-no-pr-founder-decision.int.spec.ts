@@ -512,6 +512,495 @@ describe('exact no-PR FOUNDER_GATE decision consumption', () => {
 })
 
 /**
+ * Oracle: the current Founder-approved #624 design disposition, native comment
+ * 6083370625, §§1–7. These are synthetic lifecycle fixtures only: their
+ * original-comment records are known at fixture construction and explicitly
+ * bound to native comment ID + URL. They do not certify the live #613/#622
+ * comments, whose original bytes remain unproven. The test-local proof envelope
+ * models the design's evidence requirements; it is not a production wire-format
+ * contract. Existing current-policy behavior remains fail-closed until a
+ * separately authorized implementation consumes these proofs.
+ */
+describe('approved same-head no-PR Founder gate lifecycle (#624)', () => {
+  const base0 = 'a'.repeat(40)
+  const base1 = 'b'.repeat(40)
+  const policy0 = 'c'.repeat(40)
+  const policy1 = 'd'.repeat(40)
+  const sameHead = 'e'.repeat(40)
+  const sameBranch = 'fix/624-same-head-founder-gates-recovery'
+  const liveIdentity: Identity = {
+    ...currentIdentity,
+    issue: '624',
+    branch: sameBranch,
+    head: sameHead,
+    baseSha: base0,
+    policySha: policy0,
+  }
+  const advancedBaseIdentity: Identity = {
+    ...liveIdentity,
+    baseSha: base1,
+    policySha: policy1,
+  }
+
+  type OriginalCommentFixture = {
+    commentId: string
+    commentUrl: string
+    originalBody: string
+    provenance: 'synthetic-fixture-created-original'
+  }
+
+  type BaseAdvanceFixture = {
+    historicalBaseSha: string
+    currentBaseSha: string
+    ancestry: { status: string; mergeBaseSha: string; aheadBy: number; behindBy: number } | null
+    historicalPolicySha: string
+    currentPolicySha: string
+    historicalPolicyBlobVerified: boolean
+    currentPolicyBlobVerified: boolean
+    compatibleHistoricalPolicySources: string[]
+  }
+
+  type GatePolicyBindingFixture = {
+    commentId: string
+    commentUrl: string
+    policySourceSha: string
+  }
+
+  function originalCommentRecords(comments: RoleEvidence[]): OriginalCommentFixture[] {
+    return comments.map((comment) => ({
+      commentId: String(comment.id),
+      commentUrl: comment.url,
+      originalBody: comment.body,
+      provenance: 'synthetic-fixture-created-original',
+    }))
+  }
+
+  function originalComments(comments: RoleEvidence[]): OriginalCommentFixture[] {
+    return originalCommentRecords(comments)
+  }
+
+  function malformedDecision(identity: Identity, sourceGate: RoleEvidence, id: number): RoleEvidence {
+    const valid = founderDecision(identity, sourceGate, { id })
+    return {
+      ...valid,
+      body: valid.body
+        .replace('## FOUNDER_DECISION\n\n```json\n', '## FOUNDER_DECISION\\n\\n```json\\n')
+        .replace('\n```\n', '\\n```\\n'),
+    }
+  }
+
+  function repairDecision(
+    identity: Identity,
+    sourceGate: RoleEvidence,
+    predecessor: RoleEvidence,
+    id: number,
+  ): RoleEvidence {
+    const ordinary = founderDecision(identity, sourceGate, { id })
+    const start = ordinary.body.indexOf('{')
+    const end = ordinary.body.lastIndexOf('}')
+    const record = JSON.parse(ordinary.body.slice(start, end + 1)) as Record<string, unknown>
+    record.record_type = 'FOUNDER_DECISION_REPAIR'
+    record.source_founder_decision = {
+      comment_id: String(predecessor.id),
+      url: predecessor.url,
+      body_sha256: createHash('sha256').update(predecessor.body, 'utf8').digest('hex'),
+    }
+    return {
+      ...ordinary,
+      body: '## FOUNDER_DECISION_REPAIR\n\n```json\n' + JSON.stringify(record, null, 2) + '\n```\n',
+    }
+  }
+
+  function mutateGate(source: RoleEvidence, mutate: (record: Record<string, unknown>) => void): RoleEvidence {
+    const start = source.body.indexOf('{')
+    const end = source.body.lastIndexOf('}')
+    const record = JSON.parse(source.body.slice(start, end + 1)) as Record<string, unknown>
+    mutate(record)
+    return { ...source, body: renderHandoffComment(record as unknown as HandoffRecord) }
+  }
+
+  function lifecycleRoute(options: {
+    identity?: Identity
+    handoffs: RoleEvidence[]
+    decisions?: RoleEvidence[]
+    repairs?: RoleEvidence[]
+    integrityComments?: RoleEvidence[]
+    originalCommentRecords?: OriginalCommentFixture[]
+    baseAdvance?: BaseAdvanceFixture
+    gatePolicyBindings?: GatePolicyBindingFixture[]
+  }) {
+    const identity = options.identity ?? liveIdentity
+    const evidence = contextFor(identity, options.handoffs)
+    Object.assign(evidence.durableContext, {
+      founderDecisions: options.decisions ?? [],
+      invalidFounderDecisions: [],
+      founderDecisionRepairs: options.repairs ?? [],
+      invalidFounderDecisionRepairs: [],
+    })
+    // This transient test-only envelope expresses the approved contract without
+    // choosing a production evidence field shape in advance.
+    Object.assign(evidence, {
+      sameHeadFounderGateLifecycleProof: {
+        originalComments: options.originalCommentRecords ?? originalComments(options.integrityComments ?? []),
+        // The design requires policy identity on each gate but the strict
+        // HANDOFF schema has no policy field. This test-only external binding
+        // represents the independently verified native-context association;
+        // it does not define a production transport shape.
+        gatePolicyBindings: options.gatePolicyBindings ?? options.handoffs.map((gate) => ({
+          commentId: String(gate.id),
+          commentUrl: gate.url,
+          policySourceSha: options.baseAdvance?.historicalPolicySha ?? identity.policySha,
+        })),
+        ...(options.baseAdvance ? { baseAdvance: options.baseAdvance } : {}),
+      },
+    })
+    return routeContext(evidence)
+  }
+
+  function baseAdvance(overrides: Partial<BaseAdvanceFixture> = {}): BaseAdvanceFixture {
+    return {
+      historicalBaseSha: base0,
+      currentBaseSha: base1,
+      ancestry: { status: 'ahead', mergeBaseSha: base0, aheadBy: 1, behindBy: 0 },
+      historicalPolicySha: policy0,
+      currentPolicySha: policy1,
+      historicalPolicyBlobVerified: true,
+      currentPolicyBlobVerified: true,
+      compatibleHistoricalPolicySources: [policy0],
+      ...overrides,
+    }
+  }
+
+  function unresolvedStop(id: number, identity: Identity = liveIdentity): RoleEvidence {
+    const stop = handoff(identity, { id, route: 'STOP' })
+    const start = stop.body.indexOf('{')
+    const end = stop.body.lastIndexOf('}')
+    const record = JSON.parse(stop.body.slice(start, end + 1)) as Record<string, unknown>
+    record.verified_evidence = [{ kind: 'stop-blocker', value: 'unresolved-current-blocker', url: null }]
+    return { ...stop, body: renderHandoffComment(record as unknown as HandoffRecord) }
+  }
+
+  it('leaves the sole pending B gate as FOUNDER_GATE after uniquely consuming A with integrity-qualified evidence', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000001 })
+    const gateB = handoff(liveIdentity, { id: 6240000002 })
+    const decisionA = founderDecision(liveIdentity, gateA, { id: 6240000003 })
+    const comments = [gateA, gateB, decisionA]
+
+    const result = lifecycleRoute({ handoffs: [gateA, gateB], decisions: [decisionA], integrityComments: comments })
+
+    expect(result).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+    expect(lifecycleRoute({
+      handoffs: [gateB, gateA],
+      decisions: [decisionA],
+      integrityComments: comments,
+    })).toEqual(result)
+  })
+
+  it('lets one exact canonical repair consume only A and leaves B pending', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000004 })
+    const gateB = handoff(liveIdentity, { id: 6240000005 })
+    const predecessor = malformedDecision(liveIdentity, gateA, 6240000006)
+    const repair = repairDecision(liveIdentity, gateA, predecessor, 6240000007)
+
+    const result = lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [predecessor],
+      repairs: [repair],
+      integrityComments: [gateA, gateB, predecessor, repair],
+    })
+
+    expect(result).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+  })
+
+  it('does not let a canonical repair supersede a valid ordinary decision', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000008 })
+    const gateB = handoff(liveIdentity, { id: 6240000009 })
+    const validDecision = founderDecision(liveIdentity, gateA, { id: 6240000010 })
+    const invalidSupersedingRepair = repairDecision(liveIdentity, gateA, validDecision, 6240000016)
+
+    const result = lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [validDecision],
+      repairs: [invalidSupersedingRepair],
+      integrityComments: [gateA, gateB, validDecision, invalidSupersedingRepair],
+    })
+
+    expect(result.route).toBe('STOP')
+  })
+
+  it('does not let two independently consumed gates suppress an unrelated current STOP', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000011 })
+    const gateB = handoff(liveIdentity, { id: 6240000012 })
+    const unrelatedStop = unresolvedStop(6240000013)
+    const decisionA = founderDecision(liveIdentity, gateA, { id: 6240000014 })
+    const decisionB = founderDecision(liveIdentity, gateB, { id: 6240000015 })
+
+    const result = lifecycleRoute({
+      handoffs: [gateA, gateB, unrelatedStop],
+      decisions: [decisionA, decisionB],
+      integrityComments: [gateA, gateB, decisionA, decisionB],
+    })
+
+    expect(result.route).toBe('STOP')
+  })
+
+  it('recomputes the ordinary route after independently consuming A and B', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000021 })
+    const gateB = handoff(liveIdentity, { id: 6240000022 })
+    const remainingImplementation = handoff(liveIdentity, { id: 6240000023, route: 'IMPLEMENT' })
+    const decisionA = founderDecision(liveIdentity, gateA, { id: 6240000024 })
+    const decisionB = founderDecision(liveIdentity, gateB, { id: 6240000025 })
+    const baseline = routeNoPr(liveIdentity, [remainingImplementation])
+
+    const result = lifecycleRoute({
+      handoffs: [gateA, gateB, remainingImplementation],
+      decisions: [decisionA, decisionB],
+      integrityComments: [gateA, gateB, decisionA, decisionB],
+    })
+
+    // §4 requires ordinary recomputation, not a fixed COMMAND/COMPLETE fallback.
+    expect(result).toEqual(baseline)
+  })
+
+  it.each([
+    ['Gate A', '6240000031'],
+    ['Gate B', '6240000032'],
+    ['A decision', '6240000033'],
+  ])('keeps A-consumed/B-pending at STOP when original integrity for %s is absent', (_label, missingId) => {
+    const gateA = handoff(liveIdentity, { id: 6240000031 })
+    const gateB = handoff(liveIdentity, { id: 6240000032 })
+    const decisionA = founderDecision(liveIdentity, gateA, { id: 6240000033 })
+    const allComments = [gateA, gateB, decisionA]
+
+    const result = lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [decisionA],
+      integrityComments: allComments.filter((comment) => String(comment.id) !== missingId),
+    })
+
+    expect(result.route).toBe('STOP')
+  })
+
+  it('keeps same-head gates at STOP when only current-body metadata is available', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000041 })
+    const gateB = handoff(liveIdentity, { id: 6240000042 })
+    const decisionA = founderDecision(liveIdentity, gateA, { id: 6240000043 })
+
+    // Current-body digests, timestamps, and empty edit metadata are explicitly
+    // not original-byte proof under design §6; no integrity attestation supplied.
+    const result = lifecycleRoute({ handoffs: [gateA, gateB], decisions: [decisionA] })
+
+    expect(result.route).toBe('STOP')
+  })
+
+  it('keeps a gate at STOP when its current body differs from the synthetic original-body record', () => {
+    const originalGateA = handoff(liveIdentity, { id: 6240000044 })
+    const gateB = handoff(liveIdentity, { id: 6240000045 })
+    const decisionA = founderDecision(liveIdentity, originalGateA, { id: 6240000046 })
+    const changedGateA = mutateGate(originalGateA, (record) => { record.objective = 'Edited after original publication.' })
+
+    const result = lifecycleRoute({
+      handoffs: [changedGateA, gateB],
+      decisions: [decisionA],
+      integrityComments: [changedGateA, gateB, decisionA],
+      originalCommentRecords: originalCommentRecords([originalGateA, gateB, decisionA]),
+    })
+
+    expect(result.route).toBe('STOP')
+  })
+
+  it('keeps an otherwise valid decision at STOP when its current body differs from the synthetic original-content proof', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000047 })
+    const gateB = handoff(liveIdentity, { id: 6240000048 })
+    const originalDecisionA = founderDecision(liveIdentity, gateA, { id: 6240000049 })
+    const changedDecisionA = {
+      ...originalDecisionA,
+      body: originalDecisionA.body + '\nEdited after original publication.\n',
+    }
+
+    const result = lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [changedDecisionA],
+      integrityComments: [gateA, gateB, changedDecisionA],
+      originalCommentRecords: originalCommentRecords([gateA, gateB, originalDecisionA]),
+    })
+
+    expect(result.route).toBe('STOP')
+  })
+
+  it('keeps two unconsumed gates and a third gate at STOP', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000051 })
+    const gateB = handoff(liveIdentity, { id: 6240000052 })
+    const gateC = handoff(liveIdentity, { id: 6240000053 })
+
+    expect(lifecycleRoute({ handoffs: [gateA, gateB], integrityComments: [gateA, gateB] }).route).toBe('STOP')
+    expect(lifecycleRoute({ handoffs: [gateA, gateB, gateC], integrityComments: [gateA, gateB, gateC] }).route).toBe('STOP')
+  })
+
+  it('keeps duplicate or wrong-gate decisions at STOP', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000061 })
+    const gateB = handoff(liveIdentity, { id: 6240000062 })
+    const decisionA = founderDecision(liveIdentity, gateA, { id: 6240000063 })
+    const wrongGateDecision = founderDecision(liveIdentity, handoff(liveIdentity, { id: 6240000065 }), { id: 6240000066 })
+
+    expect(lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [decisionA, decisionA],
+      integrityComments: [gateA, gateB, decisionA],
+    }).route).toBe('STOP')
+    expect(lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [wrongGateDecision],
+      integrityComments: [gateA, gateB, wrongGateDecision],
+    }).route).toBe('STOP')
+  })
+
+  it.each([
+    ['native author identity conflict', (gate: RoleEvidence) => ({ ...gate, authorIdentityConflict: true })],
+    ['repository', (gate: RoleEvidence) => mutateGate(gate, (record) => { record.repository = 'other/repository' })],
+    ['Issue', (gate: RoleEvidence) => mutateGate(gate, (record) => { record.issue_number = '623' })],
+    ['branch', (gate: RoleEvidence) => mutateGate(gate, (record) => { record.branch = 'fix/624-other' })],
+    ['head', (gate: RoleEvidence) => mutateGate(gate, (record) => { record.exact_head = 'f'.repeat(40) })],
+    ['protected base branch', (gate: RoleEvidence) => mutateGate(gate, (record) => {
+      (record.protected_base as Record<string, unknown>).branch = 'dev'
+    })],
+    ['protected base SHA', (gate: RoleEvidence) => mutateGate(gate, (record) => {
+      (record.protected_base as Record<string, unknown>).sha = 'f'.repeat(40)
+    })],
+  ])('keeps two-gate evidence at STOP for Gate A with wrong %s binding', (_label, invalidateGate) => {
+    const gateA = handoff(liveIdentity, { id: 6240000060 })
+    const gateB = handoff(liveIdentity, { id: 6240000061 })
+    const invalidGateA = invalidateGate(gateA)
+
+    expect(lifecycleRoute({
+      handoffs: [invalidGateA, gateB],
+      integrityComments: [invalidGateA, gateB],
+    }).route).toBe('STOP')
+  })
+
+  it('keeps a gate at STOP when its external policy binding disagrees with current policy', () => {
+    const gateA = handoff(liveIdentity, { id: 6240000062 })
+    const gateB = handoff(liveIdentity, { id: 6240000063 })
+
+    expect(lifecycleRoute({
+      handoffs: [gateA, gateB],
+      integrityComments: [gateA, gateB],
+      gatePolicyBindings: [
+        { commentId: String(gateA.id), commentUrl: gateA.url, policySourceSha: 'f'.repeat(40) },
+        { commentId: String(gateB.id), commentUrl: gateB.url, policySourceSha: policy0 },
+      ],
+    }).route).toBe('STOP')
+  })
+
+  it.each([
+    ['native author', (decision: RoleEvidence) => ({ ...decision, authorLogin: 'other-founder' })],
+    ['repository', (decision: RoleEvidence) => mutateDecision(decision, (record) => { record.repository = 'other/repository' })],
+    ['Issue', (decision: RoleEvidence) => mutateDecision(decision, (record) => { record.issue_number = '623' })],
+    ['branch', (decision: RoleEvidence) => mutateDecision(decision, (record) => { record.branch = 'fix/624-other' })],
+    ['head', (decision: RoleEvidence) => mutateDecision(decision, (record) => { record.exact_head = 'f'.repeat(40) })],
+    ['protected base', (decision: RoleEvidence) => mutateDecision(decision, (record) => {
+      (record.protected_base as Record<string, unknown>).sha = 'f'.repeat(40)
+    })],
+    ['policy source', (decision: RoleEvidence) => mutateDecision(decision, (record) => {
+      (record.policy as Record<string, unknown>).source_sha = 'f'.repeat(40)
+    })],
+  ])('keeps same-head A/B evidence at STOP for a decision with wrong %s', (_label, invalidate) => {
+    const gateA = handoff(liveIdentity, { id: 6240000067 })
+    const gateB = handoff(liveIdentity, { id: 6240000068 })
+    const validDecisionA = founderDecision(liveIdentity, gateA, { id: 6240000069 })
+    const invalidDecisionA = invalidate(validDecisionA)
+
+    expect(lifecycleRoute({
+      handoffs: [gateA, gateB],
+      decisions: [invalidDecisionA],
+      integrityComments: [gateA, gateB, invalidDecisionA],
+    }).route).toBe('STOP')
+  })
+
+  it('keeps base-only carry-forward at STOP without exact ancestry or current policy compatibility', () => {
+    const historicalIdentity: Identity = { ...liveIdentity, baseSha: base0, policySha: policy0 }
+    const gateA = handoff(historicalIdentity, { id: 6240000071 })
+    const gateB = handoff(historicalIdentity, { id: 6240000072 })
+    const decisionA = founderDecision(historicalIdentity, gateA, { id: 6240000073 })
+    const comments = [gateA, gateB, decisionA]
+    const invalidProofs = [
+      baseAdvance({ ancestry: null }),
+      baseAdvance({ ancestry: { status: 'diverged', mergeBaseSha: 'f'.repeat(40), aheadBy: 1, behindBy: 1 } }),
+      baseAdvance({ ancestry: { status: 'ahead', mergeBaseSha: 'f'.repeat(40), aheadBy: 1, behindBy: 0 } }),
+      baseAdvance({ compatibleHistoricalPolicySources: [] }),
+      baseAdvance({ compatibleHistoricalPolicySources: ['f'.repeat(40)] }),
+      baseAdvance({ historicalPolicySha: 'f'.repeat(40) }),
+      baseAdvance({ historicalPolicyBlobVerified: false }),
+      baseAdvance({ currentPolicyBlobVerified: false }),
+      baseAdvance({ currentPolicySha: 'f'.repeat(40) }),
+      baseAdvance({ historicalBaseSha: 'f'.repeat(40) }),
+      baseAdvance({ currentBaseSha: 'f'.repeat(40) }),
+      baseAdvance({
+        historicalBaseSha: base0,
+        currentBaseSha: base0,
+        ancestry: { status: 'identical', mergeBaseSha: base0, aheadBy: 0, behindBy: 0 },
+      }),
+    ]
+
+    for (const proof of invalidProofs) {
+      expect(lifecycleRoute({
+        identity: advancedBaseIdentity,
+        handoffs: [gateA, gateB],
+        decisions: [decisionA],
+        integrityComments: comments,
+        baseAdvance: proof,
+      }).route).toBe('STOP')
+    }
+  })
+
+  it('keeps the old B gate pending after compatible base-only advancement', () => {
+    const historicalIdentity: Identity = { ...liveIdentity, baseSha: base0, policySha: policy0 }
+    const gateA = handoff(historicalIdentity, { id: 6240000081 })
+    const gateB = handoff(historicalIdentity, { id: 6240000082 })
+    const decisionA = founderDecision(historicalIdentity, gateA, { id: 6240000083 })
+    const comments = [gateA, gateB, decisionA]
+
+    const result = lifecycleRoute({
+      identity: advancedBaseIdentity,
+      handoffs: [gateA, gateB],
+      decisions: [decisionA],
+      integrityComments: comments,
+      baseAdvance: baseAdvance(),
+    })
+
+    expect(result).toMatchObject({
+      route: 'FOUNDER_GATE',
+      nextAction: { type: 'FOUNDER_GATE', command: null },
+    })
+  })
+
+  it('recomputes after a current-authority B decision consumes an old pending gate', () => {
+    const historicalIdentity: Identity = { ...liveIdentity, baseSha: base0, policySha: policy0 }
+    const gateA = handoff(historicalIdentity, { id: 6240000091 })
+    const gateB = handoff(historicalIdentity, { id: 6240000092 })
+    const decisionA = founderDecision(historicalIdentity, gateA, { id: 6240000093 })
+    const decisionB = founderDecision(advancedBaseIdentity, gateB, { id: 6240000094 })
+    const remainingStop = unresolvedStop(6240000095, advancedBaseIdentity)
+
+    const result = lifecycleRoute({
+      identity: advancedBaseIdentity,
+      handoffs: [gateA, gateB, remainingStop],
+      decisions: [decisionA, decisionB],
+      integrityComments: [gateA, gateB, decisionA, decisionB],
+      baseAdvance: baseAdvance(),
+    })
+
+    expect(result.route).toBe('STOP')
+  })
+})
+
+/**
  * Oracle: Issue #602's acceptance criteria and the human-approved dedicated
  * FOUNDER_DECISION_REPAIR contract authorize exactly one trusted-Founder repair
  * of exactly one malformed immutable predecessor, bound to the current identity
