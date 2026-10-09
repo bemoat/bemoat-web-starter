@@ -100,6 +100,55 @@ describe('authorized RED WIP checkpoint boundary', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ command: 'bemoat:checkpoint:red-wip', mode: 'help' })
   })
 
+  it('forwards an exact test filter through real pnpm and produces consumable reports', () => {
+    const root = mkdtempSync(join(tmpdir(), 'red-wip-pnpm-boundary-'))
+    const repo = join(root, 'repo')
+    const suiteOutput = join(root, 'vitest.json')
+    const taskOutput = join(root, 'vitest-task-errors.json')
+    const selectedName = 'registers machine-readable mutation-free help for explicit discovery'
+    try {
+      cpSync(process.cwd(), repo, { recursive: true, filter: (path) => !/(^|\/)(\.git|node_modules|\.next|coverage)(\/|$)/.test(path) })
+      symlinkSync(join(process.cwd(), 'node_modules'), join(repo, 'node_modules'), 'dir')
+      const result = spawnSync('pnpm', [
+        'run', 'bemoat:test:int', '--reporter=json', '--reporter=./scripts/context/red-wip-checkpoint.ts',
+        `--outputFile=${suiteOutput}`, `--testNamePattern=${selectedName}`, 'tests/int/red-wip-checkpoint.int.spec.ts',
+      ], {
+        cwd: repo, encoding: 'utf8', timeout: 60_000,
+        env: { ...process.env, BEMOAT_RED_WIP_TASK_REPORT: taskOutput },
+      })
+      expect(result.status, `${result.stderr || result.stdout}`).toBe(0)
+      const suiteReport = JSON.parse(readFileSync(suiteOutput, 'utf8')) as {
+        testResults: Array<{ name: string; status: string; assertionResults: Array<{ status: string; fullName: string; failureMessages?: string[] }> }>
+        numFailedTests: number; numPassedTests: number; numFailedTestSuites: number; unhandledErrors?: unknown[]
+      }
+      const taskReport = JSON.parse(readFileSync(taskOutput, 'utf8')) as RedWipRunnerTaskReport
+      expect(suiteReport.testResults).toHaveLength(1)
+      expect(suiteReport.testResults[0]!.name.replace(/\\/g, '/')).toMatch(/\/tests\/int\/red-wip-checkpoint\.int\.spec\.ts$/)
+      expect(suiteReport.numPassedTests).toBe(1)
+      expect(suiteReport.numFailedTests).toBe(0)
+      const selectedAssertions = suiteReport.testResults[0]!.assertionResults.filter((assertion) => assertion.fullName.includes(selectedName))
+      expect(selectedAssertions).toHaveLength(1)
+      expect(selectedAssertions[0]!.status).toBe('passed')
+      expect(suiteReport.testResults[0]!.assertionResults.filter((assertion) => assertion.status === 'passed')).toHaveLength(1)
+      expect(suiteReport.testResults[0]!.assertionResults.every((assertion) =>
+        assertion.fullName.includes(selectedName) || ['skipped', 'pending', 'todo'].includes(assertion.status),
+      )).toBe(true)
+      expect(validateRedWipSuiteReport({ ...approval(), expected_failures: [] }, {
+        numFailedTests: suiteReport.numFailedTests,
+        numPassedTests: suiteReport.numPassedTests,
+        numFailedTestSuites: suiteReport.numFailedTestSuites,
+        unhandledErrors: suiteReport.unhandledErrors,
+        suites: suiteReport.testResults.map((file) => ({
+          file: 'tests/int/red-wip-checkpoint.int.spec.ts', status: file.status,
+          assertions: file.assertionResults.map((assertion) => ({ status: assertion.status, name: assertion.fullName, message: (assertion.failureMessages ?? []).join('\n') })),
+        })),
+      })).toEqual([])
+      expect(validateRedWipRunnerTaskReport({ ...approval(), expected_failures: [] }, taskReport)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 70_000)
+
   it('accepts only the authorized, exact intentionally red oracle as WIP', () => {
     expect(validateRedWipCandidate(approval(), evidence())).toEqual([])
   })
@@ -232,6 +281,7 @@ describe('authorized RED WIP checkpoint boundary', () => {
     const bare = join(root, 'remote.git')
     const bin = join(root, 'bin')
     const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim()
+    const realPnpm = spawnSync('which', ['pnpm'], { encoding: 'utf8' }).stdout.trim()
     const fixtureApproval = {
       ...approval(),
       expected_failures: [
@@ -246,7 +296,11 @@ describe('authorized RED WIP checkpoint boundary', () => {
       GIT_CONFIG_GLOBAL: join(root, 'global.gitconfig'),
       FIXTURE_ISSUE_DATA: JSON.stringify({ number: Number(issueNumber), state: 'OPEN', body: `<!-- BEMOAT_RED_WIP_APPROVAL\n${JSON.stringify(fixtureApproval)}\n-->` }),
       FIXTURE_CONTEXT_COUNT: join(root, 'context-count'),
+      FIXTURE_LAST_TEST_ARGS: join(root, 'test-args.json'),
+      FIXTURE_CAPTURE_SUITE: join(root, 'captured-vitest.json'),
+      FIXTURE_CAPTURE_TASK: join(root, 'captured-task.json'),
       FIXTURE_REAL_GIT: realGit,
+      FIXTURE_REAL_PNPM: realPnpm,
       FIXTURE_BARE_REMOTE: bare,
       FIXTURE_HOOK: join(repo, '.githooks/pre-push'),
     }
@@ -269,10 +323,29 @@ if (args[0] === 'run') args.shift()
 const command = args.shift()
 if (command === 'bemoat:guard:safety') process.exit(0)
 if (command === 'bemoat:test:int') {
+  fs.writeFileSync(process.env.FIXTURE_LAST_TEST_ARGS, JSON.stringify(args))
+  if (process.env.FIXTURE_REPORT_MODE === 'real-report') {
+    if (args[0] === '--') process.exit(97)
+    const result = spawnSync(process.env.FIXTURE_REAL_PNPM, [
+      'run', command, ...args,
+      '--testNamePattern=approved story one|approved story two|approved supporting pass',
+      'tests/int/example.int.spec.ts',
+    ], { cwd: process.cwd(), env: process.env, encoding: 'utf8' })
+    const outputArg = args.find((arg) => arg.startsWith('--outputFile='))
+    if (outputArg && fs.existsSync(outputArg.slice('--outputFile='.length))) fs.copyFileSync(outputArg.slice('--outputFile='.length), process.env.FIXTURE_CAPTURE_SUITE)
+    if (fs.existsSync(process.env.BEMOAT_RED_WIP_TASK_REPORT)) fs.copyFileSync(process.env.BEMOAT_RED_WIP_TASK_REPORT, process.env.FIXTURE_CAPTURE_TASK)
+    if (result.stdout) process.stdout.write(result.stdout)
+    if (result.stderr) process.stderr.write(result.stderr)
+    process.exit(result.status ?? 1)
+  }
   const reportArg = args.find((arg) => arg.startsWith('--outputFile='))
   if (reportArg) {
-    fs.writeFileSync(reportArg.slice('--outputFile='.length), process.env.FIXTURE_REPORT)
-    fs.writeFileSync(process.env.BEMOAT_RED_WIP_TASK_REPORT, process.env.FIXTURE_TASK_REPORT)
+    const reportPath = reportArg.slice('--outputFile='.length)
+    if (process.env.FIXTURE_REPORT_MODE === 'missing-suite') process.exit(1)
+    fs.writeFileSync(reportPath, process.env.FIXTURE_REPORT_MODE === 'malformed-suite' ? '{' : process.env.FIXTURE_REPORT)
+    if (process.env.FIXTURE_REPORT_MODE !== 'missing-task') {
+      fs.writeFileSync(process.env.BEMOAT_RED_WIP_TASK_REPORT, process.env.FIXTURE_REPORT_MODE === 'malformed-task' ? '{' : process.env.FIXTURE_TASK_REPORT)
+    }
     process.exit(1)
   }
   process.exit(0)
@@ -282,7 +355,7 @@ if (command === 'bemoat:context') {
   try { count = Number(fs.readFileSync(process.env.FIXTURE_CONTEXT_COUNT, 'utf8')) } catch {}
   count += 1
   fs.writeFileSync(process.env.FIXTURE_CONTEXT_COUNT, String(count))
-  process.stdout.write(count < 3 ? '{"route":"STOP","next_action":{"type":"COMMAND","command":"bemoat:checkpoint:red-wip"}}\\n' : '{"route":"STOP","next_action":{"type":"STOP","command":null}}\\n')
+  process.stdout.write(count < 8 ? '{"route":"STOP","next_action":{"type":"COMMAND","command":"bemoat:checkpoint:red-wip"}}\\n' : '{"route":"STOP","next_action":{"type":"STOP","command":null}}\\n')
   process.exit(0)
 }
 if (command === 'bemoat:checkpoint:red-wip') {
@@ -357,7 +430,12 @@ const result = call(args); write(result); process.exit(result.status ?? 1)
       expect(greenPush.stderr + greenPush.stdout).toContain('running integration tests')
       const greenHead = git(['rev-parse', 'HEAD'])
       git(['update-ref', `refs/remotes/origin/${branch}`, greenHead])
-      writeFileSync(join(repo, testPath), 'fixture intentionally red change\n')
+      writeFileSync(join(repo, testPath), `import { expect, it } from 'vitest'
+
+it('approved story one', () => { throw new Error('approved outcome one') })
+it('approved story two', () => { throw new Error('approved outcome two') })
+it('approved supporting pass', () => { expect(true).toBe(true) })
+`)
       const runCandidate = () => spawnSync('node', ['scripts/agent-red-wip-checkpoint.ts', issueNumber, '--json'], {
         cwd: repo, env: { ...env, BEMOAT_FACADE_COMMAND: 'bemoat:checkpoint:red-wip', BEMOAT_FACADE_ENTRYPOINT: 'scripts/agent-red-wip-checkpoint.ts', npm_lifecycle_event: 'bemoat:checkpoint:red-wip' }, encoding: 'utf8',
       })
@@ -371,10 +449,11 @@ const result = call(args); write(result); process.exit(result.status ?? 1)
       expect(remoteBefore).toBe(greenHead)
       git(['config', '--global', '--unset-all', `url.file://${bare}.insteadOf`])
 
-      env.FIXTURE_REPORT = JSON.stringify({
+      const approvedReport = JSON.stringify({
         numFailedTests: failures.length, numPassedTests: 10, numFailedTestSuites: 5,
         testResults: [{ name: testPath, status: 'failed', assertionResults: failures.map((item) => ({ status: 'failed', fullName: item.name, failureMessages: [item.message] })) }],
       })
+      env.FIXTURE_REPORT = approvedReport
       const taskReport = (includeNestedHookError: boolean) => {
         const childTasks: RedWipRunnerTaskReport['tasks'][number]['children'] = failures.map((item) => ({
           type: 'test', name: item.name, fullName: item.name, state: 'failed', errors: [item.message],
@@ -395,9 +474,55 @@ const result = call(args); write(result); process.exit(result.status ?? 1)
       expect(JSON.parse(hookError.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
       expect(JSON.parse(hookError.stdout).details.reason).toContain('module or suite hook')
       expect(git(['rev-parse', 'HEAD'])).toBe(greenHead)
+
+      for (const [mode, reason] of [
+        ['missing-suite', 'machine-readable results'],
+        ['malformed-suite', 'machine-readable results'],
+        ['missing-task', 'full Vitest task error report'],
+        ['malformed-task', 'full Vitest task error report'],
+      ]) {
+        env.FIXTURE_REPORT_MODE = mode
+        env.FIXTURE_REPORT = approvedReport
+        env.FIXTURE_TASK_REPORT = taskReport(false)
+        const missingReport = runCandidate()
+        expect(missingReport.status).not.toBe(0)
+        expect(JSON.parse(missingReport.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
+        expect(JSON.parse(missingReport.stdout).details.reason).toContain(reason)
+        expect(git(['rev-parse', 'HEAD'])).toBe(greenHead)
+      }
+      delete env.FIXTURE_REPORT_MODE
+
+      const unexpectedSuite = JSON.parse(approvedReport)
+      unexpectedSuite.numFailedTests += 1
+      unexpectedSuite.testResults[0].assertionResults.push({
+        status: 'failed', fullName: 'unexpected assertion failure', failureMessages: ['unexpected failure'],
+      })
+      const unexpectedTasks = JSON.parse(taskReport(false)) as RedWipRunnerTaskReport
+      unexpectedTasks.tasks[0]!.children.push({
+        type: 'test', name: 'unexpected assertion failure', fullName: 'unexpected assertion failure', state: 'failed',
+        errors: ['unexpected failure'], children: [],
+      })
+      env.FIXTURE_REPORT = JSON.stringify(unexpectedSuite)
+      env.FIXTURE_TASK_REPORT = JSON.stringify(unexpectedTasks)
+      const unexpectedFailure = runCandidate()
+      expect(unexpectedFailure.status).not.toBe(0)
+      expect(JSON.parse(unexpectedFailure.stdout)).toMatchObject({ outcome: 'STOP', mutation_performed: false })
+      expect(JSON.parse(unexpectedFailure.stdout).details.reason).toContain('outside the exact Issue-approved assertion set')
+      expect(git(['rev-parse', 'HEAD'])).toBe(greenHead)
+
+      env.FIXTURE_REPORT = approvedReport
       env.FIXTURE_TASK_REPORT = taskReport(false)
+      env.FIXTURE_REPORT_MODE = 'real-report'
       const result = runCandidate()
       expect(result.status, `${result.stderr || result.stdout}\n${git(['status', '--porcelain=v1', '--untracked-files=all'])}`).toBe(0)
+      const realSuiteReport = JSON.parse(readFileSync(env.FIXTURE_CAPTURE_SUITE!, 'utf8'))
+      const realTaskReport = JSON.parse(readFileSync(env.FIXTURE_CAPTURE_TASK!, 'utf8')) as RedWipRunnerTaskReport
+      expect(realSuiteReport.testResults).toHaveLength(1)
+      expect(realSuiteReport.numFailedTests).toBe(2)
+      expect(realSuiteReport.numPassedTests).toBe(1)
+      expect(realTaskReport.tasks).toHaveLength(1)
+      expect(realTaskReport.unhandledErrors).toEqual([])
+      expect(JSON.parse(readFileSync(env.FIXTURE_LAST_TEST_ARGS!, 'utf8'))).not.toContain('--')
       expect(JSON.parse(result.stdout)).toMatchObject({
         outcome: 'SUCCESS', mutation_performed: true,
         details: { checkpoint_status: 'WIP RED INCOMPLETE', objective_complete: false, actual_context_route: 'STOP' },
