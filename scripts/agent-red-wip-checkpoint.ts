@@ -175,7 +175,7 @@ function runIntegrationSuite(approval: RedWipApproval) {
   const output = join(directory, 'vitest.json')
   const taskOutput = join(directory, 'vitest-task-errors.json')
   try {
-    const result = run('pnpm', ['run', 'bemoat:test:int', '--', '--reporter=json', '--reporter=./scripts/context/red-wip-checkpoint.ts', `--outputFile=${output}`], {
+    const result = run('pnpm', ['run', 'bemoat:test:int', '--reporter=json', '--reporter=./scripts/context/red-wip-checkpoint.ts', `--outputFile=${output}`], {
       allowFailure: true,
       env: { ...process.env, BEMOAT_RED_WIP_TASK_REPORT: taskOutput },
     })
