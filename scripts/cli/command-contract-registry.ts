@@ -8,6 +8,7 @@ import { contextSyncCommands } from './context-sync-command-metadata.ts'
 import { contextSyncRoutes } from './context-sync-routing-policy.ts'
 import { contextSetupCommands } from './context-setup-command-metadata.ts'
 import { committedWipRecoveryCommands, committedWipRecoveryRoutes } from './committed-wip-recovery-command-metadata.ts'
+import { trustedSourceBootstrapCommands, trustedSourceBootstrapRoutes } from './trusted-source-bootstrap-command-metadata.ts'
 import { contextSetupRoutes } from './context-setup-routing-policy.ts'
 import { redWipCheckpointCommands } from './red-wip-checkpoint-command-metadata.ts'
 import { utilityRoutes } from './utility-routing-policy.ts'
@@ -534,13 +535,14 @@ const trailingCommands = Object.fromEntries(
 )
 delete commands['bemoat:test:int']
 delete commands['bemoat:typecheck']
-const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...committedWipRecoveryCommands(commandMetadataDependencies), ...redWipCheckpointCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
+const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...committedWipRecoveryCommands(commandMetadataDependencies), ...trustedSourceBootstrapCommands(commandMetadataDependencies), ...redWipCheckpointCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
 
 const routes = [
   ...utilityRoutes(),
   ...contextSyncRoutes(),
   ...contextSetupRoutes(),
   ...committedWipRecoveryRoutes(),
+  ...trustedSourceBootstrapRoutes(),
   ...handoffRoutes(),
 ]
 

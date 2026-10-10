@@ -32,6 +32,7 @@ const EXPECTED_PACKAGE_SCRIPTS: Record<string, string> = {
   'bemoat:context:sync-base': 'node scripts/agent-context-sync-base.ts',
   'bemoat:context:recover-setup': 'node scripts/agent-context-recover-setup.ts',
   'bemoat:context:recover-committed-wip': 'node scripts/agent-context-recover-committed-wip.ts',
+  'bemoat:context:bootstrap-source': 'node scripts/agent-context-bootstrap-source.ts',
   'bemoat:checkpoint:red-wip': 'node scripts/agent-red-wip-checkpoint.ts',
   'bemoat:handoff': 'node scripts/agent-handoff.ts',
   'bemoat:blocker-resolution:validate': 'node scripts/agent-validate-blocker-resolution.ts',
@@ -55,6 +56,7 @@ const EXPECTED_COMMAND_TIERS: Record<string, 'A' | 'B' | 'C'> = {
   'bemoat:context:sync-base': 'A',
   'bemoat:context:recover-setup': 'A',
   'bemoat:context:recover-committed-wip': 'A',
+  'bemoat:context:bootstrap-source': 'A',
   'bemoat:checkpoint:red-wip': 'A',
   'bemoat:handoff': 'A',
   'bemoat:blocker-resolution:validate': 'B',
@@ -231,10 +233,10 @@ describe('Task 1 command contract registry', () => {
       .sort()
 
     expect(packageCommands).toEqual(Object.keys(EXPECTED_PACKAGE_SCRIPTS).sort())
-    expect(packageCommands).toHaveLength(20)
+    expect(packageCommands).toHaveLength(21)
     expect(registryCommands).toEqual(packageCommands)
     expect(classifiedCommands).toEqual(packageCommands)
-    expect(new Set(classifiedCommands).size).toBe(20)
+    expect(new Set(classifiedCommands).size).toBe(21)
 
     for (const command of packageCommands) {
       expect(getCommandContract(command)).toBe(COMMAND_CONTRACT_REGISTRY.commands[command])
@@ -242,7 +244,7 @@ describe('Task 1 command contract registry', () => {
     expect(getCommandContract('bemoat:unregistered')).toBeNull()
   })
 
-  it('uses tier totals A=7 B=10 C=3', () => {
+  it('uses tier totals A=8 B=10 C=3', () => {
     const counts = { A: 0, B: 0, C: 0 }
 
     for (const [command, expectedTier] of Object.entries(EXPECTED_COMMAND_TIERS)) {
@@ -251,9 +253,9 @@ describe('Task 1 command contract registry', () => {
       counts[expectedTier] += 1
     }
 
-    expect(counts).toEqual({ A: 7, B: 10, C: 3 })
-    expect(Object.keys(EXPECTED_COMMAND_TIERS)).toHaveLength(20)
-    expect(Object.keys(COMMAND_CONTRACT_REGISTRY.commands)).toHaveLength(20)
+    expect(counts).toEqual({ A: 8, B: 10, C: 3 })
+    expect(Object.keys(EXPECTED_COMMAND_TIERS)).toHaveLength(21)
+    expect(Object.keys(COMMAND_CONTRACT_REGISTRY.commands)).toHaveLength(21)
     expectRegistryValid()
   })
 
