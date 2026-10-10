@@ -7,7 +7,7 @@ import { handoffRoutes } from './handoff-routing-policy.ts'
 import { contextSyncCommands } from './context-sync-command-metadata.ts'
 import { contextSyncRoutes } from './context-sync-routing-policy.ts'
 import { contextSetupCommands } from './context-setup-command-metadata.ts'
-import { committedWipRecoveryCommands } from './committed-wip-recovery-command-metadata.ts'
+import { committedWipRecoveryCommands, committedWipRecoveryRoutes } from './committed-wip-recovery-command-metadata.ts'
 import { contextSetupRoutes } from './context-setup-routing-policy.ts'
 import { redWipCheckpointCommands } from './red-wip-checkpoint-command-metadata.ts'
 import { utilityRoutes } from './utility-routing-policy.ts'
@@ -540,6 +540,7 @@ const routes = [
   ...utilityRoutes(),
   ...contextSyncRoutes(),
   ...contextSetupRoutes(),
+  ...committedWipRecoveryRoutes(),
   ...handoffRoutes(),
 ]
 

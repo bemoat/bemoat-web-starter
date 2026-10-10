@@ -120,6 +120,7 @@
     "tests/int/blocker-resolution-validation-canonical-body.int.spec.ts",
     "tests/int/review-verdict-validation-cli.int.spec.ts",
     "tests/int/founder-decision-repair-validation-cli.int.spec.ts",
+    "tests/int/context-committed-wip-recovery-contract.int.spec.ts",
     "tests/int/context-parser.int.spec.ts",
     "tests/int/context-router.int.spec.ts",
     "tests/int/context-stale-base.int.spec.ts",

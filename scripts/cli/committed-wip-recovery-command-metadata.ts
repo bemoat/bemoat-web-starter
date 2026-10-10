@@ -1,6 +1,21 @@
 /** Read-only proof contract for exact committed incomplete-WIP reentry. */
 import type { CommandMetadataDependencies } from './command-metadata-deps.ts'
 
+type CommittedWipRecoveryRoute = {
+  route_key: string
+  observed_state: string
+  evidence_case: string
+  required_evidence_condition: string
+  forbidden_evidence_condition: string
+  permitted_operation: string
+  canonical_command: string
+  required_review_type: null
+  expected_post_state_or_gate: string
+  prohibited_commands: string[]
+  decision: 'COMMAND'
+  stop_condition: string
+}
+
 const A = '0e99786f0b087de46a2518d5874beb999892dd6c'
 const B = '9c057c2a741d361b6138b95ff115bd3e56049fbd'
 const TREE = '717a04a858b4768deddf814822e3467407606f11'
@@ -72,4 +87,21 @@ export function committedWipRecoveryCommands(dependencies: CommandMetadataDepend
       post_write_readback: 'There are no writes. Re-read the exact source/target identities, native HANDOFF URL/body digest, A-to-B ancestry, tree, and GitHub plus origin refs; any mismatch, drift, unavailable probe, or ambiguous readback is STOP.',
     }),
   }
+}
+
+export function committedWipRecoveryRoutes(): CommittedWipRecoveryRoute[] {
+  return [{
+    route_key: 'context_recover_exact_committed_wip',
+    observed_state: 'NOT_STATEFUL',
+    evidence_case: 'One explicit clean #627 target at immutable WIP B with the original Objective 1 HANDOFF at A.',
+    required_evidence_condition: 'From a distinct clean canonical source at current exact-live protected-main SHA D, prove target identity and upstream, exact B/tree 717a04a858b4768deddf814822e3467407606f11, native read-only HANDOFF comment 6088681412 at A 0e99786f0b087de46a2518d5874beb999892dd6c, strict A-to-B and reverse non-ancestry, exact single-child author/subject, and exact 16-path provenance manifest. Retry only by deterministic exact reread of the same binding.',
+    forbidden_evidence_condition: 'Any wrong or missing Issue/repository/branch/origin/upstream/A/B/tree/comment identity; forged, modified, duplicate, or competing HANDOFF; stale/moved/divergent/reverse ancestry; dirty, detached, inaccessible, unsupported, or drifting roots; changed path/commit provenance; unavailable probe; or ambiguous readback.',
+    permitted_operation: 'Run the registered Tier-A bemoat:context:recover-committed-wip command as a read-only Architecture A proof only; perform no Git, worktree, source, or GitHub mutation.',
+    canonical_command: 'bemoat:context:recover-committed-wip',
+    required_review_type: null,
+    expected_post_state_or_gate: 'The proof result remains STOP with no objective-edit authority. Its only next action is registered CLI Discovery followed by fresh bemoat:context for Issue 627 with --target-worktree bound to the verified target; fresh Context alone can authorize later work.',
+    prohibited_commands: ['bemoat:context:sync-base', 'bemoat:context:recover-setup', 'bemoat:checkpoint:red-wip', 'bemoat:handoff'],
+    decision: 'COMMAND',
+    stop_condition: 'STOP on every absent, conflicting, drifting, unsupported, unavailable, or ambiguous identity, provenance, ancestry, retry, or final-readback condition. Never mutate or convert RED WIP to GREEN, publish HANDOFF, or authorize Objective N+1.',
+  }]
 }

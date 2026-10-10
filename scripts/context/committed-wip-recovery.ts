@@ -110,7 +110,6 @@ function stop(classification: CommittedWipClassification, reason: string, curren
     details: { objective_edit_authority_granted: false, reentry_performed: false },
   }
 }
-
 function exactLiveRef({ cwd, repository, branch, run }: {
   cwd: string
   repository: string
@@ -140,7 +139,6 @@ function exactLiveRef({ cwd, repository, branch, run }: {
 function gitOutput(run: ContextCommandRunner, cwd: string, args: string[]): string | null {
   return output(run('git', args, { cwd }))
 }
-
 function verifyRoot({ cwd, expectedRepository, expectedBranch, expectedHead, upstream, run, label }: {
   cwd: string
   expectedRepository: string
@@ -290,7 +288,6 @@ function prove({ binding, roots, run }: { binding: Binding; roots: ContextSyncRo
   if (sourceError) return { error: sourceError, classification: 'UNSUPPORTED_PRE_STATE' }
   const sourceTracking = gitOutput(run, roots.sourceCwd, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${binding.expectedBaseBranch}`])?.toLowerCase()
   if (sourceTracking !== liveSourceBase.sha) return { error: 'Source protected-base tracking ref does not equal current live protected-main SHA D.', classification: 'HEAD_DRIFT' }
-
   const targetError = verifyRoot({ cwd: roots.targetCwd, expectedRepository: binding.expectedRepository, expectedBranch: binding.expectedBranch, expectedHead: binding.expectedWipHead, upstream: `origin/${binding.expectedBranch}`, run, label: 'target' })
   if (targetError) return { error: targetError, classification: 'UNSUPPORTED_PRE_STATE' }
   const targetGithub = exactLiveRef({ cwd: roots.targetCwd, repository: binding.expectedRepository, branch: binding.expectedBranch, run })
@@ -301,10 +298,10 @@ function prove({ binding, roots, run }: { binding: Binding; roots: ContextSyncRo
   if ('error' in targetProof) return targetProof
   const handoffResult = verifyHandoff({ cwd: roots.sourceCwd, binding, run })
   if ('error' in handoffResult) return handoffResult
-
   const sourceAgain = verifyRoot({ cwd: roots.sourceCwd, expectedRepository: binding.expectedRepository, expectedBranch: binding.expectedBaseBranch, expectedHead: liveSourceBase.sha, run, label: 'source' })
   const targetAgain = verifyRoot({ cwd: roots.targetCwd, expectedRepository: binding.expectedRepository, expectedBranch: binding.expectedBranch, expectedHead: binding.expectedWipHead, upstream: `origin/${binding.expectedBranch}`, run, label: 'target' })
-  if (sourceAgain || targetAgain) return { error: sourceAgain ?? targetAgain!, classification: 'HEAD_DRIFT' }
+  if (sourceAgain) return { error: sourceAgain, classification: 'HEAD_DRIFT' }
+  if (targetAgain) return { error: `Final target readback is unavailable or differs from the proven binding: ${targetAgain}`, classification: 'AMBIGUOUS_RESULT' }
   const sourceLiveAgain = exactLiveRef({ cwd: roots.sourceCwd, repository: binding.expectedRepository, branch: binding.expectedBaseBranch, run })
   const targetLiveAgain = exactLiveRef({ cwd: roots.targetCwd, repository: binding.expectedRepository, branch: binding.expectedBranch, run })
   if (sourceLiveAgain.sha !== liveSourceBase.sha || targetLiveAgain.sha !== binding.expectedWipHead.toLowerCase()) {
@@ -313,9 +310,13 @@ function prove({ binding, roots, run }: { binding: Binding; roots: ContextSyncRo
   const sourceTrackingAgain = gitOutput(run, roots.sourceCwd, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${binding.expectedBaseBranch}`])?.toLowerCase()
   if (sourceTrackingAgain !== liveSourceBase.sha) return { error: 'Post-readback source tracking ref drifted from current protected-main SHA D.', classification: 'AMBIGUOUS_RESULT' }
   const targetProofAgain = readTargetProof({ cwd: roots.targetCwd, binding, run })
-  if ('error' in targetProofAgain || targetProofAgain.proof.tree !== targetProof.proof.tree ||
+  if ('error' in targetProofAgain) {
+    return { error: `Final target proof readback is unavailable or invalid: ${targetProofAgain.error}`, classification: 'AMBIGUOUS_RESULT' }
+  }
+  if (targetProofAgain.proof.tree !== targetProof.proof.tree ||
+      targetProofAgain.proof.changedPaths.length !== targetProof.proof.changedPaths.length ||
       targetProofAgain.proof.changedPaths.some((path, index) => path !== targetProof.proof.changedPaths[index])) {
-    return { error: 'error' in targetProofAgain ? targetProofAgain.error : 'Final target tree or provenance manifest differs from its original proof.', classification: 'AMBIGUOUS_RESULT' }
+    return { error: 'Final target tree or provenance manifest differs from its original proof.', classification: 'AMBIGUOUS_RESULT' }
   }
   const handoffAgain = verifyHandoff({ cwd: roots.sourceCwd, binding, run })
   if ('error' in handoffAgain || handoffAgain.digest !== handoffResult.digest) {
@@ -323,7 +324,6 @@ function prove({ binding, roots, run }: { binding: Binding; roots: ContextSyncRo
   }
   return { proof: { roots, handoff: handoffResult.handoff, handoffDigest: handoffResult.digest, sourceHead: liveSourceBase.sha, liveProtectedBase: liveSourceBase.sha, historicalBase: binding.expectedBaseSha.toLowerCase(), targetHead: binding.expectedWipHead.toLowerCase(), tree: targetProof.proof.tree, remoteHead: targetLiveAgain.sha, changedPaths: targetProof.proof.changedPaths } }
 }
-
 export function recoverCommittedWip({ binding, sourceCwd, run = runContextCommand }: {
   binding: Binding
   sourceCwd: string
