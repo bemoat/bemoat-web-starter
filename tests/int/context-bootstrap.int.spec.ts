@@ -12,6 +12,10 @@ import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/
 const repo = 'boat1994/bemoat-web-starter'
 const protectedHead = '378b2aa90ecad6d76f4ddae5958077fdad58d045'
 const targetHead = 'd58f07c2a340049c10f304d855d39fc10ef97dd8'
+const committedWipRepository = 'bemoat/bemoat-web-starter'
+const committedWipProtectedHead = 'd268fc9351df8149c02f58bab96ba61d30e908da'
+const committedWipBranch = 'fix/627-seamless-multi-objective-continuation'
+const committedWipTargetHead = '9c057c2a741d361b6138b95ff115bd3e56049fbd'
 
 function response(stdout = '', status = 0): ContextCommandResult {
   return { status, stdout, stderr: status === 0 ? '' : 'failed', error: null }
@@ -35,6 +39,7 @@ function bootstrapRunner(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = {
     '/protected': protectedHead,
     '/target': targetHead,
+    targetRoot: '/target',
     branchSource: 'main',
     branchTarget: 'fix/568-stale-base-sync-conflict-continuation',
     sourceStatus: '',
@@ -51,7 +56,7 @@ function bootstrapRunner(overrides: Record<string, string> = {}) {
   const run = (command: string, args: readonly string[], options?: { cwd?: string; env?: NodeJS.ProcessEnv }): ContextCommandResult => {
     const cwd = options?.cwd ?? '/protected'
     calls.push(`${command} ${args.join(' ')} @ ${cwd}`)
-    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return response(cwd)
+    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return response(cwd === '/target' ? values.targetRoot : cwd)
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') return response(cwd === '/protected' ? values['/protected'] : values['/target'])
     if (args[0] === 'branch') return response(cwd === '/protected' ? values.branchSource : values.branchTarget)
     if (args[0] === 'status') return response(cwd === '/protected' ? values.sourceStatus : values.targetStatus)
@@ -82,6 +87,51 @@ function detachedSourceRunner(overrides: Record<string, string> = {}) {
   })
 }
 
+function committedWipBootstrapEvidence(): NormalizedContextEvidence {
+  const evidence = bootstrapEvidence()
+  evidence.repository = {
+    owner: 'bemoat',
+    name: 'bemoat-web-starter',
+    nameWithOwner: committedWipRepository,
+    url: `https://github.com/${committedWipRepository}`,
+  }
+  evidence.protectedBase = {
+    ...evidence.protectedBase,
+    sha: committedWipProtectedHead,
+    url: `https://github.com/${committedWipRepository}/tree/main`,
+  }
+  evidence.issue = {
+    ...evidence.issue,
+    number: '627',
+    title: 'seamless multi-objective continuation',
+    url: `https://github.com/${committedWipRepository}/issues/627`,
+  }
+  evidence.localGit = {
+    ...evidence.localGit,
+    branch: committedWipBranch,
+    head: committedWipTargetHead,
+    upstream: `origin/${committedWipBranch}`,
+    originRepository: committedWipRepository,
+  }
+  return evidence
+}
+
+function committedWipBootstrapRunner(overrides: Record<string, string> = {}) {
+  const canonicalUrl = `https://github.com/${committedWipRepository}.git`
+  return bootstrapRunner({
+    '/protected': committedWipProtectedHead,
+    '/target': committedWipTargetHead,
+    branchTarget: committedWipBranch,
+    sourceOrigin: canonicalUrl,
+    targetOrigin: canonicalUrl,
+    upstreamOrigin: canonicalUrl,
+    upstream: `origin/${committedWipBranch}`,
+    remote: `${committedWipTargetHead}\trefs/heads/${committedWipBranch}\n`,
+    worktrees: `worktree /protected\nHEAD ${committedWipProtectedHead}\nbranch refs/heads/main\n`,
+    ...overrides,
+  })
+}
+
 describe('protected-main read-only Context bootstrap characterization', () => {
   // Authority: Issue #569 Goal, Scope, and Acceptance Criteria require one
   // registered read-only Context path from exact current protected main against
@@ -99,16 +149,26 @@ describe('protected-main read-only Context bootstrap characterization', () => {
     expect(contract.writes).toEqual([])
   })
 
-  it('documents target attached-worktree and upstream reads consistently in JSON help and registry', () => {
+  // Authority: #630 Objective 4 requires fresh target-mode Context against the
+  // retained original #627 B; the approved independent-clone topology makes
+  // source/target distinct canonical roots without requiring the target to be
+  // listed as a linked worktree of the source. #628 command-reference §31-52
+  // and the committed-WIP command contract still require exact independent
+  // source/target identity, cleanliness, and live-ref evidence.
+  it('documents distinct independently verified source and target roots in JSON help and registry', () => {
     const contract = getCommandContract('bemoat:context')
     if (!contract) throw new Error('bemoat:context contract missing')
     const help = JSON.parse(renderContextHelp('json')) as { reads: string[]; writes: string[] }
-    const mentionsTargetRead = (reads: string[]) => reads.some((read) =>
-      /target upstream remote URL/i.test(read) && /attached worktree list/i.test(read),
-    )
+    const requiredEvidence = contract.required_evidence.join('\n')
+    const sourceTargetReads = [...help.reads, ...contract.reads].join('\n')
 
-    expect(mentionsTargetRead(help.reads)).toBe(true)
-    expect(mentionsTargetRead(contract.reads)).toBe(true)
+    expect(contract.optional_flags).toContainEqual(expect.objectContaining({
+      name: 'target_worktree',
+      description: expect.stringMatching(/distinct|separate/i),
+    }))
+    expect(requiredEvidence).toMatch(/distinct.*(source|roots)|(source|roots).*distinct/i)
+    expect(requiredEvidence).toMatch(/target.*canonical.*origin|canonical.*origin.*target/i)
+    expect(sourceTargetReads).toMatch(/source.*target.*root|target.*source.*root/i)
     expect(help.writes).toEqual([])
     expect(contract.writes).toEqual([])
   })
@@ -200,15 +260,101 @@ describe('protected-main read-only Context bootstrap characterization', () => {
   // Authority: Issue #569 Goal, Scope, and Acceptance Criteria require the
   // protected-main source and explicit existing target to be independently
   // bound to the same repository, with clean, durable target identity.
-  it('accepts the exact #568 source and attached target identity without any write command', () => {
+  it('accepts the exact #568 source and canonical target identity without any write command', () => {
     const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
     const { run, calls } = bootstrapRunner()
 
     expect(verifyContextBootstrap({ roots, evidence: bootstrapEvidence(), run })).toEqual([])
     expect(run('git', ['rev-parse', 'HEAD'], { cwd: roots.targetCwd }).stdout).toBe(targetHead)
     expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
-    expect(calls.some((call) => call.includes('worktree list --porcelain @ /protected'))).toBe(true)
     expect(calls.some((call) => call.includes('ls-remote --heads origin fix/568-stale-base-sync-conflict-continuation @ /target'))).toBe(true)
+  })
+
+  // Authority: Issue #630 Objective 4 calls for fresh `bemoat:context 627
+  // --target-worktree <verified-original-B-path>` after Source D is acquired.
+  // The Founder-approved topology for #630 is an independent clone plus target
+  // mode. The merged #628 committed-WIP contract requires distinct canonical
+  // roots and independently verifies both; therefore source worktree-list
+  // membership cannot be a prerequisite. Each root's repository, identity,
+  // cleanliness, and live durability checks remain required.
+  it('accepts the exact clean #627 target as an independent canonical clone of live protected main', () => {
+    const roots = resolveContextBootstrapRoots({
+      sourceCwd: '/protected',
+      targetWorktree: '/target',
+      entrypointPath: '/protected/scripts/agent-context.ts',
+      realpath: (path) => path,
+      stat: () => ({ isDirectory: () => true }),
+    })
+    const evidence = committedWipBootstrapEvidence()
+    const { run, calls } = committedWipBootstrapRunner()
+
+    expect(verifyContextBootstrap({ roots, evidence, run })).toEqual([])
+    expect(calls.some((call) => call.includes('rev-parse --show-toplevel @ /protected'))).toBe(true)
+    expect(calls.some((call) => call.includes('rev-parse --show-toplevel @ /target'))).toBe(true)
+    expect(calls.some((call) => call.includes('remote get-url origin @ /target'))).toBe(true)
+    expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
+  })
+
+  // Authority: the same #630/#628 source-target binding requires two distinct
+  // roots. An alias that canonicalizes to the source root is not an independent
+  // target, even when the path supplied by the caller differs textually.
+  it('still rejects a #627 target path that canonicalizes to the source root', () => {
+    expect(() => resolveContextBootstrapRoots({
+      sourceCwd: '/protected',
+      targetWorktree: '/source-alias',
+      entrypointPath: '/protected/scripts/agent-context.ts',
+      realpath: (path) => path === '/source-alias' ? '/protected' : path,
+      stat: () => ({ isDirectory: () => true }),
+    })).toThrow('must be distinct')
+  })
+
+  // Authority: #630 requires canonical repository/source/target identity and
+  // fails closed on wrong identity, dirtiness, drift, or unsupported topology.
+  // #628's proof contract defines exact live D and exact B; an independent
+  // clone changes only the attachment relation, not those safety predicates.
+  // The unchanged verifyContextBootstrap validator also requires
+  // `rev-parse --show-toplevel` to equal the canonical target path.
+  it.each([
+    ['target path resolves to a different Git root', { targetRoot: '/other-target-root' }, 'target path is not the canonical root of its Git worktree'],
+    ['wrong target origin', { targetOrigin: 'https://github.com/other/repository.git' }, 'target origin does not match the canonical repository'],
+    ['dirty target', { targetStatus: ' M docs/agent-loop/README.md\n' }, 'target worktree is dirty or unavailable'],
+    ['stale protected source', { '/protected': 'f'.repeat(40) }, 'source HEAD does not match the live protected base'],
+    ['stale target remote', { remote: `${'f'.repeat(40)}\trefs/heads/${committedWipBranch}\n` }, 'target HEAD is not proven pushed to its live upstream'],
+    ['detached target', { branchTarget: '' }, 'target branch differs from independently collected Context evidence or is detached'],
+  ])('keeps independent-clone Context fail-closed for %s', (_story, overrides, expectedReason) => {
+    const roots = resolveContextBootstrapRoots({
+      sourceCwd: '/protected',
+      targetWorktree: '/target',
+      entrypointPath: '/protected/scripts/agent-context.ts',
+      realpath: (path) => path,
+      stat: () => ({ isDirectory: () => true }),
+    })
+    const evidence = committedWipBootstrapEvidence()
+    const { run } = committedWipBootstrapRunner(overrides)
+    const reasons = verifyContextBootstrap({ roots, evidence, run })
+
+    expect(reasons.join('\n')).toContain(expectedReason)
+    expect(routeContext({ ...evidence, evidenceErrors: reasons }).route).toBe('STOP')
+  })
+
+  // Authority: #630 selects independent clones for the source/target pair but
+  // does not forbid a linked worktree when both roots independently satisfy
+  // the same exact identity and durability checks. Keep the prior topology
+  // compatible while adding clone support.
+  it('continues to accept a clean linked #627 target worktree', () => {
+    const roots = resolveContextBootstrapRoots({
+      sourceCwd: '/protected',
+      targetWorktree: '/target',
+      entrypointPath: '/protected/scripts/agent-context.ts',
+      realpath: (path) => path,
+      stat: () => ({ isDirectory: () => true }),
+    })
+    const evidence = committedWipBootstrapEvidence()
+    const { run } = committedWipBootstrapRunner({
+      worktrees: `worktree /protected\nHEAD ${committedWipProtectedHead}\nbranch refs/heads/main\n\nworktree /target\nHEAD ${committedWipTargetHead}\nbranch refs/heads/${committedWipBranch}\n`,
+    })
+
+    expect(verifyContextBootstrap({ roots, evidence, run })).toEqual([])
   })
 
   // Authority: Issue #571's Founder-approved Option A selects the detached
@@ -216,13 +362,12 @@ describe('protected-main read-only Context bootstrap characterization', () => {
   // Source-command identity section requires exact live-base SHA, clean state,
   // and canonical repository identity, and explicitly permits a detached
   // source because it is not the mutation target. The target still must pass
-  // the independent attached, exact-identity, and durability checks below.
-  it('accepts a clean canonical detached source at the exact live protected SHA with a valid attached target', () => {
+  // independent branch, exact-identity, and durability checks below.
+  it('accepts a clean canonical detached source at the exact live protected SHA with a valid target', () => {
     const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
     const { run, calls } = detachedSourceRunner()
 
     expect(verifyContextBootstrap({ roots, evidence: bootstrapEvidence(), run })).toEqual([])
-    expect(calls.some((call) => call.includes('worktree list --porcelain @ /protected'))).toBe(true)
     expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
   })
 
@@ -279,7 +424,6 @@ describe('protected-main read-only Context bootstrap characterization', () => {
     expect(verifyContextBootstrap({ roots, evidence, run })).toEqual([])
     expect(targetHeadBefore).toBe(issueHead)
     expect(run('git', ['rev-parse', 'HEAD'], { cwd: roots.targetCwd }).stdout).toBe(targetHeadBefore)
-    expect(calls.some((call) => call.includes('worktree list --porcelain @ /protected'))).toBe(true)
     expect(calls.some((call) => call.includes(`ls-remote --heads origin ${issueBranch} @ /target`))).toBe(true)
     expect(calls.every((call) => !/\b(checkout|reset|merge|commit|push|fetch|worktree add|worktree remove)\b/.test(call))).toBe(true)
   })
@@ -298,9 +442,9 @@ describe('protected-main read-only Context bootstrap characterization', () => {
     expect(verifyContextBootstrap({ roots, evidence: bootstrapEvidence(), run }).join('\n')).toContain(expectedReason)
   })
 
-  // Authority: Issue #571 Option A changes source attachment eligibility only.
-  // The existing explicit-target contract still requires an attached target
-  // whose live repository/head/durability evidence matches Context.
+  // Authority: Issue #571 Option A changes source attachment eligibility.
+  // Issue #630 additionally permits an independent canonical target clone;
+  // neither topology relaxes target repository/head/durability evidence.
   it.each([
     ['wrong target HEAD', { '/target': 'f'.repeat(40) }, 'target HEAD differs from independently collected Context evidence'],
     ['wrong target branch and Issue', {
@@ -313,7 +457,6 @@ describe('protected-main read-only Context bootstrap characterization', () => {
     ['wrong target upstream', { upstream: 'origin/fix/999-unrelated' }, 'target upstream is missing or does not match its branch'],
     ['unpushed target', { remote: `${'f'.repeat(40)}\trefs/heads/fix/568-stale-base-sync-conflict-continuation\n` }, 'target HEAD is not proven pushed'],
     ['detached target', { branchTarget: '', worktrees: detachedSourceWorktrees('detached') }, 'target branch differs from independently collected Context evidence or is detached'],
-    ['unattached target', { worktrees: 'worktree /protected\nHEAD 378b2aa90ecad6d76f4ddae5958077fdad58d045\ndetached\n' }, 'target is not an attached worktree of the protected-main command source'],
   ])('keeps a detached source fail-closed when the target has %s', (_story, overrides, expectedReason) => {
     const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
     const { run } = detachedSourceRunner(overrides)
@@ -434,7 +577,6 @@ describe('protected-main read-only Context bootstrap characterization', () => {
     ['dirty target', { targetStatus: ' M docs/agent-loop/README.md\n' }, 'dirty'],
     ['wrong target repository', { targetOrigin: 'https://github.com/other/repository.git' }, 'target origin'],
     ['unpushed target', { remote: `${'f'.repeat(40)}\trefs/heads/fix/568-stale-base-sync-conflict-continuation\n` }, 'not proven pushed'],
-    ['unattached target', { worktrees: 'worktree /protected\nHEAD 378b2aa90ecad6d76f4ddae5958077fdad58d045\nbranch refs/heads/main\n' }, 'not an attached worktree'],
     ['suffix-matched wrong remote ref', { remote: `${targetHead}\trefs/heads/other/fix/568-stale-base-sync-conflict-continuation\n` }, 'not proven pushed'],
   ])('fails closed for %s', (_story, overrides, expectedReason) => {
     const roots = resolveContextBootstrapRoots({ sourceCwd: '/protected', targetWorktree: '/target', entrypointPath: '/protected/scripts/agent-context.ts', realpath: (path) => path, stat: () => ({ isDirectory: () => true }) })
