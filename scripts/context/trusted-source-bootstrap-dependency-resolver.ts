@@ -3,13 +3,13 @@ import { isBuiltin, registerHooks } from 'node:module'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const resolverRelativePath = 'scripts/context/trusted-source-bootstrap-dependency-resolver.mjs'
+const resolverRelativePath = 'scripts/context/trusted-source-bootstrap-dependency-resolver.ts'
 
-function fail(message) {
+function fail(message: string): never {
   throw new Error(`Bemoat read-only D dependency resolver: ${message}`)
 }
 
-function configuredRoot(name) {
+function configuredRoot(name: string) {
   const value = process.env[name]
   if (typeof value !== 'string' || !isAbsolute(value)) fail(`${name} must be an absolute path.`)
   const canonical = realpathSync(value)
@@ -17,16 +17,16 @@ function configuredRoot(name) {
   return canonical
 }
 
-function isWithin(root, candidate) {
+function isWithin(root: string, candidate: string) {
   const pathFromRoot = relative(root, candidate)
   return pathFromRoot === '' || (pathFromRoot !== '..' && !pathFromRoot.startsWith(`..${sep}`) && !isAbsolute(pathFromRoot))
 }
 
-function overlaps(first, second) {
+function overlaps(first: string, second: string) {
   return isWithin(first, second) || isWithin(second, first)
 }
 
-function assertNoOverlap(first, second, label) {
+function assertNoOverlap(first: string, second: string, label: string) {
   if (overlaps(first, second)) fail(`${label} must be distinct and non-overlapping.`)
 }
 
@@ -92,7 +92,7 @@ for (const section of ['dependencies', 'devDependencies', 'optionalDependencies'
 
 if (typeof registerHooks !== 'function') fail('this Node runtime does not support synchronous module resolution hooks.')
 
-function packageName(specifier) {
+function packageName(specifier: string) {
   if (specifier.startsWith('@')) {
     const parts = specifier.split('/')
     return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier
@@ -100,7 +100,7 @@ function packageName(specifier) {
   return specifier.split('/')[0] ?? specifier
 }
 
-function shouldUseDefaultResolution(specifier) {
+function shouldUseDefaultResolution(specifier: string) {
   return isBuiltin(specifier) || specifier.startsWith('node:') || specifier.startsWith('#') ||
     specifier.startsWith('.') || specifier.startsWith('/') || /^[A-Za-z][A-Za-z\d+.-]*:/.test(specifier)
 }
@@ -149,7 +149,7 @@ registerHooks({
     } catch (error) {
       fail(`declared package "${specifier}" is unavailable from source dependencies: ${error instanceof Error ? error.message : String(error)}`)
     }
-    if (!resolution.url.startsWith('file:')) fail(`declared package "${specifier}" did not resolve to a source file.`)
+    if (!resolution || !resolution.url.startsWith('file:')) fail(`declared package "${specifier}" did not resolve to a source file.`)
     let resolvedPath
     try {
       resolvedPath = realpathSync(fileURLToPath(resolution.url))

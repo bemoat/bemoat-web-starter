@@ -66,7 +66,8 @@ function initializeDisposableGitRoot(root: string) {
     ['git', ['config', 'user.name', 'Bemoat Test Fixture']],
     ['git', ['config', 'user.email', 'fixture@example.invalid']],
     ['git', ['add', '.']],
-    ['git', ['commit', '--quiet', '-m', 'fixture']],
+    // Keep Git's detached auto-maintenance from racing the fixture's full-tree snapshots.
+    ['git', ['-c', 'maintenance.auto=false', 'commit', '--quiet', '-m', 'fixture']],
   ]
   for (const [command, args] of commands) {
     const result = runContextCommand(command, args, { cwd: root })
@@ -322,6 +323,7 @@ type FixtureOptions = {
   realDRuntime?: boolean
   missingResolver?: boolean
   missingSourceDependency?: boolean
+  missingDeclaredPackage?: boolean
 }
 
 function fixture(settings: FixtureOptions = {}): Fixture {
@@ -335,15 +337,15 @@ function fixture(settings: FixtureOptions = {}): Fixture {
   mkdirSync(source); mkdirSync(target)
   if (settings.realDRuntime) {
     copyRuntimeProject(repositoryRoot, source)
-    if (settings.missingResolver) rmSync(join(source, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.mjs'))
+    if (settings.missingResolver) rmSync(join(source, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.ts'))
   }
   else {
     const sourceContext = join(source, 'scripts', 'context')
     mkdirSync(sourceContext, { recursive: true })
     if (!settings.missingResolver) {
       copyFileSync(
-        join(repositoryRoot, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.mjs'),
-        join(sourceContext, 'trusted-source-bootstrap-dependency-resolver.mjs'),
+        join(repositoryRoot, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.ts'),
+        join(sourceContext, 'trusted-source-bootstrap-dependency-resolver.ts'),
       )
     }
     for (const file of ['package.json', 'pnpm-lock.yaml']) copyFileSync(join(repositoryRoot, file), join(source, file))
@@ -352,7 +354,15 @@ function fixture(settings: FixtureOptions = {}): Fixture {
     if (settings.realDRuntime) {
       const fixtureNodeModules = join(source, 'node_modules')
       mkdirSync(fixtureNodeModules)
-      cpSync(realpathSync(join(repositoryRoot, 'node_modules', 'zod')), join(fixtureNodeModules, 'zod'), { recursive: true })
+      if (settings.missingDeclaredPackage) {
+        // Make an ambient copy reachable from the disposable roots' parent. The
+        // source-backed resolver must reject it because it is outside source/node_modules.
+        const ambientNodeModules = join(root, 'node_modules')
+        mkdirSync(ambientNodeModules)
+        cpSync(realpathSync(join(repositoryRoot, 'node_modules', 'zod')), join(ambientNodeModules, 'zod'), { recursive: true })
+      } else {
+        cpSync(realpathSync(join(repositoryRoot, 'node_modules', 'zod')), join(fixtureNodeModules, 'zod'), { recursive: true })
+      }
     } else {
       mkdirSync(join(source, 'node_modules'))
     }
@@ -587,6 +597,7 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
 
     const result = await invoke(f) as { classification: string; mutationPerformed: boolean; route: string; details: Record<string, unknown> }
     const registeredRuns = f.calls.filter((call) => call.command === 'pnpm')
+    const resolverPath = join(f.source, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.ts')
     const cloneCall = f.calls.find((call) => call.command === 'git' && call.args[0] === 'clone')
     const targetAndDestinationGitReads = f.calls.filter((call) =>
       call.command === 'git' && call.args[0] !== 'clone' && [f.target, f.destination].includes(call.cwd),
@@ -598,6 +609,8 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     })
     expect(registeredRuns.map((call) => call.cwd)).toEqual([f.destination, f.destination, f.destination, f.destination])
     expect(registeredRuns.every((call) => call.env?.GIT_OPTIONAL_LOCKS === '0')).toBe(true)
+    expect(existsSync(resolverPath)).toBe(true)
+    expect(registeredRuns.every((call) => call.env?.NODE_OPTIONS?.includes(`--import=${pathToFileURL(resolverPath).href}`))).toBe(true)
     expect(registeredRuns.map((call) => call.args.includes('--help')
       ? (call.args.includes(RECOVERY) ? 'proof-help' : 'context-help')
       : call.args.includes(RECOVERY) ? 'proof' : 'context')).toEqual(['proof-help', 'context-help', 'proof', 'context'])
@@ -679,6 +692,42 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
     expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
     expect(existsSync(f.destination)).toBe(false)
+  })
+
+  // Authority: Issue #630 requires the D runtime to resolve declared packages only from the verified source dependency root and to fail closed when one is unavailable there. A disposable ambient copy is deliberately present outside source/node_modules, so success would prove an impermissible fallback. The permitted clone is the only D creation; the post-clone snapshot must stay unchanged after the failed registered command.
+  it('fails closed during a D script import when a declared package is absent from source dependencies', async () => {
+    const f = fixture({ realDRuntime: true, missingDeclaredPackage: true })
+    const ambientZod = join(resolve(f.source, '..'), 'node_modules', 'zod')
+    expect(existsSync(join(f.source, 'node_modules'))).toBe(true)
+    expect(existsSync(join(f.source, 'node_modules', 'zod'))).toBe(false)
+    expect(existsSync(ambientZod)).toBe(true)
+
+    let treeAfterClone: string | null = null
+    const fixtureRun = f.run
+    f.run = (command, args, options = {}) => {
+      const result = fixtureRun(command, args, options)
+      if (command === 'git' && args[0] === 'clone' && existsSync(f.destination) && treeAfterClone === null) {
+        treeAfterClone = snapshotTree(f.destination)
+      }
+      return result
+    }
+
+    const result = await invoke(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+    const downstream = f.calls.filter((call) => call.command === 'pnpm')
+
+    expect(result.classification).not.toBe('SUCCESS')
+    expect(result.route).toBe('STOP')
+    expect(result.mutationPerformed).toBe(true)
+    expect(result.details.objective_edit_authority_granted).toBe(false)
+    expect(downstream.map((call) => call.args.includes('--help')
+      ? (call.args.includes(RECOVERY) ? 'proof-help' : 'context-help')
+      : call.args.includes(RECOVERY) ? 'proof' : 'context')).toEqual(['proof-help'])
+    expect(downstream[0]?.result?.status).not.toBe(0)
+    expect(downstream[0]?.result?.stderr).toContain('Bemoat read-only D dependency resolver')
+    expect(downstream[0]?.result?.stderr).toContain('verified source dependencies')
+    expect(existsSync(join(f.destination, 'node_modules'))).toBe(false)
+    expect(treeAfterClone).not.toBeNull()
+    expect(snapshotTree(f.destination)).toBe(treeAfterClone)
   })
 
   it('stops before clone when compare evidence does not prove merged correction is on live main', async () => {

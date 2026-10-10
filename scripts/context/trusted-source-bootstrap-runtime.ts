@@ -9,7 +9,7 @@ export function readOnlyResolverEnvironment(sourceRoot: string, targetRoot: stri
   environment: NodeJS.ProcessEnv | null
   reason: string | null
 } {
-  const resolverPath = resolve(sourceRoot, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.mjs')
+  const resolverPath = resolve(sourceRoot, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.ts')
   let canonicalResolverPath: string
   try {
     canonicalResolverPath = realpathSync(resolverPath)
