@@ -16,6 +16,7 @@ const BASE_A = COMMITTED_WIP_BINDING.baseSha
 const HEAD_B = COMMITTED_WIP_BINDING.wipHead
 const TREE_B = COMMITTED_WIP_BINDING.wipTree
 const HANDOFF_COMMENT = COMMITTED_WIP_BINDING.handoffCommentId
+const CURRENT_D = 'd'.repeat(40)
 const AUTHOR_ID = '36528988'
 const WIP_SUBJECT = 'wip(#627): preserve incomplete multi-objective routing candidate'
 const WIP_AUTHOR = 'Bemoat'
@@ -216,10 +217,6 @@ describe('Architecture A committed RED-WIP reentry command contract', () => {
         classification: 'SUCCESS',
         next_action: expect.objectContaining({ type: 'COMMAND', command: 'bemoat:context' }),
       }),
-      expect.objectContaining({
-        classification: 'NO_OP_IDENTICAL_RETRY',
-        next_action: expect.objectContaining({ type: 'COMMAND', command: 'bemoat:context' }),
-      }),
     ]))
     expect(contract.next_action_rules).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ next_action: expect.objectContaining({ type: 'COMMAND', command: expect.not.stringMatching(/^bemoat:context$/) }) }),
@@ -290,7 +287,7 @@ describe('Architecture A committed RED-WIP reentry command contract', () => {
 
     expect(contract.retry_contract).toMatchObject({
       identical_retry: 'allowed',
-      classification: 'NO_OP_IDENTICAL_RETRY',
+      classification: null,
     })
     expect(contract.retry_contract.condition).toMatch(/exact|same|identical/i)
     expect(contract.retry_contract.condition).toMatch(/readback|re-read|proof|binding/i)
@@ -347,6 +344,35 @@ describe('Architecture A committed RED-WIP reentry runtime proof', () => {
     expect(result.details.canonical_target_root).toBe(state.target)
     expect(state.calls.some(({ command, args }) => command === 'git' && args[0] === 'show' && args.includes(HEAD_B))).toBe(true)
     expect(state.calls.some(({ command, args }) => command === 'git' && args[0] === 'diff' && args.includes(BASE_A) && args.includes(HEAD_B))).toBe(true)
+    expectNoMutation(state)
+  })
+
+  it('accepts current protected-main D beyond historical A while preserving the A-to-B proof', () => {
+    const state = fixture({
+      sourceHead: CURRENT_D,
+      sourceTracking: CURRENT_D,
+      sourceLiveRefs: [CURRENT_D, CURRENT_D],
+    })
+    const result = recoverCommittedWip({
+      sourceCwd: state.source,
+      binding: bindingFor(state.target),
+      run: state.run,
+    })
+
+    expect(result).toMatchObject({
+      classification: 'SUCCESS',
+      route: 'STOP',
+      mutationPerformed: false,
+      nextAction: { type: 'COMMAND', command: 'bemoat:context' },
+      details: {
+        immutable_A: BASE_A,
+        immutable_B: HEAD_B,
+        live_protected_main_D: CURRENT_D,
+        ancestry: { A_to_B: 'STRICT_ANCESTOR', B_to_A: 'NOT_ANCESTOR' },
+        wip_state: 'RED_INCOMPLETE',
+        objective_edit_authority_granted: false,
+      },
+    })
     expectNoMutation(state)
   })
 

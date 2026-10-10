@@ -38,10 +38,11 @@ A-to-B ancestry, canonical repository/branch/base identities, clean durable
 roots, and the preserved commit's provenance. It re-reads the bound evidence
 and fails closed on wrong, missing, competing, forged, modified, stale, dirty,
 or unsupported state. It performs no writes, treats RED WIP as incomplete, and
-does not authorize GREEN, Objective N+1, or any objective edits. On proof
-success or an identical retry, the result remains STOP with next action
-COMMAND `bemoat:context`: run registered CLI Discovery, then fresh Context
-with `--target-worktree`. That Context alone can authorize later work.
+does not authorize GREEN, Objective N+1, or any objective edits. Every
+successful proof, including an exact reread of the same binding, returns
+`SUCCESS` and remains STOP with next action COMMAND `bemoat:context`: run
+registered CLI Discovery, then fresh Context with `--target-worktree`. That
+Context alone can authorize later work; drift or ambiguous reread is STOP.
 
 Safe help:
 

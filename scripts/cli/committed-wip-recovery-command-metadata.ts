@@ -60,7 +60,7 @@ export function committedWipRecoveryCommands(dependencies: CommandMetadataDepend
       ],
       reads: ['GitHub protected-base ref, exact Issue comment by ID, Issue comments for competing HANDOFFs, and topic ref', 'source and target canonical roots, status, branch, HEAD, origin, upstream, commit tree, ancestry, GitHub refs, and git ls-remote refs'],
       writes: [],
-      success_classifications: ['SUCCESS', 'NO_OP_IDENTICAL_RETRY'],
+      success_classifications: ['SUCCESS'],
       stop_classifications: ['UNSUPPORTED_PRE_STATE', 'STATE_CONFLICT', 'HEAD_DRIFT', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT', 'AMBIGUOUS_RESULT'],
       stop_conditions: [
         'STOP on wrong Issue, repository, branch, origin, upstream, protected base, A, B, or tree; source drift; live ref movement; unavailable probes; or any contradictory readback.',
@@ -70,8 +70,8 @@ export function committedWipRecoveryCommands(dependencies: CommandMetadataDepend
       ],
       retry_contract: {
         identical_retry: 'allowed',
-        classification: 'NO_OP_IDENTICAL_RETRY',
-        condition: 'Because this proof operation has no writes, an identical retry is allowed only as a deterministic exact re-read of the same issue, comment/body digest, A, B, tree, identity tuple, and canonical target root; any drift or ambiguous readback is STOP.',
+        classification: null,
+        condition: 'Because this stateless proof operation has no writes, an identical retry is allowed only as a deterministic exact re-read of the same issue, comment/body digest, A, B, tree, identity tuple, and canonical target root; each exact proof reread returns SUCCESS, while any drift or ambiguous readback is STOP.',
       },
       role_contracts: {
         controller: 'objective-edit authority is false; this proof does not grant or imply objective-edit authority.',
@@ -79,7 +79,6 @@ export function committedWipRecoveryCommands(dependencies: CommandMetadataDepend
       },
       next_action_rules: [
         { classification: 'SUCCESS', next_action: nextAction('COMMAND', 'bemoat:context', 'Run registered CLI Discovery, then fresh bemoat:context for the verified Issue and --target-worktree. This proof grants no objective-edit authority.') },
-        { classification: 'NO_OP_IDENTICAL_RETRY', next_action: nextAction('COMMAND', 'bemoat:context', 'After exact re-read/readback of the same binding, run registered CLI Discovery, then fresh bemoat:context for the verified Issue and --target-worktree. This proof grants no objective-edit authority.') },
       ],
       examples: [{ description: 'Read-only proof of the preserved #627 committed WIP binding.', argv: ['627', '--expected-repository', 'bemoat/bemoat-web-starter', '--expected-branch', 'fix/627-seamless-multi-objective-continuation', '--expected-base-branch', 'main', '--expected-base-sha', A, '--expected-handoff-comment-id', '6088681412', '--expected-handoff-head', A, '--expected-wip-head', B, '--expected-wip-tree', TREE, '--target-worktree', '/worktrees/issue-627', '--json'] }],
       parser_owner: 'scripts/agent-context-recover-committed-wip.ts',

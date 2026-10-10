@@ -26,7 +26,7 @@ export const managedPaths = [
   'scripts/deploy-smoke-test.ts', 'scripts/guards/repo-safety.ts', 'scripts/guards/types.ts',
   'scripts/guard-harness-contract.ts', 'scripts/harness-contract',
   'scripts/guards/build-script-contract.ts', 'scripts/build.ts',
-  'scripts/agent-context.ts', 'scripts/agent-context-sync-base.ts', 'scripts/agent-context-recover-setup.ts', 'scripts/context', 'scripts/context/blocker-resolution-history.ts', 'scripts/context/review-verdict-validation.ts', 'scripts/agent-handoff.ts', 'scripts/agent-red-wip-checkpoint.ts', 'scripts/agent-validate-blocker-resolution.ts', 'scripts/agent-validate-review-verdict.ts', 'scripts/agent-validate-founder-decision-repair.ts', 'scripts/handoff',
+  'scripts/agent-context.ts', 'scripts/agent-context-sync-base.ts', 'scripts/agent-context-recover-setup.ts', 'scripts/agent-context-recover-committed-wip.ts', 'scripts/context', 'scripts/context/blocker-resolution-history.ts', 'scripts/context/review-verdict-validation.ts', 'scripts/agent-handoff.ts', 'scripts/agent-red-wip-checkpoint.ts', 'scripts/agent-validate-blocker-resolution.ts', 'scripts/agent-validate-review-verdict.ts', 'scripts/agent-validate-founder-decision-repair.ts', 'scripts/handoff',
   'scripts/adapters/command-runner.ts',
   'scripts/cli',
   'scripts/guard-cloudflare-env.ts', 'scripts/guards/cloudflare-env.ts', 'scripts/guard-pack.ts', 'scripts/guards/pack.ts', 'scripts/guards/planning-contract-runtime.ts', 'scripts/guards/planning-contract-live.ts', 'scripts/guards/legacy-managed-state.ts',
@@ -101,7 +101,7 @@ export const packageSyncProposalPath = '.bemoat/package-sync-proposal.md'
 
 /** Namespaced scripts safe to add when missing during sync. Never overwrite existing entries. */
 export const managedPackageScripts = [
-  'bemoat:context', 'bemoat:context:sync-base', 'bemoat:context:recover-setup', 'bemoat:handoff', 'bemoat:blocker-resolution:validate', 'bemoat:review-verdict:validate', 'bemoat:founder-decision-repair:validate',
+  'bemoat:context', 'bemoat:context:sync-base', 'bemoat:context:recover-setup', 'bemoat:context:recover-committed-wip', 'bemoat:handoff', 'bemoat:blocker-resolution:validate', 'bemoat:review-verdict:validate', 'bemoat:founder-decision-repair:validate',
   'bemoat:branch:check', 'bemoat:guard:safety', 'bemoat:guard:pack',
   'bemoat:guard:harness-contract',
   'bemoat:guard:cloudflare-env', 'bemoat:test:int', 'bemoat:typecheck', 'bemoat:check',
