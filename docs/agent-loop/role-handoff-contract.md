@@ -38,6 +38,50 @@ publication example are in
 [handoff-template.md](../mission-control/handoff-template.md). Runtime schema
 validation remains authoritative.
 
+## Ordered no-PR objective checkpoints
+
+For an Issue with one exact H2 `## Bounded work sequence` or
+`## Bounded work sequence (each new objective requires fresh authorization)`,
+and more than one valid, contiguously numbered objective, publish one durable
+schema-v2 `IMPLEMENT` HANDOFF after each completed objective. A matching
+sequence heading at another level or in setext form fails closed; matching text
+inside a fenced Markdown code example is ignored. The Objective 1 HANDOFF may
+be an existing read-only record whose objective begins `Objective 1 —`; preserve
+its native comment ID, URL, body, and timestamp. Later HANDOFFs use the exact
+declared title, `objective_mode: "implementation"`, and one current-head
+writer-generated `validation-proof`. The Handoff workflow emits `code` with
+`pnpm run bemoat:check` for code-bearing changes, or `docs-only` with
+`pnpm run bemoat:guard:safety` for documentation-only changes.
+
+Each HANDOFF from Objective 2 onward includes exactly one checkpoint evidence
+entry. Its `value` is a JSON string with exactly these fields:
+
+```json
+{
+  "kind": "objective-checkpoint",
+  "value": "{\"objective_id\":\"2\",\"sequence\":2,\"predecessor_comment_id\":\"6088681412\",\"predecessor_head\":\"<40-character-lowercase-SHA>\"}",
+  "url": null
+}
+```
+
+`objective_id` is the canonical decimal string for the declared ordinal;
+`sequence` is the same ordinal as a JSON number. `predecessor_comment_id` is the
+native GitHub comment ID of the immediately preceding objective HANDOFF, and
+`predecessor_head` is that HANDOFF's exact commit SHA. The new HANDOFF's own
+native ID is bound by its exact Issue-comment URL and readback after publication.
+Context independently checks the identity and exact-head bindings, then
+reconstructs remote Git ancestry from predecessor head to checkpoint head. It
+requires the checkpoint to be ahead, with no commits behind and the predecessor
+head as merge base; operators do not supply or select that ancestry result.
+
+Fresh Context routes only the immediate next declared objective after a valid
+intermediate checkpoint. It routes `PR_READY` / `OPEN_PR` only after the final
+declared checkpoint passes the existing validation and durability rules. The
+one-objective and no-sequence paths retain their existing behavior. Context
+returns `STOP` if a `COMPLETE` HANDOFF would leave declared objectives pending.
+It uses declared ordinals and native evidence, never comment timestamps or
+hidden Execution-session state.
+
 ## Evidence rules
 
 - Reconstruct live GitHub and native Git evidence before acting. A HANDOFF is a

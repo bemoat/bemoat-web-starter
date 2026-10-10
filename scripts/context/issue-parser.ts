@@ -1,4 +1,4 @@
-import type { RoleEvidence } from './model.ts'
+import type { IssueObjectiveSequence, RoleEvidence } from './model.ts'
 import { parseIssueDeclarations, deriveWorkflowProfile } from './issue-declarations.ts'
 import { parseHandoffBody, renderHandoffComment } from '../handoff/schema.ts'
 
@@ -10,6 +10,7 @@ interface ParsedIssueBody {
   taskSize: string | null
   missionControlMode: string | null
   workflowProfile: string | null
+  objectiveSequence: IssueObjectiveSequence
 }
 
 interface RoleEvidenceResult {
@@ -114,6 +115,71 @@ function matchingSection(map: Map<string, string[]>, pattern: RegExp): string[] 
   return undefined
 }
 
+function parseObjectiveSequence(body: string): IssueObjectiveSequence {
+  const sections: string[][] = []
+  let malformedHeading = false
+  let active: string[] | null = null
+  const lines = String(body ?? '').split(/\r?\n/)
+  let fence: { marker: string; length: number } | null = null
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!
+    if (fence) {
+      const closing = line.match(/^\s{0,3}(`+|~+)\s*$/)?.[1]
+      if (closing && closing[0] === fence.marker && closing.length >= fence.length) fence = null
+      continue
+    }
+
+    const openingFence = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/)
+    if (openingFence && (openingFence[1]![0] !== '`' || !openingFence[2]!.includes('`'))) {
+      fence = { marker: openingFence[1]![0]!, length: openingFence[1]!.length }
+      continue
+    }
+
+    const setext = lines[index + 1]?.match(/^\s*(=+|-+)\s*$/)
+    if (setext && /^bounded work sequence\b/i.test(line.trim())) {
+      malformedHeading = true
+      active = null
+      continue
+    }
+
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/)
+    if (heading) {
+      const level = heading[1]!.length
+      const value = heading[2]!.trim().toLowerCase()
+      const canonical = /^bounded work sequence(?:\s*\(each new objective requires fresh authorization\))?$/.test(value)
+      if (canonical && level === 2) {
+        active = []
+        sections.push(active)
+      } else {
+        if (/^bounded work sequence\b/.test(value)) malformedHeading = true
+        active = null
+      }
+    } else if (active) {
+      active.push(line)
+    }
+  }
+
+  if (malformedHeading) return { status: 'invalid', objectives: [] }
+  if (sections.length === 0) return { status: 'absent', objectives: [] }
+  if (sections.length !== 1) return { status: 'invalid', objectives: [] }
+
+  const objectives: Array<{ id: string; title: string }> = []
+  for (const line of sections[0]!) {
+    if (!line.trim()) continue
+    const declaration = line.match(/^\s*[-*+]\s+(?:\*\*)?Objective\s+([1-9]\d*)\s+—\s+(.+?)(?:\*\*)?:\s*(?:.*)$/i)
+    if (!declaration) return { status: 'invalid', objectives: [] }
+    const id = declaration[1]!
+    const title = declaration[2]!.trim()
+    if (!title || Number(id) !== objectives.length + 1) return { status: 'invalid', objectives: [] }
+    objectives.push({ id, title })
+  }
+
+  return objectives.length > 0
+    ? { status: 'valid', objectives }
+    : { status: 'invalid', objectives: [] }
+}
+
 export function parseIssueBody(body: string): ParsedIssueBody {
   const map = sections(body)
   const decls = parseIssueDeclarations(body)
@@ -126,6 +192,7 @@ export function parseIssueBody(body: string): ParsedIssueBody {
     taskSize: decls.taskSize,
     missionControlMode: decls.missionControlMode,
     workflowProfile: profile?.name ?? null,
+    objectiveSequence: parseObjectiveSequence(body),
   }
 }
 

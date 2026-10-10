@@ -226,6 +226,7 @@ export function readGithubEvidence({
         acceptanceCriteria: parsed.acceptanceCriteria,
         dependencies: parsed.dependencies,
         taskSize: parsed.taskSize, missionControlMode: parsed.missionControlMode, workflowProfile: parsed.workflowProfile,
+        objectiveSequence: parsed.objectiveSequence,
       }
     }
   }

@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { routeContext } from '../../scripts/context/router.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
+import { parseIssueBody, parseRoleEvidence } from '../../scripts/context/issue-parser.ts'
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 import { createContextOutput } from '../../scripts/agent-context.ts'
 
@@ -113,6 +118,313 @@ function evidence(
     },
     evidenceErrors: [],
     ...overrides,
+  }
+}
+
+const multiObjectiveRepository = 'bemoat/bemoat-web-starter'
+const multiObjectiveIssueNumber = '627'
+const multiObjectiveBranch = 'fix/627-seamless-multi-objective-continuation'
+const objectiveTitles = [
+  'Read-only contract/trace',
+  'Worker-owned regression oracle',
+  'Minimal worker-owned correction',
+  'Validation + dogfood',
+]
+const objectiveIssueBody = `## Goal
+
+Make **multiple ordered objectives in one Issue** behave like **one continuous Execution job** for the Founder: **one accountable Execution controller, one canonical Issue branch/lineage, and automatic same-session continuation after each genuinely authorized durable objective**, stopping only at real human/safety gates.
+
+Task size: core
+Mission Control mode: required
+
+## Bounded work sequence (each new objective requires fresh authorization)
+
+- **Objective 1 — Read-only contract/trace:** identify the smallest gap in merged policy/loader/Execution continuation and one real observed multi-objective failure; publish a short decision-ready delta, preserve unrelated open Issue ownership.
+- **Objective 2 — Worker-owned regression oracle:** write production-shaped positives for three sequential authorized objectives in one Issue/branch/session and negative controls for first-edit, dirty interruption, STOP, FOUNDER_GATE, malformed/stale evidence, changed base/head, worker independence, and merge gate.
+- **Objective 3 — Minimal worker-owned correction:** apply only the demonstrated documentation/dispatch/Context-contract change, run focused proof, complete coherent lawful GREEN checkpoint, publish/read back required HANDOFF, and fresh Context.
+- **Objective 4 — Validation + dogfood:** required checks, independent semantic review, exact-head CI, Founder-controlled PR merge; then read-only dogfood on one *eligible* real multi-objective Issue (do not mutate #624/#613/#622 histories without their separate authority), record measured Founder prompts/STOPs and terminal disposition.
+`
+
+type ObjectiveCheckpointAncestryProof = {
+  handoffCommentId: string
+  predecessorCommentId: string
+  predecessorHead: string
+  checkpointHead: string
+  mergeBaseSha: string
+  aheadBy: number
+  behindBy: number
+}
+
+type ObjectiveComment = {
+  id: string | number
+  body: string
+  createdAt: string
+  url: string
+}
+
+const historicalObjectiveOneComment: ObjectiveComment = {
+  id: 6088681412,
+  body: `## HANDOFF
+
+\`\`\`json
+{
+  "schema_version": 2,
+  "record_type": "HANDOFF",
+  "objective_mode": "read_only",
+  "repository": "bemoat/bemoat-web-starter",
+  "issue_number": "627",
+  "objective": "Objective 1 — read-only contract and transition trace: determine whether the reported intra-Issue continuation ambiguity demonstrates a merged policy or Context gap; provide the minimal behavior specification and regression requirements.",
+  "permitted_scope": [
+    "Read-only inspection of the merged Mission Control guide, Execution contract, project loader, registered Context help/semantics, Issue #627, and public documentary #624 comments.",
+    "Characterize Objective 1 only and report evidence, the minimum correction proposal if supported, and bounded positive/negative regression requirements."
+  ],
+  "prohibited_scope": [
+    "No #627 Objective 2 or later work, source/test/document edits, or future-objective pre-authorization.",
+    "No inspection or mutation of #624 local worktrees, branches, code, files, or historical comments.",
+    "No PR, merge, deploy, production, migration, secret, or unrelated Issue operation."
+  ],
+  "executing_agent": "Codex #627 Execution Controller",
+  "provider": "OpenAI",
+  "branch": "fix/627-seamless-multi-objective-continuation",
+  "exact_head": "0e99786f0b087de46a2518d5874beb999892dd6c",
+  "protected_base": {
+    "branch": "main",
+    "sha": "0e99786f0b087de46a2518d5874beb999892dd6c"
+  },
+  "pr": null,
+  "verified_evidence": [
+    {
+      "kind": "authority",
+      "value": "Retained fresh #627 Context returned route IMPLEMENT and next_action.type COMMAND on this exact clean, durable branch; issue.scope was null. The Context result was not rerun after the user's instruction.",
+      "url": null
+    },
+    {
+      "kind": "authority",
+      "value": "The user selected #627 Objective 1 only under the reported Issue-level COMMAND. The live Issue orders Objective 1 first and defines it as read-only contract/transition characterization; no later objective is authorized.",
+      "url": "https://github.com/bemoat/bemoat-web-starter/issues/627"
+    },
+    {
+      "kind": "authority",
+      "value": "The merged policy and loader require one bounded objective at a time, automatic same-session continuation only for the newly authorized objective, and fresh Context before choosing a later objective.",
+      "url": "https://github.com/bemoat/bemoat-web-starter/blob/0e99786f0b087de46a2518d5874beb999892dd6c/docs/mission-control/mission-control-guide.md"
+    },
+    {
+      "kind": "authority",
+      "value": "Public #624 evidence documents STOP and mid-objective Context friction but does not establish a fresh authorized post-checkpoint COMMAND that was ignored; Objective 1 found no demonstrated policy violation or basis for requiring objective_id/non-null scope.",
+      "url": "https://github.com/bemoat/bemoat-web-starter/issues/624#issuecomment-6087620865"
+    },
+    {
+      "kind": "validation-proof",
+      "value": "{\\"status\\":\\"PASS\\",\\"tier\\":\\"read-only\\",\\"command\\":\\"pnpm run bemoat:guard:safety\\",\\"exact_head\\":\\"0e99786f0b087de46a2518d5874beb999892dd6c\\"}",
+      "url": null
+    }
+  ],
+  "route": "IMPLEMENT",
+  "next_action": {
+    "route": "IMPLEMENT",
+    "description": "Objective 1 read-only characterization is complete. Run registered CLI Discovery and fresh Context before selecting any later objective; no future objective is pre-authorized."
+  },
+  "stop_conditions": [
+    "Do not begin Objective 2 or later work until fresh Context independently authorizes it.",
+    "Do not edit #627 source or test files without the separately required first-edit authorization and workflow prerequisites.",
+    "If repository, branch, head, base, Issue, or PR identity changes, reconstruct authority before continuing."
+  ],
+  "local_durability": {
+    "required": true,
+    "durable": true,
+    "reason": null
+  }
+}
+\`\`\`
+`,
+  createdAt: '2026-10-09T20:26:11Z',
+  url: 'https://github.com/bemoat/bemoat-web-starter/issues/627#issuecomment-6088681412',
+}
+
+function historicalObjectiveOneHandoff(): HandoffRecord {
+  const json = historicalObjectiveOneComment.body.match(/^## HANDOFF\n\n```json\n([\s\S]*?)\n```\n$/)?.[1]
+  if (!json) throw new Error('Native #6088681412 HANDOFF fixture is malformed')
+  return parseHandoffBody(json)
+}
+
+function objectiveImplementationHandoff(
+  ordinal: 2 | 3,
+  exactHead: string,
+  predecessor: { commentId: string; head: string },
+  identity: { issueNumber?: string; branch?: string; titles?: string[]; validationTier?: 'docs-only' | 'code' } = {},
+): HandoffRecord {
+  const issueNumber = identity.issueNumber ?? multiObjectiveIssueNumber
+  const branchName = identity.branch ?? multiObjectiveBranch
+  const title = (identity.titles ?? objectiveTitles)[ordinal - 1]!
+  const validationTier = identity.validationTier ?? 'code'
+  const record = implementationHandoff({
+    repository: multiObjectiveRepository,
+    issue_number: issueNumber,
+    objective: `Objective ${ordinal} — ${title}`,
+    branch: branchName,
+    exact_head: exactHead,
+    protected_base: { branch: 'main', sha: '0e99786f0b087de46a2518d5874beb999892dd6c' },
+    verified_evidence: [
+      {
+        kind: 'validation-proof',
+        value: JSON.stringify({
+          status: 'PASS',
+          tier: validationTier,
+          command: validationTier === 'code' ? 'pnpm run bemoat:check' : 'pnpm run bemoat:guard:safety',
+          exact_head: exactHead,
+        }),
+        url: null,
+      },
+      {
+        kind: 'objective-checkpoint',
+        value: JSON.stringify({ objective_id: String(ordinal), sequence: ordinal, predecessor_comment_id: predecessor.commentId, predecessor_head: predecessor.head }),
+        url: null,
+      },
+    ],
+  })
+  return parseHandoffBody(JSON.stringify(record))
+}
+
+function objectiveTerminalHandoff(
+  route: 'STOP' | 'FOUNDER_GATE' | 'COMPLETE',
+  exactHead: string,
+): HandoffRecord {
+  return parseHandoffBody(JSON.stringify(implementationHandoff({
+    schema_version: route === 'STOP' ? 3 : 2,
+    objective_mode: 'read_only',
+    repository: multiObjectiveRepository,
+    issue_number: multiObjectiveIssueNumber,
+    objective: 'Objective 1 — Read-only contract/trace',
+    branch: multiObjectiveBranch,
+    exact_head: exactHead,
+    protected_base: { branch: 'main', sha: '0e99786f0b087de46a2518d5874beb999892dd6c' },
+    verified_evidence: route === 'STOP'
+      ? [{ kind: 'stop-blocker', value: 'unresolved-objective-blocker', url: null }]
+      : [{
+        kind: 'validation-proof',
+        value: JSON.stringify({
+          status: 'PASS', tier: 'read-only', command: 'pnpm run bemoat:guard:safety', exact_head: exactHead,
+        }),
+        url: null,
+      }],
+    route,
+    next_action: { route, description: `Canonical ${route} decision for this exact head.` },
+  })))
+}
+
+function objectiveComment(record: HandoffRecord, id: string, createdAt: string): ObjectiveComment {
+  return {
+    id,
+    body: renderHandoffComment(record),
+    createdAt,
+    url: `https://github.com/${record.repository}/issues/${record.issue_number}#issuecomment-${id}`,
+  }
+}
+
+function multiObjectiveEvidence(
+  comments: ObjectiveComment[],
+  currentHead: string,
+  ancestryProofs: ObjectiveCheckpointAncestryProof[] = [],
+  options: { clean?: boolean; issueBody?: string; issueNumber?: string; branch?: string; title?: string } = {},
+): NormalizedContextEvidence {
+  const issueNumber = options.issueNumber ?? multiObjectiveIssueNumber
+  const branch = options.branch ?? multiObjectiveBranch
+  const parsedIssue = parseIssueBody(options.issueBody ?? objectiveIssueBody)
+  return Object.assign(evidence([], {
+    repository: {
+      owner: 'bemoat',
+      name: 'bemoat-web-starter',
+      nameWithOwner: multiObjectiveRepository,
+      url: `https://github.com/${multiObjectiveRepository}`,
+    },
+    protectedBase: {
+      branch: 'main',
+      sha: '0e99786f0b087de46a2518d5874beb999892dd6c',
+      source: 'live GitHub ref',
+      url: `https://github.com/${multiObjectiveRepository}/tree/main`,
+    },
+    policy: {
+      ...evidence().policy,
+      trustedFounderLogin: 'bemoat',
+      url: `https://github.com/${multiObjectiveRepository}/blob/main/docs/mission-control/mission-control-guide.md`,
+    },
+    issue: {
+      ...evidence().issue,
+      ...parsedIssue,
+      number: issueNumber,
+      title: options.title ?? 'fix(execution): seamless multi-objective continuation within one Issue',
+      url: `https://github.com/${multiObjectiveRepository}/issues/${issueNumber}`,
+      scope: null,
+    },
+    localGit: {
+      ...evidence().localGit,
+      branch,
+      head: currentHead,
+      upstream: `origin/${branch}`,
+      originRepository: multiObjectiveRepository,
+      clean: options.clean ?? true,
+      pushed: true,
+      durable: true,
+    },
+    durableContext: parseRoleEvidence(comments),
+  }), {
+    objectiveCheckpointAncestryProofs: ancestryProofs,
+  })
+}
+
+function checkpointAncestryProof(
+  handoffCommentId: string,
+  predecessorCommentId: string,
+  predecessorHead: string,
+  checkpointHead: string,
+  mergeBaseSha: string,
+  aheadBy = 1,
+  behindBy = 0,
+): ObjectiveCheckpointAncestryProof {
+  return { handoffCommentId, predecessorCommentId, predecessorHead, checkpointHead, mergeBaseSha, aheadBy, behindBy }
+}
+
+function makeObjectiveCommitLineage(options: {
+  initialPredecessorCommentId?: string
+  commentIdPrefix?: string
+} = {}) {
+  const cwd = mkdtempSync(join(tmpdir(), 'bemoat-627-objective-lineage-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  try {
+    execFileSync('git', ['clone', '--quiet', '--shared', '--no-checkout', process.cwd(), cwd], { encoding: 'utf8' })
+    git('checkout', '--quiet', '--detach', '0e99786f0b087de46a2518d5874beb999892dd6c')
+    git('config', 'user.email', 'context-test@example.invalid')
+    git('config', 'user.name', 'Context test')
+    const baseHead = git('rev-parse', 'HEAD')
+    const heads = [baseHead]
+    const proofs: ObjectiveCheckpointAncestryProof[] = []
+    let predecessorHead = baseHead
+    let predecessorCommentId = options.initialPredecessorCommentId ?? String(historicalObjectiveOneComment.id)
+    for (const ordinal of [2, 3] as const) {
+      const commentId = `${options.commentIdPrefix ?? '700000000'}${ordinal}`
+      const path = `objective-${ordinal}.txt`
+      writeFileSync(join(cwd, path), `Objective ${ordinal} checkpoint\n`)
+      git('add', path)
+      git('-c', 'commit.gpgsign=false', 'commit', '-m', `Objective ${ordinal} checkpoint`)
+      const head = git('rev-parse', 'HEAD')
+      const proof = checkpointAncestryProof(
+        commentId,
+        predecessorCommentId,
+        predecessorHead,
+        head,
+        git('merge-base', predecessorHead, head),
+        Number(git('rev-list', '--count', `${predecessorHead}..${head}`)),
+        Number(git('rev-list', '--count', `${head}..${predecessorHead}`)),
+      )
+      heads.push(head)
+      proofs.push(proof)
+      predecessorHead = head
+      predecessorCommentId = commentId
+    }
+    return { cwd, heads, proofs }
+  } catch (error) {
+    rmSync(cwd, { recursive: true, force: true })
+    throw error
   }
 }
 
@@ -560,4 +872,357 @@ describe('no-PR implementation HANDOFF to PR-only Context transition', () => {
 
     expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
   })
+})
+
+describe('ordered no-PR multi-objective Context continuation', () => {
+  let lineage: ReturnType<typeof makeObjectiveCommitLineage>
+
+  beforeAll(() => { lineage = makeObjectiveCommitLineage() })
+  afterAll(() => { rmSync(lineage.cwd, { recursive: true, force: true }) })
+
+  it('uses native HANDOFF #6088681412 unchanged as Objective 1', () => {
+    const record = historicalObjectiveOneHandoff()
+
+    expect(historicalObjectiveOneComment).toMatchObject({
+      id: 6088681412,
+      createdAt: '2026-10-09T20:26:11Z',
+      url: 'https://github.com/bemoat/bemoat-web-starter/issues/627#issuecomment-6088681412',
+    })
+    expect(renderHandoffComment(record)).toBe(historicalObjectiveOneComment.body)
+    expect(record.repository).toBe('bemoat/bemoat-web-starter')
+    expect(record.objective.startsWith('Objective 1 —')).toBe(true)
+    expect(record.objective).not.toBe(`Objective 1 — ${objectiveTitles[0]}`)
+    expect(record.exact_head).toBe('0e99786f0b087de46a2518d5874beb999892dd6c')
+    expect(record.objective_mode).toBe('read_only')
+  })
+
+  it('dispatches live #627 Objectives 2, 3, and 4 through three fresh COMMAND transitions', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const third = objectiveComment(objectiveImplementationHandoff(3, lineage.heads[2]!, {
+      commentId: String(second.id), head: lineage.heads[1]!,
+    }), '7000000003', '2026-10-11T00:00:00Z')
+    const afterObjective1 = routeContext(multiObjectiveEvidence([first], firstRecord.exact_head))
+    const afterObjective2 = routeContext(multiObjectiveEvidence([first, second], lineage.heads[1]!, [lineage.proofs[0]!]))
+    const afterObjective3 = routeContext(multiObjectiveEvidence([first, second, third], lineage.heads[2]!, lineage.proofs.slice(0, 2)))
+
+    expect([
+      { route: afterObjective1.route, action: afterObjective1.nextAction.type, objective2Only: afterObjective1.nextAction.description.includes('Objective 2') && !afterObjective1.nextAction.description.includes('Objective 3') && !afterObjective1.nextAction.description.includes('Objective 4') },
+      { route: afterObjective2.route, action: afterObjective2.nextAction.type, objective3Only: afterObjective2.nextAction.description.includes('Objective 3') && !afterObjective2.nextAction.description.includes('Objective 2') && !afterObjective2.nextAction.description.includes('Objective 4') },
+      { route: afterObjective3.route, action: afterObjective3.nextAction.type, objective4Only: afterObjective3.nextAction.description.includes('Objective 4') && !afterObjective3.nextAction.description.includes('Objective 2') && !afterObjective3.nextAction.description.includes('Objective 3') },
+    ]).toEqual([
+      { route: 'IMPLEMENT', action: 'COMMAND', objective2Only: true },
+      { route: 'IMPLEMENT', action: 'COMMAND', objective3Only: true },
+      { route: 'IMPLEMENT', action: 'COMMAND', objective4Only: true },
+    ])
+  })
+
+  it('reaches PR_READY after the final checkpoint of a synthetic three-objective all-pre-PR Issue', () => {
+    const issueNumber = '900'
+    const branch = 'fix/900-pre-pr-objective-sequence'
+    const titles = ['Read-only characterization', 'Implementation checkpoint', 'Final implementation checkpoint']
+    const issueBody = `## Goal\n\nComplete three pre-PR implementation objectives before opening a PR.\n\nTask size: core\nMission Control mode: required\n\n## Bounded work sequence (each new objective requires fresh authorization)\n\n- **Objective 1 — ${titles[0]}:** prepare the bounded change.\n- **Objective 2 — ${titles[1]}:** implement the approved change.\n- **Objective 3 — ${titles[2]}:** finish the implementation checkpoint.\n`
+    const syntheticLineage = makeObjectiveCommitLineage({
+      initialPredecessorCommentId: '9000000001',
+      commentIdPrefix: '900000000',
+    })
+    try {
+      const firstRecord = implementationHandoff({
+        repository: multiObjectiveRepository,
+        issue_number: issueNumber,
+        objective_mode: 'read_only',
+        objective: `Objective 1 — ${titles[0]}`,
+        branch,
+        exact_head: syntheticLineage.heads[0]!,
+        protected_base: { branch: 'main', sha: '0e99786f0b087de46a2518d5874beb999892dd6c' },
+        verified_evidence: [{
+          kind: 'validation-proof',
+          value: JSON.stringify({ status: 'PASS', tier: 'read-only', command: 'pnpm run bemoat:guard:safety', exact_head: syntheticLineage.heads[0] }),
+          url: null,
+        }],
+      })
+      const first = objectiveComment(firstRecord, '9000000001', '2026-10-10T00:00:00Z')
+      const second = objectiveComment(objectiveImplementationHandoff(2, syntheticLineage.heads[1]!, {
+        commentId: String(first.id), head: syntheticLineage.heads[0]!,
+      }, { issueNumber, branch, titles }), '9000000002', '2026-10-11T00:00:00Z')
+      const third = objectiveComment(objectiveImplementationHandoff(3, syntheticLineage.heads[2]!, {
+        commentId: String(second.id), head: syntheticLineage.heads[1]!,
+      }, { issueNumber, branch, titles }), '9000000003', '2026-10-12T00:00:00Z')
+      const afterObjective1 = routeContext(multiObjectiveEvidence([first], syntheticLineage.heads[0]!, [], {
+        issueBody, issueNumber, branch, title: 'Synthetic three-objective all-pre-PR Issue',
+      }))
+      const afterObjective2 = routeContext(multiObjectiveEvidence([first, second], syntheticLineage.heads[1]!, [syntheticLineage.proofs[0]!], {
+        issueBody, issueNumber, branch, title: 'Synthetic three-objective all-pre-PR Issue',
+      }))
+      const afterObjective3 = routeContext(multiObjectiveEvidence([first, second, third], syntheticLineage.heads[2]!, syntheticLineage.proofs.slice(0, 2), {
+        issueBody, issueNumber, branch, title: 'Synthetic three-objective all-pre-PR Issue',
+      }))
+
+      expect([
+        { route: afterObjective1.route, action: afterObjective1.nextAction.type },
+        { route: afterObjective2.route, action: afterObjective2.nextAction.type },
+        { route: afterObjective3.route, action: afterObjective3.nextAction.type },
+      ]).toEqual([
+        { route: 'IMPLEMENT', action: 'COMMAND' },
+        { route: 'IMPLEMENT', action: 'COMMAND' },
+        { route: 'PR_READY', action: 'OPEN_PR' },
+      ])
+      expect(afterObjective3.nextAction).toMatchObject({
+        type: 'OPEN_PR',
+        command: 'gh pr create',
+        description: expect.stringContaining('No source edits or other Git mutations are authorized.'),
+      })
+    } finally {
+      rmSync(syntheticLineage.cwd, { recursive: true, force: true })
+    }
+  })
+
+  it('uses declared Objective ordinals when HANDOFF timestamps are out of order', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const third = objectiveComment(objectiveImplementationHandoff(3, lineage.heads[2]!, {
+      commentId: String(second.id), head: lineage.heads[1]!,
+    }), '7000000003', '2026-10-09T20:25:00Z')
+    const decision = routeContext(multiObjectiveEvidence(
+      [first, second, third],
+      lineage.heads[2]!,
+      lineage.proofs.slice(0, 2),
+    ))
+
+    expect(decision).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: {
+        type: 'COMMAND',
+        description: expect.stringContaining('Objective 4'),
+      },
+    })
+  })
+
+  it('accepts the writer-generated docs-only validation proof for an implementation checkpoint', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const secondRecord = objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }, { validationTier: 'docs-only' })
+    const second = objectiveComment(secondRecord, '7000000002', '2026-10-10T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence([first, second], lineage.heads[1]!, [lineage.proofs[0]!]))
+
+    expect(JSON.parse(secondRecord.verified_evidence[0]!.value)).toEqual({
+      status: 'PASS',
+      tier: 'docs-only',
+      command: 'pnpm run bemoat:guard:safety',
+      exact_head: lineage.heads[1],
+    })
+    expect(decision).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: { type: 'COMMAND', description: expect.stringContaining('Objective 3') },
+    })
+  })
+
+  it.each([
+    ['repository', (current: NormalizedContextEvidence) => { current.repository.nameWithOwner = 'other/repository' }],
+    ['Issue', (current: NormalizedContextEvidence) => { current.issue.number = '628' }],
+    ['branch', (current: NormalizedContextEvidence) => {
+      current.localGit.branch = 'fix/627-renamed-branch'
+      current.localGit.upstream = 'origin/fix/627-renamed-branch'
+    }],
+    ['protected base', (current: NormalizedContextEvidence) => { current.protectedBase.sha = 'e'.repeat(40) }],
+    ['current head', (current: NormalizedContextEvidence) => { current.localGit.head = lineage.heads[2]! }],
+  ] as Array<[string, (current: NormalizedContextEvidence) => void]>)('stops sequence continuation after %s identity drift', (_story, drift) => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const current = multiObjectiveEvidence([first, second], lineage.heads[1]!, [lineage.proofs[0]!])
+    drift(current)
+
+    const decision = routeContext(current)
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('preserves a compatible current-head FOUNDER_GATE after read-only Objective 1', () => {
+    const first = historicalObjectiveOneComment
+    const gate = objectiveComment(objectiveTerminalHandoff('FOUNDER_GATE', lineage.heads[0]!),
+      '8000000001', '2026-10-10T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence([first, gate], lineage.heads[0]!))
+
+    expect(decision).toMatchObject({ route: 'FOUNDER_GATE', nextAction: { type: 'FOUNDER_GATE' } })
+  })
+
+  it('does not let Objective 1 COMPLETE terminalize a sequence with Objective 2 still pending', () => {
+    const first = historicalObjectiveOneComment
+    const complete = objectiveComment(objectiveTerminalHandoff('COMPLETE', lineage.heads[0]!),
+      '8000000004', '2026-10-10T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence([first, complete], lineage.heads[0]!))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('keeps an unresolved current-head STOP ahead of sequence continuation', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const blocker = objectiveComment(objectiveTerminalHandoff('STOP', lineage.heads[1]!),
+      '8000000002', '2026-10-11T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence(
+      [first, second, blocker], lineage.heads[1]!, [lineage.proofs[0]!],
+    ))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('does not let COMPLETE terminalize an Issue while mutation-capable objective history remains', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const complete = objectiveComment(objectiveTerminalHandoff('COMPLETE', lineage.heads[1]!),
+      '8000000003', '2026-10-11T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence(
+      [first, second, complete], lineage.heads[1]!, [lineage.proofs[0]!],
+    ))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('fails closed when an Objective 2 checkpoint omits the verified Objective 1 ancestry proof', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+
+    const decision = routeContext(multiObjectiveEvidence([first, second], lineage.heads[1]!))
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('fails closed when the intermediate Objective 2 checkpoint is missing', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const third = objectiveComment(objectiveImplementationHandoff(3, lineage.heads[2]!, {
+      commentId: String(second.id), head: lineage.heads[1]!,
+    }), '7000000003', '2026-10-11T00:00:00Z')
+
+    const decision = routeContext(multiObjectiveEvidence([first, third], lineage.heads[2]!, [lineage.proofs[1]!]))
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('fails closed when a checkpoint HANDOFF claims the wrong objective ordinal', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const wrongOrdinal = objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    })
+    const wrongRecord = parseHandoffBody(JSON.stringify({
+      ...wrongOrdinal,
+      objective: `Objective 3 — ${objectiveTitles[2]}`,
+      verified_evidence: [
+        wrongOrdinal.verified_evidence[0],
+        {
+          kind: 'objective-checkpoint',
+          value: JSON.stringify({ objective_id: '3', sequence: 3, predecessor_comment_id: String(first.id), predecessor_head: firstRecord.exact_head }),
+          url: null,
+        },
+      ],
+    }))
+    const second = objectiveComment(wrongRecord, '7000000002', '2026-10-10T00:00:00Z')
+    const proof = checkpointAncestryProof('7000000002', String(first.id), firstRecord.exact_head, lineage.heads[1]!, lineage.proofs[0]!.mergeBaseSha)
+    const decision = routeContext(multiObjectiveEvidence([first, second], lineage.heads[1]!, [proof]))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('keeps an interrupted dirty worktree at STOP after an intermediate checkpoint', () => {
+    const first = historicalObjectiveOneComment
+    const firstRecord = historicalObjectiveOneHandoff()
+    const second = objectiveComment(objectiveImplementationHandoff(2, lineage.heads[1]!, {
+      commentId: String(first.id), head: firstRecord.exact_head,
+    }), '7000000002', '2026-10-10T00:00:00Z')
+    const interrupted = routeContext(multiObjectiveEvidence([first, second], lineage.heads[1]!, [lineage.proofs[0]!], { clean: false }))
+
+    expect(interrupted).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('preserves PR_READY for an exactly-one declared objective', () => {
+    const issueNumber = '901'
+    const branch = 'fix/901-single-objective'
+    const issueBody = '## Goal\n\nComplete one bounded task.\n\nTask size: core\nMission Control mode: required\n\n## Bounded work sequence (each new objective requires fresh authorization)\n\n- **Objective 1 — One bounded task:** complete the task.\n'
+    const record = implementationHandoff({
+      repository: multiObjectiveRepository,
+      issue_number: issueNumber,
+      objective: 'Objective 1 — One bounded task',
+      branch,
+      exact_head: lineage.heads[0]!,
+      protected_base: { branch: 'main', sha: '0e99786f0b087de46a2518d5874beb999892dd6c' },
+      verified_evidence: [{
+        kind: 'validation-proof',
+        value: JSON.stringify({ status: 'PASS', tier: 'code', command: 'pnpm run bemoat:check', exact_head: lineage.heads[0] }),
+        url: null,
+      }],
+    })
+    const comment = objectiveComment(record, '9010000001', '2026-10-10T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence([comment], lineage.heads[0]!, [], {
+      issueBody, issueNumber, branch, title: 'Synthetic one-objective Issue',
+    }))
+
+    expect(decision).toMatchObject({ route: 'PR_READY', nextAction: { type: 'OPEN_PR' } })
+  })
+
+  it('fails closed for docs-only validation on an exactly-one declared objective', () => {
+    const issueNumber = '902'
+    const branch = 'fix/902-single-objective-docs-proof'
+    const issueBody = '## Goal\n\nComplete one bounded task.\n\nTask size: core\nMission Control mode: required\n\n## Bounded work sequence (each new objective requires fresh authorization)\n\n- **Objective 1 — One bounded task:** complete the task.\n'
+    const record = implementationHandoff({
+      repository: multiObjectiveRepository,
+      issue_number: issueNumber,
+      objective: 'Objective 1 — One bounded task',
+      branch,
+      exact_head: lineage.heads[0]!,
+      protected_base: { branch: 'main', sha: '0e99786f0b087de46a2518d5874beb999892dd6c' },
+      verified_evidence: [{
+        kind: 'validation-proof',
+        value: JSON.stringify({ status: 'PASS', tier: 'docs-only', command: 'pnpm run bemoat:guard:safety', exact_head: lineage.heads[0] }),
+        url: null,
+      }],
+    })
+    const comment = objectiveComment(record, '9020000001', '2026-10-10T00:00:00Z')
+    const decision = routeContext(multiObjectiveEvidence([comment], lineage.heads[0]!, [], {
+      issueBody, issueNumber, branch, title: 'Synthetic one-objective Issue with docs-only proof',
+    }))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it('fails closed for malformed live objective declarations', () => {
+    const issueBody = `## Goal\n\nInvalid ordered objectives.\n\nTask size: core\nMission Control mode: required\n\n## Bounded work sequence (each new objective requires fresh authorization)\n\n- Objective 1 — First.\n- Objective 3 — Third.\n`
+    const decision = routeContext(multiObjectiveEvidence([], lineage.heads[0]!, [], { issueBody }))
+
+    expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+  })
+
+  it.each(['COMPLETE', 'FOUNDER_GATE'] as const)(
+    'does not let current-head %s bypass a malformed live objective sequence',
+    (route) => {
+      const issueBody = `## Goal\n\nInvalid ordered objectives.\n\nTask size: core\nMission Control mode: required\n\n## Bounded work sequence (each new objective requires fresh authorization)\n\n- Objective 1 — First.\n- Objective 3 — Third.\n`
+      const first = historicalObjectiveOneComment
+      const terminal = objectiveComment(objectiveTerminalHandoff(route, lineage.heads[0]!),
+        route === 'COMPLETE' ? '8000000005' : '8000000006', '2026-10-10T00:00:00Z')
+      const decision = routeContext(multiObjectiveEvidence([first, terminal], lineage.heads[0]!, [], { issueBody }))
+
+      expect(decision).toMatchObject({ route: 'STOP', nextAction: { type: 'STOP' } })
+    },
+  )
 })

@@ -10,7 +10,7 @@ import { hasStrictCrossHeadNativeReviewPredecessor } from './native-review-linea
 import { resolveStopBlockers } from './blocker-resolution.ts'
 import { routeNoPrContext, routeWrongIssueActivePrContext } from './no-pr-routing.ts'
 import { redWipDurabilityCommand } from './red-wip-routing.ts'
-import { protectedBranchSetupState } from './setup-base-recovery-routing.ts'
+import { protectedBranchSetupState } from './objective-sequence-routing.ts'
 import { prBaseIdentityErrors, staleBaseSyncDiagnostic } from './stale-base.ts'
 import type { ProductionMergeReviewVerdict } from './merge-review-verdict.ts'
 

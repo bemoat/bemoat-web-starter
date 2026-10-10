@@ -15,6 +15,7 @@ import {
 import { routeContext } from '../../scripts/context/router.ts'
 import { runContextCommand } from '../../scripts/context/runtime.ts'
 import { parseProtectedPolicyContent } from '../../scripts/context/policy.ts'
+import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 
 function response(stdout: string): ContextCommandResult {
   return { status: 0, stdout, stderr: '', error: null }
@@ -693,6 +694,147 @@ describe('bemoat:context neutral evidence adapters', () => {
       issue: { number: '410', objective: 'Implement context.' },
       activePr: null,
       evidenceErrors: [],
+    })
+  })
+
+  it('collects objective ancestry proof from a GitHub Compare response through Context evidence acquisition', () => {
+    const repo = 'bemoat/bemoat-web-starter'
+    const issueNumber = '777'
+    const branch = 'fix/777-context-objective-lineage'
+    const baseSha = 'a'.repeat(40)
+    const firstHead = 'b'.repeat(40)
+    const checkpointHead = 'c'.repeat(40)
+    const policySha = 'd'.repeat(40)
+    const firstCommentId = '9000000001'
+    const checkpointCommentId = '9000000002'
+    const titles = ['Read-only contract trace', 'Documentation checkpoint', 'Final implementation checkpoint']
+    const issueBody = `## Goal\n\nExercise native objective ancestry evidence collection.\n\nTask size: core\nMission Control mode: required\n\n## Bounded work sequence (each new objective requires fresh authorization)\n\n- **Objective 1 — ${titles[0]}:** inspect the workflow contract.\n- **Objective 2 — ${titles[1]}:** update the bounded documentation.\n- **Objective 3 — ${titles[2]}:** finish the implementation checkpoint.\n`
+    const makeRecord = (
+      objective: string,
+      objectiveMode: HandoffRecord['objective_mode'],
+      exactHead: string,
+      verifiedEvidence: HandoffRecord['verified_evidence'],
+    ): HandoffRecord => ({
+      schema_version: 2,
+      record_type: 'HANDOFF',
+      objective_mode: objectiveMode,
+      repository: repo,
+      issue_number: issueNumber,
+      objective,
+      permitted_scope: ['One bounded objective.'],
+      prohibited_scope: ['Do not start another objective before fresh Context.'],
+      executing_agent: 'Context evidence test worker',
+      provider: 'OpenAI',
+      branch,
+      exact_head: exactHead,
+      protected_base: { branch: 'main', sha: baseSha },
+      pr: null,
+      verified_evidence: verifiedEvidence,
+      route: 'IMPLEMENT',
+      next_action: { route: 'IMPLEMENT', description: 'Continue only the authorized bounded work.' },
+      stop_conditions: ['Stop if identity or ancestry evidence conflicts.'],
+      local_durability: { required: true, durable: true, reason: null },
+    })
+    const firstRecord = makeRecord(`Objective 1 — ${titles[0]}`, 'read_only', firstHead, [{
+      kind: 'validation-proof',
+      value: JSON.stringify({ status: 'PASS', tier: 'read-only', command: 'pnpm run bemoat:guard:safety', exact_head: firstHead }),
+      url: null,
+    }])
+    const checkpointRecord = makeRecord(`Objective 2 — ${titles[1]}`, 'implementation', checkpointHead, [
+      {
+        kind: 'validation-proof',
+        value: JSON.stringify({ status: 'PASS', tier: 'code', command: 'pnpm run bemoat:check', exact_head: checkpointHead }),
+        url: null,
+      },
+      {
+        kind: 'objective-checkpoint',
+        value: JSON.stringify({
+          objective_id: '2', sequence: 2, predecessor_comment_id: firstCommentId, predecessor_head: firstHead,
+        }),
+        url: null,
+      },
+    ])
+    const comment = (id: string, record: HandoffRecord) => ({
+      id,
+      body: renderHandoffComment(record),
+      createdAt: '2026-10-10T00:00:00Z',
+      url: `https://github.com/${repo}/issues/${issueNumber}#issuecomment-${id}`,
+    })
+    const comments = [comment(firstCommentId, firstRecord), comment(checkpointCommentId, checkpointRecord)]
+    let compareCalls = 0
+    const run: ContextCommandRunner = (command, args) => {
+      const key = args.join(' ')
+      if (command === 'git') {
+        const values: Record<string, string> = {
+          'branch --show-current': `${branch}\n`,
+          'rev-parse HEAD': `${checkpointHead}\n`,
+          'status --short': '',
+          'rev-parse --abbrev-ref --symbolic-full-name @{upstream}': `origin/${branch}\n`,
+          'remote get-url origin': `https://github.com/${repo}.git\n`,
+          [`ls-remote --heads origin ${branch}`]: `${checkpointHead}\trefs/heads/${branch}\n`,
+        }
+        return response(values[key] ?? '')
+      }
+      if (args[0] === 'api' && args[1] === `repos/${repo}/git/ref/heads/dev`) {
+        return { status: 1, stdout: '', stderr: 'Not Found', error: null }
+      }
+      if (args[0] === 'api' && args[1] === `repos/${repo}/git/ref/heads/main`) {
+        return response(JSON.stringify({ object: { sha: baseSha } }))
+      }
+      if (args[0] === 'api' && args[1]?.startsWith(`repos/${repo}/contents/docs/mission-control/mission-control-guide.md`)) {
+        return response(JSON.stringify({
+          sha: policySha,
+          content: Buffer.from(`---\npolicy_id: bemoat-mission-control\nversion: 1.7.0\ncanonical_repository: ${repo}\ntrusted_founder_login: bemoat\n---\n\n# Mission Control\n`).toString('base64'),
+          encoding: 'base64',
+        }))
+      }
+      if (args[0] === 'api' && args[1] === `repos/${repo}/compare/${firstHead}...${checkpointHead}`) {
+        compareCalls += 1
+        return response(JSON.stringify({
+          status: 'ahead',
+          ahead_by: 1,
+          behind_by: 0,
+          base_commit: { sha: firstHead },
+          head_commit: { sha: checkpointHead },
+          merge_base_commit: { sha: firstHead },
+        }))
+      }
+      if (args[0] === 'issue' && args[1] === 'view') {
+        return response(JSON.stringify({
+          number: Number(issueNumber),
+          title: 'test(context): collect ordered objective ancestry',
+          state: 'OPEN',
+          url: `https://github.com/${repo}/issues/${issueNumber}`,
+          body: issueBody,
+          comments,
+        }))
+      }
+      if (args[0] === 'pr' && args[1] === 'list') return response('[]')
+      if (args[0] === 'api' && args[1] === `repos/${repo}/branches/main/protection`) return response('{}')
+      return response('')
+    }
+
+    const evidence = collectContextEvidence({
+      cwd: '/repo',
+      issueNumber,
+      run,
+      env: { GH_REPO: repo, NODE_ENV: 'test', PAYLOAD_SECRET: 'test-only-secret' },
+    })
+    const decision = routeContext(evidence)
+
+    expect(compareCalls).toBe(1)
+    expect(evidence.objectiveCheckpointAncestryProofs).toEqual([{
+      handoffCommentId: checkpointCommentId,
+      predecessorCommentId: firstCommentId,
+      predecessorHead: firstHead,
+      checkpointHead,
+      mergeBaseSha: firstHead,
+      aheadBy: 1,
+      behindBy: 0,
+    }])
+    expect(decision).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: { type: 'COMMAND', description: expect.stringContaining('Objective 3') },
     })
   })
 

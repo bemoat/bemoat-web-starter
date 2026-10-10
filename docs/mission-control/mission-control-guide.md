@@ -127,6 +127,44 @@ remains separate.
 
 Example: `Global MC → one worker (one objective) → durable result/Handoff → fresh Context → next route`
 
+### Ordered no-PR Issue objectives
+
+Context recognizes an ordered objective sequence only in one exact H2 Issue
+section headed `## Bounded work sequence` or
+`## Bounded work sequence (each new objective requires fresh authorization)`.
+Matching section titles at other heading levels or setext headings fail closed
+as `STOP`; heading text inside fenced Markdown code examples is ignored. Its
+list must declare `Objective 1` onward with unique, contiguous ordinals. A
+missing section or a valid one-objective list keeps the existing single-objective
+routing. Duplicate sections, malformed declarations, gaps, duplicate ordinals,
+or other ambiguous sequence content fail closed as `STOP`. Context does not
+infer objectives from unrelated headings, prose, or comment timestamps.
+
+For a valid sequence of more than one objective, each durable no-PR checkpoint
+must bind one native schema-v2 `IMPLEMENT` HANDOFF to its declared ordinal,
+repository, Issue, branch, protected base, exact head, and validation proof.
+Objective 1 may use an existing read-only HANDOFF whose objective begins with
+`Objective 1 —`; its native comment identity and exact body remain unchanged.
+Each later checkpoint must identify the exact declared objective title and
+include one writer-generated validation proof bound to its exact head. A
+code-bearing change uses the `code` proof and `pnpm run bemoat:check`; a
+documentation-only change uses the `docs-only` proof and
+`pnpm run bemoat:guard:safety`. It also includes one `objective-checkpoint`
+evidence entry binding its ordinal and the preceding HANDOFF comment ID and
+exact head. Context independently verifies that the preceding head is an
+ancestor of the checkpoint head. Missing, duplicate, stale, ambiguous, or
+unproven checkpoint evidence routes `STOP`.
+
+After a valid intermediate checkpoint, Context returns `IMPLEMENT` / `COMMAND`
+for only the immediate next declared objective. After the final declared
+checkpoint passes the existing PR-ready validation and durability checks,
+Context returns `PR_READY` / `OPEN_PR`. Existing `STOP`, `FOUNDER_GATE`, and
+`COMPLETE` evidence and the repository, base, branch, exact-head, clean-worktree,
+and pushed-durability gates continue to apply. `COMPLETE` cannot terminalize a
+valid ordered sequence while declared objectives remain pending. This
+reconstruction is stateless and does not establish continuity of a host
+Execution session.
+
 bemoat:context:sync-base remains a separately bounded protected-main
 synchronization utility. Run CLI Discovery before invoking any retained
 bemoat command. Follow the repository's

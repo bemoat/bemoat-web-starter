@@ -2,7 +2,7 @@ import type { NormalizedContextEvidence } from './model.ts'
 import { collectContextEvidence } from './evidence.ts'
 import { isFullSha, output, runContextCommand, type ContextCommandRunner } from './runtime.ts'
 import { routeNoPrContext } from './no-pr-routing.ts'
-import { setupBaseRecoveryCandidate } from './setup-base-recovery-routing.ts'
+import { setupBaseRecoveryCandidate } from './objective-sequence-routing.ts'
 import { identityErrors, routeContext } from './router.ts'
 
 export type SetupRecoveryClassification = 'SUCCESS' | 'NO_OP_IDENTICAL_RETRY' | 'UNSUPPORTED_PRE_STATE' | 'STATE_CONFLICT' | 'HEAD_DRIFT' | 'BLOCKED_EXTERNAL' | 'EVIDENCE_CONFLICT' | 'AUTHORITY_CONFLICT'

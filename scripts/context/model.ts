@@ -49,6 +49,12 @@ export interface IssueEvidence {
   taskSize: string | null
   missionControlMode: string | null
   workflowProfile: string | null
+  objectiveSequence?: IssueObjectiveSequence
+}
+
+export interface IssueObjectiveSequence {
+  status: 'absent' | 'valid' | 'invalid'
+  objectives: Array<{ id: string; title: string }>
 }
 
 export interface LocalGitEvidence {
@@ -256,6 +262,17 @@ export interface NoPrImplementationBaseAncestryProof {
   behindBy: 0
 }
 
+/** Remote ancestry proof binding one objective checkpoint to its predecessor. */
+export interface ObjectiveCheckpointAncestryProof {
+  handoffCommentId: string
+  predecessorCommentId: string
+  predecessorHead: string
+  checkpointHead: string
+  mergeBaseSha: string
+  aheadBy: number
+  behindBy: number
+}
+
 export interface NormalizedContextEvidence {
   repository: RepositoryEvidence
   protectedBase: ProtectedBaseEvidence
@@ -271,6 +288,7 @@ export interface NormalizedContextEvidence {
   setupBaseRecovery?: SetupBaseRecoveryEvidence | null
   historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
   noPrImplementationBaseAncestryProofs?: NoPrImplementationBaseAncestryProof[]
+  objectiveCheckpointAncestryProofs?: ObjectiveCheckpointAncestryProof[]
   /** Read-only proof for one uniquely consumed old no-PR Founder gate. */
   historicalNoPrFounderGateReplayProofs?: HistoricalNoPrFounderGateReplayProof[]
   evidenceErrors: string[]

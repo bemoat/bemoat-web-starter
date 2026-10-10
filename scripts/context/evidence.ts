@@ -15,6 +15,7 @@ import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
 import type { NoPrImplementationBaseAncestryProof } from './model.ts'
 import type { HandoffRecord } from '../handoff/schema.ts'
 import { readRedWipWorkingTreeEvidence } from './red-wip-tree-evidence.ts'
+import { readObjectiveCheckpointAncestryProofs } from './native-review-lineage.ts'
 
 function readSetupBaseRecoveryEvidence({
   cwd,
@@ -163,8 +164,9 @@ export function isPrReadyImplementationEvidence(record: HandoffRecord, source: R
   if (proofs.length === 1) {
     try {
       const proof = JSON.parse(proofs[0]!.value) as Record<string, unknown>
-      validProof = proof.status === 'PASS' && proof.tier === 'code' &&
-        proof.command === 'pnpm run bemoat:check' && proof.exact_head === record.exact_head
+      validProof = proof.status === 'PASS' && proof.exact_head === record.exact_head &&
+        ((proof.tier === 'code' && proof.command === 'pnpm run bemoat:check') ||
+          (proof.tier === 'docs-only' && proof.command === 'pnpm run bemoat:guard:safety'))
     } catch {
       validProof = false
     }
@@ -250,6 +252,23 @@ export function collectContextEvidence({
       baseBranch: approvedBase.branch,
       baseSha: policyResult.sha ?? approvedBase.sha,
       localGit,
+      handoffs: roleEvidence.handoffs,
+      run,
+      cwd,
+      env,
+    })
+    : []
+  const objectiveCheckpointAncestryProofs = repo && approvedBase.branch && approvedBase.sha && github.issue &&
+    localGit.branch !== '<detached>' && localGit.head && github.activePrs.length === 0
+    ? readObjectiveCheckpointAncestryProofs({
+      repo,
+      issueNumber,
+      branch: localGit.branch,
+      head: localGit.head,
+      baseBranch: approvedBase.branch,
+      baseSha: policyResult.sha ?? approvedBase.sha,
+      localGit,
+      objectiveSequence: github.issue.objectiveSequence,
       handoffs: roleEvidence.handoffs,
       run,
       cwd,
@@ -343,6 +362,7 @@ export function collectContextEvidence({
     },
     ...(historicalBlockerResolutionProofs.length > 0 ? { historicalBlockerResolutionProofs } : {}),
     ...(noPrImplementationBaseAncestryProofs.length > 0 ? { noPrImplementationBaseAncestryProofs } : {}),
+    ...(objectiveCheckpointAncestryProofs.length > 0 ? { objectiveCheckpointAncestryProofs } : {}),
     ...(github.redWipApproval ? {
       redWipApproval: github.redWipApproval,
       redWipWorkingTree: readRedWipWorkingTreeEvidence(cwd, github.redWipApproval, run),

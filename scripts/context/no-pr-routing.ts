@@ -3,10 +3,13 @@ import { hasMalformedNoPrBlockerResolutionEvidence, resolveStopBlockers } from '
 import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 import { foldNoPrFounderDecision, type ApplicableNoPrHandoff } from './founder-decision-folding.ts'
 import { extractHandoffPayload, isExactIssueCommentUrl } from './runtime.ts'
-import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
+import { setupBaseRecoveryRoute } from './objective-sequence-routing.ts'
 import { consumedHistoricalNoPrFounderGate, hasConflictingTerminalHandoff } from './founder-gate-history.ts'
 import { isPrReadyImplementationEvidence } from './evidence.ts'
 import { hasInvalidImplementationHandoffCandidate } from './issue-parser.ts'
+import { multiObjectiveProgress, routeMultiObjectiveProgress } from './objective-sequence-routing.ts'
+import { uniqueWrongIssueBranchRecovery } from './pr-issue-ownership.ts'
+export { uniqueWrongIssueBranchRecovery } from './pr-issue-ownership.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -88,85 +91,6 @@ function hasConsistentHistoricalBase(handoffs: ApplicableNoPrHandoff[]): boolean
   return new Set(handoffs.map(({ record }) => record.protected_base.sha)).size <= 1
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
-
-export function uniqueWrongIssueBranchRecovery(evidence: NormalizedContextEvidence): ContextBranchRecovery | null {
-  const candidates = evidence.issueBranchRecoveryCandidates ?? []
-  if (candidates.length !== 1) return null
-
-  const candidate = candidates[0]!
-  const ownerIssue = candidate.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
-  const activePr = !Array.isArray(evidence.activePr) && evidence.activePr &&
-    !evidence.activePr.merged && evidence.activePr.state.toUpperCase() !== 'MERGED'
-    ? evidence.activePr
-    : null
-  const localGit = evidence.localGit
-  if (
-    (activePr
-      ? candidate.branch !== activePr.headBranch || candidate.liveHead.toLowerCase() !== activePr.headSha.toLowerCase() ||
-        activePr.baseBranch !== evidence.protectedBase.branch || activePr.baseSha.toLowerCase() !== evidence.protectedBase.sha.toLowerCase()
-      : ownerIssue !== evidence.issue.number) ||
-    !candidate.eligible ||
-    candidate.checkedOutElsewhere ||
-    !/^[0-9a-f]{40}$/i.test(candidate.liveHead) ||
-    candidate.remoteTrackingHead !== candidate.liveHead ||
-    !localGit.head ||
-    localGit.upstream !== `origin/${localGit.branch}` ||
-    localGit.originRepository !== evidence.repository.nameWithOwner ||
-    !evidence.protectedBase.branch ||
-    !/^[0-9a-f]{40}$/i.test(evidence.protectedBase.sha) ||
-    !localGit.clean ||
-    localGit.detached ||
-    !localGit.pushed ||
-    !localGit.durable
-  ) return null
-
-  let args: string[]
-  if (candidate.localHead) {
-    if (candidate.localHead !== candidate.liveHead || candidate.upstream !== `origin/${candidate.branch}`) return null
-    args = ['switch', '--', candidate.branch]
-  } else {
-    args = ['switch', '--track', `origin/${candidate.branch}`]
-  }
-
-  return {
-    type: 'SWITCH_BRANCH',
-    command: 'git',
-    args,
-    display_command: `git ${args.slice(0, -1).join(' ')} ${shellQuote(args.at(-1)!)}`,
-    binding: {
-      repository: evidence.repository.nameWithOwner,
-      issue_number: evidence.issue.number,
-      protected_base: {
-        branch: evidence.protectedBase.branch,
-        sha: evidence.protectedBase.sha,
-      },
-      source: {
-        branch: localGit.branch,
-        head: localGit.head,
-        upstream: localGit.upstream,
-        clean: localGit.clean,
-        detached: localGit.detached,
-        pushed: localGit.pushed,
-        durable: localGit.durable,
-      },
-      target: { branch: candidate.branch, head: candidate.liveHead },
-      ...(activePr ? {
-        active_pr: {
-          number: activePr.number,
-          url: activePr.url,
-          base_branch: activePr.baseBranch,
-          base_sha: activePr.baseSha,
-          head_branch: activePr.headBranch,
-          head: activePr.headSha,
-        },
-      } : {}),
-    },
-  }
-}
-
 export function routeWrongIssueActivePrContext(evidence: NormalizedContextEvidence): NoPrDecision | null {
   const activePr = !Array.isArray(evidence.activePr) ? evidence.activePr : null
   const sourceIssue = evidence.localGit.branch.match(/^[^/]+\/([1-9]\d*)-[^/]+$/)?.[1]
@@ -240,7 +164,12 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
   }
   const handoffSources = routingEvidence.durableContext.handoffs ??
     (routingEvidence.durableContext.latestHandoff ? [routingEvidence.durableContext.latestHandoff] : [])
-  if (hasInvalidImplementationHandoffCandidate(handoffSources, handoffs.map(({ source }) => source), (source) => {
+  const objectiveProgress = multiObjectiveProgress(routingEvidence)
+  const recognizedObjectiveSources = objectiveProgress.enabled && objectiveProgress.valid
+    ? objectiveProgress.checkpoints.map(({ source }) => source)
+    : []
+  if (hasInvalidImplementationHandoffCandidate(handoffSources, [...handoffs.map(({ source }) => source), ...recognizedObjectiveSources], (source) => {
+    if (recognizedObjectiveSources.includes(source)) return true
     const matching = handoffs.find((handoff) => handoff.source === source)
     return Boolean(matching && isPrReadyImplementationEvidence(matching.record, source, evidence))
   })) return stop(
@@ -317,6 +246,13 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
         'Resolve historical protected-base identity conflicts before terminalizing this Issue.',
       )
     }
+    if (objectiveProgress.enabled && objectiveProgress.valid &&
+        objectiveProgress.checkpoints.length < objectiveProgress.objectiveCount) {
+      return stop(
+        `EVIDENCE_CONFLICT: no-PR COMPLETE would terminalize an ordered objective sequence with pending objectives at ${evidence.localGit.head}.`,
+        'Complete the remaining declared objectives through their individually validated HANDOFF checkpoints before terminalizing this Issue.',
+      )
+    }
 
     return {
       route: 'COMPLETE',
@@ -361,6 +297,9 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
       },
     }
   }
+
+  const sequenceDecision = routeMultiObjectiveProgress(routingEvidence, objectiveProgress, handoffs, handoffSources)
+  if (sequenceDecision) return sequenceDecision
 
   const onlyRecomputableHistory = handoffs.every(({ record }) =>
     (record.route === 'IMPLEMENT' && record.objective_mode === 'read_only') ||

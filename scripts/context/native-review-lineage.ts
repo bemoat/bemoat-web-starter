@@ -1,7 +1,16 @@
-import type { ActivePullRequestEvidence, NativeReviewAncestryProof, NativeReviewEvidence, NormalizedContextEvidence } from './model.ts'
+import type {
+  ActivePullRequestEvidence,
+  IssueObjectiveSequence,
+  NativeReviewAncestryProof,
+  NativeReviewEvidence,
+  NormalizedContextEvidence,
+  ObjectiveCheckpointAncestryProof,
+  RoleEvidence,
+} from './model.ts'
 import { parseProductionMergeReviewVerdict } from './merge-review-verdict.ts'
-import { isFullSha, type ContextCommandRunner } from './runtime.ts'
+import { extractHandoffPayload, isFullSha, type ContextCommandRunner } from './runtime.ts'
 import { hasUniqueCanonicalReviewIdentity } from './semantic-review-evidence.ts'
+import { parseHandoffBody, renderHandoffComment, type HandoffRecord } from '../handoff/schema.ts'
 
 function submitted(review: NativeReviewEvidence): boolean {
   return ['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'].includes(review.state.toUpperCase())
@@ -155,5 +164,112 @@ export function readNativeReviewAncestryProofs({
     })
   }
 
+  return proofs
+}
+export function readObjectiveCheckpointAncestryProofs({
+  repo,
+  issueNumber,
+  branch,
+  head,
+  baseBranch,
+  baseSha,
+  localGit,
+  objectiveSequence,
+  handoffs,
+  run,
+  cwd,
+  env,
+}: {
+  repo: string
+  issueNumber: string
+  branch: string
+  head: string
+  baseBranch: string
+  baseSha: string
+  localGit: {
+    durable: boolean
+    clean: boolean
+    detached: boolean
+    pushed: boolean
+    originRepository: string | null
+    branch: string
+    head: string | null
+    upstream: string | null
+  }
+  objectiveSequence: IssueObjectiveSequence | undefined
+  handoffs: RoleEvidence[]
+  run: ContextCommandRunner
+  cwd: string
+  env: NodeJS.ProcessEnv
+}): ObjectiveCheckpointAncestryProof[] {
+  if (objectiveSequence?.status !== 'valid' || objectiveSequence.objectives.length < 2 ||
+      !localGit.durable || !localGit.clean || localGit.detached || !localGit.pushed ||
+      localGit.originRepository !== repo || localGit.branch !== branch || localGit.head?.toLowerCase() !== head.toLowerCase() ||
+      localGit.upstream !== `origin/${branch}` || !/^[0-9a-f]{40}$/i.test(baseSha)) return []
+
+  const records = new Map<string, { source: RoleEvidence; record: HandoffRecord; ordinal: number }>()
+  for (const source of handoffs) {
+    try {
+      const record = parseHandoffBody(JSON.stringify(extractHandoffPayload(source.body)))
+      const match = record.objective.match(/^Objective ([1-9]\d*) — (.+)$/)
+      const nativeId = String(source.id)
+      if (record.schema_version !== 2 || record.route !== 'IMPLEMENT' || record.pr !== null ||
+          record.repository !== repo || record.issue_number !== issueNumber || record.branch !== branch ||
+          record.local_durability.required !== true || record.local_durability.durable !== true ||
+          record.protected_base.branch !== baseBranch || record.protected_base.sha.toLowerCase() !== baseSha.toLowerCase() ||
+          renderHandoffComment(record) !== source.body || !/^[1-9]\d*$/.test(nativeId) || !match ||
+          Number(match[1]) > objectiveSequence.objectives.length ||
+          (Number(match[1]) > 1 && objectiveSequence.objectives[Number(match[1]) - 1]?.title !== match[2]) ||
+          source.url !== `https://github.com/${repo}/issues/${issueNumber}#issuecomment-${nativeId}`) continue
+      records.set(nativeId, { source, record, ordinal: Number(match[1]) })
+    } catch {
+      // A malformed checkpoint cannot supply ancestry proof.
+    }
+  }
+
+  const proofs: ObjectiveCheckpointAncestryProof[] = []
+  for (const { source, record, ordinal } of records.values()) {
+    if (ordinal < 2 || record.objective_mode !== 'implementation') continue
+    const entries = record.verified_evidence.filter((entry) => entry.kind === 'objective-checkpoint')
+    if (entries.length !== 1) continue
+    let binding: Record<string, unknown>
+    try { binding = JSON.parse(entries[0]!.value) as Record<string, unknown> } catch { continue }
+    if (!binding || typeof binding !== 'object' || Array.isArray(binding) ||
+        Object.keys(binding).sort().join('\u0000') !== ['objective_id', 'sequence', 'predecessor_comment_id', 'predecessor_head'].sort().join('\u0000') ||
+        binding.objective_id !== String(ordinal) || binding.sequence !== ordinal ||
+        typeof binding.predecessor_comment_id !== 'string' || !/^[1-9]\d*$/.test(binding.predecessor_comment_id) ||
+        typeof binding.predecessor_head !== 'string' || !/^[0-9a-f]{40}$/i.test(binding.predecessor_head)) continue
+
+    const predecessor = records.get(binding.predecessor_comment_id)
+    if (!predecessor || predecessor.ordinal !== ordinal - 1 ||
+        predecessor.record.exact_head.toLowerCase() !== binding.predecessor_head.toLowerCase()) continue
+
+    const predecessorHead = predecessor.record.exact_head.toLowerCase()
+    const checkpointHead = record.exact_head.toLowerCase()
+    const comparison = run('gh', ['api', `repos/${repo}/compare/${predecessorHead}...${checkpointHead}`], { cwd, env })
+    if (comparison.status !== 0 || comparison.error || !comparison.stdout.trim()) continue
+    let facts: {
+      status?: unknown
+      ahead_by?: unknown
+      behind_by?: unknown
+      base_commit?: { sha?: unknown }
+      merge_base_commit?: { sha?: unknown }
+    }
+    try { facts = JSON.parse(comparison.stdout) as typeof facts } catch { continue }
+    if (facts.status !== 'ahead' || !Number.isSafeInteger(facts.ahead_by) || (facts.ahead_by as number) <= 0 ||
+        facts.behind_by !== 0 || typeof facts.base_commit?.sha !== 'string' ||
+        facts.base_commit.sha.toLowerCase() !== predecessorHead || typeof facts.merge_base_commit?.sha !== 'string' ||
+        facts.merge_base_commit.sha.toLowerCase() !== predecessorHead) continue
+
+    proofs.push({
+      handoffCommentId: String(source.id),
+      predecessorCommentId: binding.predecessor_comment_id,
+      predecessorHead,
+      checkpointHead,
+      mergeBaseSha: predecessorHead,
+      aheadBy: facts.ahead_by as number,
+      behindBy: 0,
+    })
+  }
   return proofs
 }
