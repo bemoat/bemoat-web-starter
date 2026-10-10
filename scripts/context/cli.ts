@@ -56,9 +56,9 @@ export function renderContextHelp(format = 'text') {
       required_inputs: [{ name: 'issue_number', syntax: '<issue-number>', kind: 'positional', value_type: 'positive_integer', required: true, source: 'caller', multiple: false, values: [], description: 'Issue number to reconstruct.' }],
       optional_flags: [
         { name: 'json', syntax: '--json', kind: 'flag', value_type: 'boolean', required: false, source: 'caller', multiple: false, values: [], description: 'Emit deterministic machine-readable context output.' },
-        { name: 'target_worktree', syntax: '--target-worktree <absolute-path>', kind: 'option', value_type: 'path', required: false, source: 'caller', multiple: false, values: [], description: 'Evaluate one existing target worktree using this command source; omit for same-worktree mode.' },
+        { name: 'target_worktree', syntax: '--target-worktree <absolute-path>', kind: 'option', value_type: 'path', required: false, source: 'caller', multiple: false, values: [], description: 'Evaluate one existing target root independently from this protected-main command source; the distinct canonical roots may be separate clones or worktrees. Omit for same-worktree mode.' },
       ],
-      reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison for eligible no-PR implementation HANDOFFs, blocker resolutions, or consumed no-PR Founder gates that require strict ancestry'],
+      reads: ['local Git source and target roots, refs, status, branch, upstream, origin identity, target upstream remote URL, and target live branch ref', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison for eligible no-PR implementation HANDOFFs, blocker resolutions, or consumed no-PR Founder gates that require strict ancestry'],
       writes: [],
       result_classifications: ['SUCCESS', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT'],
       stop_classifications: ['INVALID_INVOCATION', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT', 'INTERNAL_ERROR'],

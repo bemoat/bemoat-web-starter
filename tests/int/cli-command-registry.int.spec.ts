@@ -12,6 +12,7 @@ import {
   getCommandContract,
   validateCommandContractRegistry,
 } from '../../scripts/cli/command-contract.ts'
+import { createHelpEnvelopeV1 } from '../../scripts/cli/command-help.ts'
 
 type JsonRecord = Record<string, unknown>
 type PackageJson = { scripts: Record<string, string> }
@@ -32,6 +33,7 @@ const EXPECTED_PACKAGE_SCRIPTS: Record<string, string> = {
   'bemoat:context:sync-base': 'node scripts/agent-context-sync-base.ts',
   'bemoat:context:recover-setup': 'node scripts/agent-context-recover-setup.ts',
   'bemoat:context:recover-committed-wip': 'node scripts/agent-context-recover-committed-wip.ts',
+  'bemoat:context:bootstrap-source': 'node scripts/agent-context-bootstrap-source.ts',
   'bemoat:checkpoint:red-wip': 'node scripts/agent-red-wip-checkpoint.ts',
   'bemoat:handoff': 'node scripts/agent-handoff.ts',
   'bemoat:blocker-resolution:validate': 'node scripts/agent-validate-blocker-resolution.ts',
@@ -55,6 +57,7 @@ const EXPECTED_COMMAND_TIERS: Record<string, 'A' | 'B' | 'C'> = {
   'bemoat:context:sync-base': 'A',
   'bemoat:context:recover-setup': 'A',
   'bemoat:context:recover-committed-wip': 'A',
+  'bemoat:context:bootstrap-source': 'A',
   'bemoat:checkpoint:red-wip': 'A',
   'bemoat:handoff': 'A',
   'bemoat:blocker-resolution:validate': 'B',
@@ -231,10 +234,10 @@ describe('Task 1 command contract registry', () => {
       .sort()
 
     expect(packageCommands).toEqual(Object.keys(EXPECTED_PACKAGE_SCRIPTS).sort())
-    expect(packageCommands).toHaveLength(20)
+    expect(packageCommands).toHaveLength(21)
     expect(registryCommands).toEqual(packageCommands)
     expect(classifiedCommands).toEqual(packageCommands)
-    expect(new Set(classifiedCommands).size).toBe(20)
+    expect(new Set(classifiedCommands).size).toBe(21)
 
     for (const command of packageCommands) {
       expect(getCommandContract(command)).toBe(COMMAND_CONTRACT_REGISTRY.commands[command])
@@ -242,7 +245,7 @@ describe('Task 1 command contract registry', () => {
     expect(getCommandContract('bemoat:unregistered')).toBeNull()
   })
 
-  it('uses tier totals A=7 B=10 C=3', () => {
+  it('uses tier totals A=8 B=10 C=3', () => {
     const counts = { A: 0, B: 0, C: 0 }
 
     for (const [command, expectedTier] of Object.entries(EXPECTED_COMMAND_TIERS)) {
@@ -251,9 +254,9 @@ describe('Task 1 command contract registry', () => {
       counts[expectedTier] += 1
     }
 
-    expect(counts).toEqual({ A: 7, B: 10, C: 3 })
-    expect(Object.keys(EXPECTED_COMMAND_TIERS)).toHaveLength(20)
-    expect(Object.keys(COMMAND_CONTRACT_REGISTRY.commands)).toHaveLength(20)
+    expect(counts).toEqual({ A: 8, B: 10, C: 3 })
+    expect(Object.keys(EXPECTED_COMMAND_TIERS)).toHaveLength(21)
+    expect(Object.keys(COMMAND_CONTRACT_REGISTRY.commands)).toHaveLength(21)
     expectRegistryValid()
   })
 
@@ -269,6 +272,19 @@ describe('Task 1 command contract registry', () => {
       multiple: false,
     }))
     expect(contract?.optional_flags?.filter((input) => input.name === 'target_worktree')).toHaveLength(1)
+  })
+
+  // Oracle: the approved #630 acquisition command is limited to the caller's explicit D; native exact-head review #5479644848 requires atomic no-clobber reservation before clone, preserving any concurrently occupied or partial destination.
+  it('publishes explicit destination reservation and no-clobber guarantees in bootstrap-source help', () => {
+    const contract = getCommandContract('bemoat:context:bootstrap-source')
+    expect(contract).not.toBeNull()
+    const help = createHelpEnvelopeV1(contract) as JsonRecord
+    const writes = (help.writes as string[]).join('\n')
+
+    expect(writes).toMatch(/atomic(?:ally)?[^\n]*reserv(?:e|ation)[^\n]*explicit destination/i)
+    expect(writes).toMatch(/reserv(?:e|ation)[^\n]*before[^\n]*clone/i)
+    expect(writes).toMatch(/(?:concurrent|occupied|no.clobber)[^\n]*(?:stop|preserv)|(?:stop|preserv)[^\n]*(?:concurrent|occupied|no.clobber)/i)
+    expect(writes).toMatch(/partial[^\n]*preserv/i)
   })
 
   it('requires every schema-v1 command field and existing entrypoint', () => {

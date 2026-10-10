@@ -1,0 +1,5 @@
+export const TRUSTED_SOURCE_BOOTSTRAP_COMMAND = 'bemoat:context:bootstrap-source'
+export const CONTEXT_COMMAND = 'bemoat:context'
+export const PROOF_COMMAND = 'bemoat:context:recover-committed-wip'
+export const REPOSITORY = 'bemoat/bemoat-web-starter'
+export const BASE_BRANCH = 'main'

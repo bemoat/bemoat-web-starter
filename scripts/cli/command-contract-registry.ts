@@ -8,6 +8,7 @@ import { contextSyncCommands } from './context-sync-command-metadata.ts'
 import { contextSyncRoutes } from './context-sync-routing-policy.ts'
 import { contextSetupCommands } from './context-setup-command-metadata.ts'
 import { committedWipRecoveryCommands, committedWipRecoveryRoutes } from './committed-wip-recovery-command-metadata.ts'
+import { trustedSourceBootstrapCommands, trustedSourceBootstrapRoutes } from './trusted-source-bootstrap-command-metadata.ts'
 import { contextSetupRoutes } from './context-setup-routing-policy.ts'
 import { redWipCheckpointCommands } from './red-wip-checkpoint-command-metadata.ts'
 import { utilityRoutes } from './utility-routing-policy.ts'
@@ -256,9 +257,9 @@ const commands: Record<string, CommandContract> = {
     purpose: 'Reconstruct deterministic bounded task context without mutation.',
     operation: 'Read and normalize live GitHub and local Git evidence, then compute one pure route.',
     required_inputs: [positional('issue_number', '<issue-number>', 'positive_integer', 'Issue number to reconstruct.')],
-    optional_flags: [flag('json', '--json', 'boolean', 'Emit deterministic machine-readable context output.'), flag('target_worktree', '--target-worktree <absolute-path>', 'path', 'Evaluate one existing attached target worktree from the current protected-main command source; omit for same-worktree mode.')],
-    required_evidence: ['Canonical repository identity and live protected-base SHA.', 'Canonical policy path, version, and source/blob identity.', 'Issue objective, scope, acceptance criteria, dependencies, and durable comments.', 'Local branch, HEAD, upstream, origin identity, cleanliness, and push durability.', 'When --target-worktree is supplied: clean canonical protected-main source at the live protected-base SHA, and one canonical attached target worktree in the same repository with exact queried Issue branch/head, origin/upstream, cleanliness, and live push durability.', 'Unique active PR, exact head, CI/check, review, and applicable protection evidence when present.', 'For applicable historical BLOCKER_RESOLUTION carry-forward: exact historical policy replay, approved-base ancestry, identical historical/current mission-control-guide and command-reference blobs, and invariant current resolution bindings.'],
-    reads: ['local Git refs, status, branch, upstream, origin identity, target upstream remote URL, and attached worktree list', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base'],
+    optional_flags: [flag('json', '--json', 'boolean', 'Emit deterministic machine-readable context output.'), flag('target_worktree', '--target-worktree <absolute-path>', 'path', 'Evaluate one existing target root independently from this protected-main command source; source and target must be distinct canonical roots, and may be separate clones or worktrees. Omit for same-worktree mode.')],
+    required_evidence: ['Canonical repository identity and live protected-base SHA.', 'Canonical policy path, version, and source/blob identity.', 'Issue objective, scope, acceptance criteria, dependencies, and durable comments.', 'Local branch, HEAD, upstream, origin identity, cleanliness, and push durability.', 'When --target-worktree is supplied: a clean canonical protected-main source at the live protected-base SHA, and a distinct canonical target root independently verified for the same repository, exact queried Issue branch/head, canonical origin/upstream, cleanliness, and live push durability. The target need not appear in the source clone’s Git worktree list.', 'Unique active PR, exact head, CI/check, review, and applicable protection evidence when present.', 'For applicable historical BLOCKER_RESOLUTION carry-forward: exact historical policy replay, approved-base ancestry, identical historical/current mission-control-guide and command-reference blobs, and invariant current resolution bindings.'],
+    reads: ['local Git source and target roots, refs, status, branch, upstream, origin identity, target upstream remote URL, and target live branch ref', 'GitHub repository, protected base, policy, Issue, comments, PR, checks, reviews, and protection', 'exact historical/current canonical contract snapshots and GitHub commit comparison when an applicable resolution binds an older protected base'],
     writes: [],
     success_classifications: ['SUCCESS'],
     next_action_rules: [
@@ -266,7 +267,7 @@ const commands: Record<string, CommandContract> = {
       { classification: 'BLOCKED_EXTERNAL', next_action: nextAction('STOP', null, 'Required external evidence is unavailable.') },
       { classification: 'EVIDENCE_CONFLICT', next_action: nextAction('STOP', null, 'Required evidence is contradictory or ambiguous.') },
     ],
-    stop_conditions: ['Stop fail-closed when required evidence is missing, unavailable, contradictory, or ambiguous.', 'Stop with LOCAL_STATE_NOT_DURABLE-style evidence when required local work is dirty, detached, unpushed, or local-only.', 'With --target-worktree, stop unless the source is the clean live protected-base checkout and exactly one explicit target is an attached, canonical, clean, pushed worktree in the same repository bound to the queried Issue and exact head.'],
+    stop_conditions: ['Stop fail-closed when required evidence is missing, unavailable, contradictory, or ambiguous.', 'Stop with LOCAL_STATE_NOT_DURABLE-style evidence when required local work is dirty, detached, unpushed, or local-only.', 'With --target-worktree, stop unless the source is the clean live protected-base checkout and the one explicit, distinct canonical target root independently passes repository, queried Issue, exact branch/head, origin/upstream, cleanliness, and live push-durability checks.'],
     examples: [
       { description: 'Reconstruct Issue context as JSON.', argv: ['410', '--json'] },
       { description: 'Reconstruct an explicitly identified target from protected main.', argv: ['568', '--target-worktree', '/worktrees/fix-568-stale-base', '--json'] },
@@ -534,13 +535,14 @@ const trailingCommands = Object.fromEntries(
 )
 delete commands['bemoat:test:int']
 delete commands['bemoat:typecheck']
-const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...committedWipRecoveryCommands(commandMetadataDependencies), ...redWipCheckpointCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
+const orderedCommands = { ...commands, ...contextSyncCommands(commandMetadataDependencies), ...contextSetupCommands(commandMetadataDependencies), ...committedWipRecoveryCommands(commandMetadataDependencies), ...trustedSourceBootstrapCommands(commandMetadataDependencies), ...redWipCheckpointCommands(commandMetadataDependencies), ...protocolCommands, ...validationCommands, ...trailingCommands }
 
 const routes = [
   ...utilityRoutes(),
   ...contextSyncRoutes(),
   ...contextSetupRoutes(),
   ...committedWipRecoveryRoutes(),
+  ...trustedSourceBootstrapRoutes(),
   ...handoffRoutes(),
 ]
 

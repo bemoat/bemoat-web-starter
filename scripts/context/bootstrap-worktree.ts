@@ -56,11 +56,6 @@ export function resolveContextBootstrapRoots({
   return { sourceCwd: source, targetCwd: target, bootstrap: true }
 }
 
-function worktreePaths(value: string | null): string[] {
-  if (value === null) return []
-  return value.split(/\r?\n/).filter((line) => line.startsWith('worktree ')).map((line) => line.slice('worktree '.length))
-}
-
 /** Validate independently collected local source and target facts before routing. */
 export function verifyContextBootstrap({
   roots,
@@ -101,11 +96,7 @@ export function verifyContextBootstrap({
   const remoteHead = remoteRecords.length === 1 && remoteRecords[0]?.ref === expectedRemoteRef
     ? remoteRecords[0].sha
     : null
-  const attachedPaths = worktreePaths(output(run('git', ['worktree', 'list', '--porcelain'], { cwd: roots.sourceCwd })))
-  const attached = attachedPaths.includes(target)
-
   if (topLevel !== target) reasons.push('EVIDENCE_CONFLICT: target path is not the canonical root of its Git worktree')
-  if (!attached) reasons.push('EVIDENCE_CONFLICT: target is not an attached worktree of the protected-main command source')
   if (!isFullSha(head) || head.toLowerCase() !== evidence.localGit.head?.toLowerCase()) reasons.push('EVIDENCE_CONFLICT: target HEAD differs from independently collected Context evidence')
   if (!branch || branch !== evidence.localGit.branch || branch === '<detached>') reasons.push('EVIDENCE_CONFLICT: target branch differs from independently collected Context evidence or is detached')
   if (status === null || status !== '') reasons.push('LOCAL_STATE_NOT_DURABLE: target worktree is dirty or unavailable')

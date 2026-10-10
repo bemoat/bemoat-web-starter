@@ -51,6 +51,12 @@ proof may route bounded `IMPLEMENT` reentry for the current #627 RED/incomplete
 objective; current-head STOP, FOUNDER_GATE, and COMPLETE evidence keeps
 precedence.
 
+Fresh target-mode Context independently verifies two distinct canonical roots.
+The source and target may be independent clones or linked worktrees; the target
+does not need to appear in the source clone's Git worktree list. Each root must
+still pass its own canonical repository, exact identity, cleanliness, and
+durability checks.
+
 Safe help:
 
     pnpm run bemoat:context:recover-committed-wip -- --help --json
