@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { parseCommandInvocation } from '../../scripts/cli/command-invocation.ts'
+import { getCommandContract } from '../../scripts/cli/command-contract.ts'
 import { resolveSetupRecoveryRoots, verifySetupRecoveryWorktrees } from '../../scripts/context/setup-recovery-worktree.ts'
 import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
 import type { NormalizedContextEvidence } from '../../scripts/context/model.ts'
@@ -76,6 +77,25 @@ function sourceRunner(overrides: WorktreeOverrides = {}): ContextCommandRunner {
 }
 
 describe('Issue #592 explicit target setup recovery command contract', () => {
+  // Authority: the protected Mission Control guide says Context is read-only
+  // and recovery grants no objective-edit authority. The registered
+  // recover-setup contract limits mutation to a clean stale protected branch
+  // and routes success only to fresh Context.
+  it('keeps setup recovery separate from task-owned WIP repair authority', () => {
+    const contract = getCommandContract('bemoat:context:recover-setup')
+    if (!contract) throw new Error('bemoat:context:recover-setup contract missing')
+
+    expect(contract.accepted_pre_states.join(' ')).toMatch(/clean attached canonical protected branch/i)
+    expect(contract.accepted_pre_states.join(' ')).toMatch(/strictly behind the exact live protected base/i)
+    expect(contract.writes.join(' ')).toMatch(/no .*objective-file writes/i)
+    expect(contract.next_action_rules).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        classification: 'SUCCESS',
+        next_action: expect.objectContaining({ type: 'COMMAND', command: 'bemoat:context' }),
+      }),
+    ]))
+  })
+
   // Authority: Issue #592 requires the current protected-main source to expose
   // one explicit stale target while retaining the existing exact binding.
   it('parses one explicit absolute target alongside the exact recovery binding', () => {
