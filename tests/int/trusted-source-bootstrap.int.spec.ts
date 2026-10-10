@@ -291,6 +291,20 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     expect(validateContext(payload, { liveMain: LIVE_MAIN })).toBe(false)
   })
 
+  // Oracle: merged main@067a16e3634bc21a34efcc2608a7d767f094d40a docs/mission-control/command-reference.md:15-29 binds PR_READY to OPEN_PR `gh pr create` only; live no-pr-routing.ts:369-379 emits that exact pair. Neighboring producers retain FOUNDER_GATE + FOUNDER_GATE (no-pr-routing.ts:338-359) and STOP + COMMAND setup recovery (setup-base-recovery-routing.ts:60-71). These direct validator stories hold target identity constant and vary only the nested route/action pair; they do not assert that #627's bound target emits PR_READY.
+  it.each([
+    ['PR_READY with its canonical OPEN_PR action', 'PR_READY', 'OPEN_PR', 'gh pr create', true],
+    ['PR_READY with COMMAND', 'PR_READY', 'COMMAND', 'bemoat:context:recover-setup', false],
+    ['PR_READY with a noncanonical OPEN_PR command', 'PR_READY', 'OPEN_PR', 'git push', false],
+    ['FOUNDER_GATE with its canonical FOUNDER_GATE action', 'FOUNDER_GATE', 'FOUNDER_GATE', null, true],
+  ] as const)('validates %s', (_story, route, actionType, command, expected) => {
+    const payload = successfulContextPayload({
+      route,
+      next_action: { type: actionType, command, description: 'Canonical route/action characterization.' },
+    })
+    expect(validateContext(payload, { liveMain: LIVE_MAIN })).toBe(expected)
+  })
+
   it('preserves a destination created after the final absence check and never invokes clone', async () => {
     const f = fixture()
     const result = await invokeWithFinalAbsenceRace(f) as { classification: string; mutationPerformed: boolean; details: Record<string, unknown> }
