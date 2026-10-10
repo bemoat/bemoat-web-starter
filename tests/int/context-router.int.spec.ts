@@ -14,6 +14,32 @@ import type { RedWipApproval } from '../../scripts/context/red-wip-checkpoint.ts
 
 const sha = 'a'.repeat(40)
 const headSha = 'b'.repeat(40)
+const architectureA = '0e99786f0b087de46a2518d5874beb999892dd6c'
+const architectureB = '9c057c2a741d361b6138b95ff115bd3e56049fbd'
+const architectureTree = '717a04a858b4768deddf814822e3467407606f11'
+const architectureD = 'd'.repeat(40)
+const architectureRepository = 'bemoat/bemoat-web-starter'
+const architectureIssue = '627'
+const architectureBranch = 'fix/627-seamless-multi-objective-continuation'
+const architectureHandoffComment = '6088681412'
+
+type CommittedWipProof = {
+  status: 'PROVEN'
+  repository: string
+  issue_number: string
+  branch: string
+  protected_base: { branch: string; historical_sha: string; live_sha: string }
+  historical_handoff: { comment_id: string; exact_head: string }
+  distinct_roots: boolean
+  source: { root: string; head: string; clean: boolean; accessible: boolean }
+  target: { root: string; head: string; tree: string; upstream: string; clean: boolean; accessible: boolean }
+  ancestry: { historical_to_target: 'STRICT_ANCESTOR' | 'NOT_ANCESTOR'; target_to_historical: 'STRICT_ANCESTOR' | 'NOT_ANCESTOR' }
+  provenance: { author: string; subject: string; paths: string[] }
+}
+
+type ArchitectureNormalizedContextEvidence = NormalizedContextEvidence & {
+  committedWipProof?: CommittedWipProof
+}
 
 function baseEvidence(
   overrides: Partial<NormalizedContextEvidence> = {},
@@ -189,6 +215,148 @@ function strictHandoff(overrides: Partial<HandoffRecord> = {}) {
     body: renderHandoffComment(record),
     createdAt: '2026-08-02T00:00:00Z',
     url: 'https://github.com/boat1994/bemoat-web-starter/issues/410#issuecomment-900',
+  }
+}
+
+function architectureAHandoff(overrides: Partial<HandoffRecord> = {}) {
+  const record: HandoffRecord = {
+    schema_version: 2,
+    record_type: 'HANDOFF',
+    objective_mode: 'read_only',
+    repository: architectureRepository,
+    issue_number: architectureIssue,
+    objective: 'Objective 1 — read-only contract and transition trace: determine whether the reported intra-Issue continuation ambiguity demonstrates a merged policy or Context gap; provide the minimal behavior specification and regression requirements.',
+    permitted_scope: [
+      'Read-only inspection of the merged Mission Control guide, Execution contract, project loader, registered Context help/semantics, Issue #627, and public documentary #624 comments.',
+      'Characterize Objective 1 only and report evidence, the minimum correction proposal if supported, and bounded positive/negative regression requirements.',
+    ],
+    prohibited_scope: [
+      'No #627 Objective 2 or later work, source/test/document edits, or future-objective pre-authorization.',
+      'No inspection or mutation of #624 local worktrees, branches, code, files, or historical comments.',
+      'No PR, merge, deploy, production, migration, secret, or unrelated Issue operation.',
+    ],
+    executing_agent: 'Codex #627 Execution Controller',
+    provider: 'OpenAI',
+    branch: architectureBranch,
+    exact_head: architectureA,
+    protected_base: { branch: 'main', sha: architectureA },
+    pr: null,
+    verified_evidence: [
+      { kind: 'authority', value: 'Retained fresh #627 Context returned route IMPLEMENT and next_action.type COMMAND on this exact clean, durable branch; issue.scope was null. The Context result was not rerun after the user\'s instruction.', url: null },
+      { kind: 'authority', value: 'The user selected #627 Objective 1 only under the reported Issue-level COMMAND. The live Issue orders Objective 1 first and defines it as read-only contract/transition characterization; no later objective is authorized.', url: 'https://github.com/bemoat/bemoat-web-starter/issues/627' },
+      { kind: 'authority', value: 'The merged policy and loader require one bounded objective at a time, automatic same-session continuation only for the newly authorized objective, and fresh Context before choosing a later objective.', url: 'https://github.com/bemoat/bemoat-web-starter/blob/0e99786f0b087de46a2518d5874beb999892dd6c/docs/mission-control/mission-control-guide.md' },
+      { kind: 'authority', value: 'Public #624 evidence documents STOP and mid-objective Context friction but does not establish a fresh authorized post-checkpoint COMMAND that was ignored; Objective 1 found no demonstrated policy violation or basis for requiring objective_id/non-null scope.', url: 'https://github.com/bemoat/bemoat-web-starter/issues/624#issuecomment-6087620865' },
+      { kind: 'validation-proof', value: '{"status":"PASS","tier":"read-only","command":"pnpm run bemoat:guard:safety","exact_head":"0e99786f0b087de46a2518d5874beb999892dd6c"}', url: null },
+    ],
+    route: 'IMPLEMENT',
+    next_action: { route: 'IMPLEMENT', description: 'Objective 1 read-only characterization is complete. Run registered CLI Discovery and fresh Context before selecting any later objective; no future objective is pre-authorized.' },
+    stop_conditions: [
+      'Do not begin Objective 2 or later work until fresh Context independently authorizes it.',
+      'Do not edit #627 source or test files without the separately required first-edit authorization and workflow prerequisites.',
+      'If repository, branch, head, base, Issue, or PR identity changes, reconstruct authority before continuing.',
+    ],
+    local_durability: { required: true, durable: true, reason: null },
+    ...overrides,
+  }
+  return {
+    id: '6088681412',
+    body: renderHandoffComment(record),
+    createdAt: '2026-10-06T12:00:00Z',
+    url: `https://github.com/${architectureRepository}/issues/${architectureIssue}#issuecomment-${architectureHandoffComment}`,
+  }
+}
+
+function architectureProof(
+  sourceRoot = '/worktrees/protected-main',
+  targetRoot = '/worktrees/issue-627',
+  overrides: Partial<CommittedWipProof> = {},
+): CommittedWipProof {
+  return {
+    status: 'PROVEN',
+    repository: architectureRepository,
+    issue_number: architectureIssue,
+    branch: architectureBranch,
+    protected_base: { branch: 'main', historical_sha: architectureA, live_sha: architectureD },
+    historical_handoff: { comment_id: architectureHandoffComment, exact_head: architectureA },
+    distinct_roots: sourceRoot !== targetRoot,
+    source: { root: sourceRoot, head: architectureD, clean: true, accessible: true },
+    target: { root: targetRoot, head: architectureB, tree: architectureTree, upstream: `origin/${architectureBranch}`, clean: true, accessible: true },
+    ancestry: { historical_to_target: 'STRICT_ANCESTOR', target_to_historical: 'NOT_ANCESTOR' },
+    provenance: {
+      author: 'Bemoat',
+      subject: 'wip(#627): preserve incomplete multi-objective routing candidate',
+      paths: [
+        'docs/agent-loop/role-handoff-contract.md',
+        'docs/mission-control/mission-control-guide.md',
+        'scripts/context/evidence.ts',
+        'scripts/context/github.ts',
+        'scripts/context/issue-parser.ts',
+        'scripts/context/model.ts',
+        'scripts/context/native-review-lineage.ts',
+        'scripts/context/no-pr-routing.ts',
+        'scripts/context/objective-sequence-routing.ts',
+        'scripts/context/pr-issue-ownership.ts',
+        'scripts/context/router.ts',
+        'scripts/context/setup-base-recovery-routing.ts',
+        'scripts/context/setup-recovery.ts',
+        'tests/int/context-evidence.int.spec.ts',
+        'tests/int/context-no-pr-pr-ready.int.spec.ts',
+        'tests/int/context-parser.int.spec.ts',
+      ],
+    },
+    ...overrides,
+  }
+}
+
+function architectureAEvidence(
+  overrides: Partial<NormalizedContextEvidence> = {},
+  committedWipProof?: CommittedWipProof,
+): ArchitectureNormalizedContextEvidence {
+  const handoff = architectureAHandoff()
+  return {
+    ...baseEvidence({
+    repository: {
+      owner: 'bemoat',
+      name: 'bemoat-web-starter',
+      nameWithOwner: architectureRepository,
+      url: `https://github.com/${architectureRepository}`,
+    },
+    protectedBase: {
+      ...baseEvidence().protectedBase,
+      sha: architectureD,
+      url: `https://github.com/${architectureRepository}/tree/main`,
+    },
+    policy: {
+      ...baseEvidence().policy,
+      url: `https://github.com/${architectureRepository}/blob/main/docs/mission-control/mission-control-guide.md`,
+    },
+    issue: {
+      ...baseEvidence().issue,
+      number: architectureIssue,
+      url: `https://github.com/${architectureRepository}/issues/${architectureIssue}`,
+      objective: 'Recover the exact committed WIP without authorizing a new objective.',
+      acceptanceCriteria: ['Preserve A, B, and RED incomplete status.'],
+    },
+    localGit: {
+      ...baseEvidence().localGit,
+      branch: architectureBranch,
+      head: architectureB,
+      upstream: `origin/${architectureBranch}`,
+      originRepository: architectureRepository,
+      clean: true,
+      pushed: true,
+      durable: true,
+      reasons: [],
+    },
+    durableContext: {
+      latestHandoff: handoff,
+      handoffs: [handoff],
+      historicalResults: [],
+    },
+    evidenceErrors: [],
+      ...overrides,
+    }),
+    ...(committedWipProof ? { committedWipProof } : {}),
   }
 }
 
@@ -1714,6 +1882,118 @@ describe('bemoat:context pure routing', () => {
 
   it('routes clean durable work without a PR to IMPLEMENT', () => {
     expect(routeContext(baseEvidence()).route).toBe('IMPLEMENT')
+  })
+
+  // Authority: Founder Architecture A requires immutable HANDOFF A plus
+  // committed WIP B to be reconciled before any later objective action. The
+  // historical HANDOFF itself contains only immutable A evidence; B/tree and
+  // workspace proof are separate normalized Context evidence.
+  it('routes exact #627 A-to-B evidence without proof to the registered recovery command', () => {
+    const evidence = architectureAEvidence()
+    const handoffBody = evidence.durableContext.handoffs?.[0]?.body ?? ''
+    expect(handoffBody).toContain(architectureA)
+    expect(handoffBody).not.toContain(architectureB)
+    expect(handoffBody).not.toContain(architectureTree)
+    expect(evidence.localGit.head).toBe(architectureB)
+    expect(evidence.protectedBase.sha).toBe(architectureD)
+
+    const decision = routeContext(evidence)
+    expect(decision).toMatchObject({
+      route: 'STOP',
+      nextAction: { type: 'STOP', command: null },
+    })
+    expect(decision.nextAction.description).toMatch(/bemoat:context:recover-committed-wip/)
+    expect(JSON.stringify(decision)).not.toMatch(/GREEN|Objective N\+1|OPEN_PR|bemoat:handoff/i)
+  })
+
+  it.each([
+    ['wrong Issue', architectureAHandoff({ issue_number: '628' }), undefined],
+    ['wrong branch', architectureAHandoff({ branch: 'fix/628-harness-doctor-v0' }), undefined],
+    ['wrong protected base', architectureAHandoff({ protected_base: { branch: 'main', sha: 'e'.repeat(40) } }), undefined],
+    ['wrong HANDOFF head', architectureAHandoff({ exact_head: architectureB }), undefined],
+    ['stale HANDOFF', architectureAHandoff({ exact_head: 'c'.repeat(40) }), undefined],
+    ['missing HANDOFF', null, undefined],
+    ['duplicate HANDOFF', architectureAHandoff(), [architectureAHandoff(), architectureAHandoff({ objective: 'Objective 1 — Competing record.' })]],
+  ] as Array<[string, ReturnType<typeof architectureAHandoff> | null, ReturnType<typeof architectureAHandoff>[] | undefined]>)('%s fails closed before objective authority', (_story, handoff, handoffs) => {
+    const decision = routeContext(architectureAEvidence({
+      durableContext: {
+        latestHandoff: handoff,
+        handoffs: handoffs ?? (handoff ? [handoff] : []),
+        historicalResults: [],
+      },
+    }))
+
+    expect(decision.route).toBe('STOP')
+    expect(['bemoat:context:recover-committed-wip', null]).toContain(decision.nextAction.command)
+    expect(decision.nextAction.type).toBe(decision.nextAction.command ? 'COMMAND' : 'STOP')
+    expect(JSON.stringify(decision)).not.toMatch(/GREEN|Objective N\+1|OPEN_PR|bemoat:handoff/i)
+  })
+
+  it.each([
+    ['wrong proof repository', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { repository: 'boat1994/bemoat-web-starter' })],
+    ['wrong B', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { target: { ...architectureProof().target, head: 'e'.repeat(40) } })],
+    ['wrong tree', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { target: { ...architectureProof().target, tree: 'f'.repeat(40) } })],
+    ['wrong provenance', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { provenance: { ...architectureProof().provenance, paths: ['src/unowned.ts'] } })],
+    ['divergent A-to-B ancestry', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { ancestry: { historical_to_target: 'NOT_ANCESTOR', target_to_historical: 'NOT_ANCESTOR' } })],
+    ['unreachable target workspace', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { target: { ...architectureProof().target, accessible: false } })],
+    ['dirty target workspace', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { target: { ...architectureProof().target, clean: false } })],
+    ['non-distinct source and target', architectureProof('/worktrees/protected-main', '/worktrees/issue-627', { distinct_roots: false })],
+  ] as Array<[string, CommittedWipProof]>)('%s fails closed without mutation', (_story, proof) => {
+    const decision = routeContext(architectureAEvidence({}, proof))
+
+    expect(decision.route).toBe('STOP')
+    expect(['bemoat:context:recover-committed-wip', null]).toContain(decision.nextAction.command)
+    expect(JSON.stringify(decision)).not.toMatch(/GREEN|Objective N\+1|OPEN_PR|bemoat:handoff/i)
+  })
+
+  it('routes exact proof-backed D-after-A evidence through bounded existing IMPLEMENT', () => {
+    const proof = architectureProof()
+    const decision = routeContext(architectureAEvidence({}, proof))
+
+    expect(decision).toMatchObject({ route: 'IMPLEMENT', nextAction: { type: 'COMMAND', command: null } })
+    expect(decision.nextAction.description).toMatch(/Architecture A|reentry|incomplete|#627/i)
+    expect(decision.nextAction.description).not.toBe('Implement the bounded Issue objective on the durable topic branch.')
+    expect(JSON.stringify(decision)).not.toMatch(/GREEN|Objective N\+1|OPEN_PR|bemoat:handoff/i)
+  })
+
+  it.each([
+    ['FOUNDER_GATE', architectureAHandoff({ exact_head: architectureB, protected_base: { branch: 'main', sha: architectureD }, route: 'FOUNDER_GATE', next_action: { route: 'FOUNDER_GATE', description: 'Founder authorization is required.' } })],
+    ['STOP', architectureAHandoff({ schema_version: 3, exact_head: architectureB, protected_base: { branch: 'main', sha: architectureD }, route: 'STOP', verified_evidence: [{ kind: 'stop-blocker', value: 'architecture-a-gate', url: null }], next_action: { route: 'STOP', description: 'Resolve the blocker.' } })],
+    ['COMPLETE', architectureAHandoff({ exact_head: architectureB, protected_base: { branch: 'main', sha: architectureD }, route: 'COMPLETE', next_action: { route: 'COMPLETE', description: 'No further objective action is permitted.' } })],
+  ] as Array<[string, ReturnType<typeof architectureAHandoff>]>)('preserves current exact-head %s over proof-backed handling', (_route, handoff) => {
+    const decision = routeContext(architectureAEvidence({
+      durableContext: { latestHandoff: handoff, handoffs: [handoff], historicalResults: [] },
+    }, architectureProof()))
+
+    expect(decision.route).toBe(_route)
+    expect(JSON.stringify(decision)).not.toMatch(/bemoat:context:recover-committed-wip|GREEN|Objective N\+1/i)
+  })
+
+  it('keeps ordinary N=1 no-PR behavior unchanged without committed-WIP proof', () => {
+    const decision = routeContext(baseEvidence())
+
+    expect(decision).toMatchObject({
+      route: 'IMPLEMENT',
+      nextAction: { type: 'COMMAND', command: null, description: 'Implement the bounded Issue objective on the durable topic branch.' },
+    })
+  })
+
+  it('fails closed for dirty target-owned local state and grants no next-objective authority', () => {
+    const evidence = architectureAEvidence({
+      localGit: {
+        ...architectureAEvidence().localGit,
+        clean: false,
+        pushed: false,
+        durable: false,
+        reasons: ['LOCAL_STATE_NOT_DURABLE: target workspace is dirty'],
+      },
+    })
+    const decision = routeContext(evidence)
+
+    expect(decision.route).toBe('STOP')
+    expect(decision.nextAction).toMatchObject({ type: 'STOP', command: null })
+    expect(decision.reasons.join(' ')).toMatch(/dirty|durable/i)
+    expect(JSON.stringify(decision)).not.toMatch(/GREEN|Objective N\+1|OPEN_PR|bemoat:handoff/i)
   })
 
   it('fails closed for non-durable local work', () => {

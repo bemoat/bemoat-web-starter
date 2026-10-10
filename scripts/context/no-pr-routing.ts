@@ -7,8 +7,8 @@ import { setupBaseRecoveryRoute } from './setup-base-recovery-routing.ts'
 import { consumedHistoricalNoPrFounderGate, hasConflictingTerminalHandoff } from './founder-gate-history.ts'
 import { isPrReadyImplementationEvidence } from './evidence.ts'
 import { hasInvalidImplementationHandoffCandidate } from './issue-parser.ts'
+import { committedWipTargetBoundary } from './committed-wip-routing.ts'
 type NoPrDecision = Omit<ContextDecision, 'evidenceUrls'>
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -199,14 +199,12 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
       },
     }
     : evidence
-
   if (hasMalformedNoPrBlockerResolutionEvidence(evidence)) {
     return stop(
       `EVIDENCE_CONFLICT: malformed no-PR BLOCKER_RESOLUTION evidence at ${evidence.localGit.head}.`,
       'Resolve malformed no-PR blocker-resolution evidence before continuing.',
     )
   }
-
   if ((evidence.durableContext.invalidFounderDecisions ?? []).length > 0) {
     return stop(
       `EVIDENCE_CONFLICT: malformed no-PR FOUNDER_DECISION native comment identity at ${evidence.localGit.head}.`,
@@ -361,6 +359,8 @@ export function routeNoPrContext(evidence: NormalizedContextEvidence): NoPrDecis
       },
     }
   }
+  const committedWipBoundary = committedWipTargetBoundary(evidence)
+  if (committedWipBoundary) return committedWipBoundary
 
   const onlyRecomputableHistory = handoffs.every(({ record }) =>
     (record.route === 'IMPLEMENT' && record.objective_mode === 'read_only') ||

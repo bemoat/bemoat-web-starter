@@ -9,6 +9,8 @@ import { routeContext } from './context/router.ts'
 import { authorizeContextSync } from './context/sync.ts'
 import { resolveContextBootstrapRoots, verifyContextBootstrap } from './context/bootstrap-worktree.ts'
 import { ContextSyncWorktreeError } from './context/sync-worktree.ts'
+import { COMMITTED_WIP_BINDING } from './context/committed-wip-recovery.ts'
+import { collectCommittedWipContextProof } from './context/committed-wip-context-proof.ts'
 import type { NormalizedContextEvidence, ContextDecision } from './context/model.ts'
 
 function handleInvocationError(error: unknown): boolean {
@@ -112,7 +114,20 @@ function main() {
     }
   }
   const evidence = collectContextEvidence({ cwd, issueNumber })
-  if (bootstrapRoots) evidence.evidenceErrors.push(...verifyContextBootstrap({ roots: bootstrapRoots, evidence }))
+  if (bootstrapRoots) {
+    const bootstrapErrors = verifyContextBootstrap({ roots: bootstrapRoots, evidence })
+    evidence.evidenceErrors.push(...bootstrapErrors)
+    if (bootstrapErrors.length === 0 && issueNumber === COMMITTED_WIP_BINDING.issueNumber &&
+        evidence.localGit.branch === COMMITTED_WIP_BINDING.branch &&
+        evidence.localGit.head?.toLowerCase() === COMMITTED_WIP_BINDING.wipHead) {
+      const proof = collectCommittedWipContextProof({
+        sourceCwd: bootstrapRoots.sourceCwd,
+        targetWorktree: bootstrapRoots.targetCwd,
+      })
+      if (proof.proof) evidence.committedWipProof = proof.proof
+      else evidence.evidenceErrors.push(`EVIDENCE_CONFLICT: exact committed-WIP proof failed: ${proof.error}`)
+    }
+  }
   if (bootstrapError) evidence.evidenceErrors.push(bootstrapError)
   const decision = routeContext(evidence)
   const output = createContextOutput(evidence, decision, issueNumber)
