@@ -6,6 +6,7 @@ import type { ContextCommandRunner } from './runtime.ts'
 import { runContextCommand } from './runtime.ts'
 import { BASE_BRANCH, CONTEXT_COMMAND, PROOF_COMMAND, REPOSITORY, TRUSTED_SOURCE_BOOTSTRAP_COMMAND } from './trusted-source-bootstrap-contract.ts'
 import { canonicalDestination, canonicalExistingDirectory, parseJsonLine, pathsOverlap, readPullRequest, rootsOverlap, validateDestination, verifyIssue627Target, verifyMainOnlyApprovedBase, verifyMergeOnLiveMain, verifySource } from './trusted-source-bootstrap-preflight.ts'
+import { readOnlyResolverEnvironment, verifySourceRuntimeFilesAgainstLiveMain } from './trusted-source-bootstrap-runtime.ts'
 import { commandFailureReason, validHelp, validateContext, validateProof } from './trusted-source-bootstrap-validation.ts'
 
 export { TRUSTED_SOURCE_BOOTSTRAP_COMMAND }
@@ -70,7 +71,7 @@ export function bootstrapTrustedSource({
   prNumber,
   targetWorktree,
   destination,
-  run = runContextCommand,
+  run: suppliedRun = runContextCommand,
 }: {
   sourceCwd: string
   prNumber: string | number
@@ -78,6 +79,13 @@ export function bootstrapTrustedSource({
   destination: string
   run?: ContextCommandRunner
 }): TrustedSourceBootstrapResult {
+  const run: ContextCommandRunner = (command, args, options = {}) => {
+    if (command !== 'git' || args[0] === 'clone') return suppliedRun(command, args, options)
+    return suppliedRun(command, args, {
+      ...options,
+      env: { ...process.env, ...options.env, GIT_OPTIONAL_LOCKS: '0' },
+    })
+  }
   let mutationPerformed = false
   let details: Record<string, unknown> = { objective_edit_authority_granted: false, destination_preserved_on_stop: false }
   try {
@@ -111,6 +119,21 @@ export function bootstrapTrustedSource({
     if (pathsOverlap(destinationState.canonical, sourceRoot) || pathsOverlap(destinationState.canonical, targetRoot)) {
       return stopped('STATE_CONFLICT', 'Destination must be a distinct, non-overlapping root from both #630 and original #627.', { currentHead: source.head })
     }
+    if (destinationState.exists) {
+      details = { ...details, destination: destinationState.canonical, destination_preserved_on_stop: true, destination_state: 'REUSED' }
+    }
+
+    let runtime = readOnlyResolverEnvironment(sourceRoot, targetRoot, destinationState.canonical)
+    if (!runtime.environment) {
+      return stopped('BLOCKED_EXTERNAL', runtime.reason ?? 'The read-only source dependency runtime could not be established; no destination was created.', {
+        currentHead: source.head,
+        details,
+      })
+    }
+    const sourceRuntimeFilesReason = verifySourceRuntimeFilesAgainstLiveMain(sourceRoot, liveMain, run)
+    if (sourceRuntimeFilesReason) {
+      return stopped('EVIDENCE_CONFLICT', sourceRuntimeFilesReason, { currentHead: source.head, details })
+    }
 
     let destinationMode: 'CREATED' | 'REUSED'
     if (destinationState.exists) {
@@ -136,6 +159,21 @@ export function bootstrapTrustedSource({
       if (destinationBeforeClone.reason || destinationBeforeClone.exists || destinationBeforeClone.canonical !== destinationState.canonical) {
         return stopped('STATE_CONFLICT', destinationBeforeClone.reason ?? 'The explicit destination changed after its absence check; preserve it and stop.', { currentHead: source.head })
       }
+
+      // Repeat source-only runtime and exact-live-main checks after the final
+      // absence/readback gate, so no intervening authority reads can stale them.
+      runtime = readOnlyResolverEnvironment(sourceRoot, targetRoot, destinationState.canonical)
+      if (!runtime.environment) {
+        return stopped('BLOCKED_EXTERNAL', runtime.reason ?? 'The read-only source dependency runtime could not be re-established; no destination was created.', {
+          currentHead: source.head,
+          details,
+        })
+      }
+      const finalSourceRuntimeFilesReason = verifySourceRuntimeFilesAgainstLiveMain(sourceRoot, liveMain, run)
+      if (finalSourceRuntimeFilesReason) {
+        return stopped('EVIDENCE_CONFLICT', finalSourceRuntimeFilesReason, { currentHead: source.head, details })
+      }
+
       try {
         // Claim an absent destination atomically. `git clone` accepts an existing
         // empty directory, so checking absence alone would still let us populate
@@ -192,7 +230,9 @@ export function bootstrapTrustedSource({
       return stopped('HEAD_DRIFT', mainAfterAcquisition.reason ?? 'Live main moved during acquisition; preserve D and retry only after fresh verification.', { currentHead: source.head, mutationPerformed, details })
     }
 
-    const proofHelp = run('pnpm', ['run', PROOF_COMMAND, '--', '--help', '--json'], { cwd: verifiedDestination.identity.root })
+    const commandOptions = { cwd: verifiedDestination.identity.root, env: runtime.environment }
+
+    const proofHelp = run('pnpm', ['run', PROOF_COMMAND, '--', '--help', '--json'], commandOptions)
     const proofHelpPayload = parseJsonLine(proofHelp.stdout)
     if (proofHelp.status !== 0 || proofHelp.error) {
       return stopped('BLOCKED_EXTERNAL', `The registered Architecture A proof safe help cannot run from D; preserve D and stop: ${commandFailureReason(proofHelp, PROOF_COMMAND)}`, {
@@ -203,7 +243,7 @@ export function bootstrapTrustedSource({
       return stopped('EVIDENCE_CONFLICT', 'D did not return the registered Architecture A proof JSON help contract; preserve D and stop.', { currentHead: source.head, mutationPerformed, details })
     }
 
-    const contextHelp = run('pnpm', ['run', CONTEXT_COMMAND, '--', '--help', '--json'], { cwd: verifiedDestination.identity.root })
+    const contextHelp = run('pnpm', ['run', CONTEXT_COMMAND, '--', '--help', '--json'], commandOptions)
     const contextHelpPayload = parseJsonLine(contextHelp.stdout)
     if (contextHelp.status !== 0 || contextHelp.error) {
       return stopped('BLOCKED_EXTERNAL', `Registered Context safe help cannot run from D; preserve D and stop: ${commandFailureReason(contextHelp, CONTEXT_COMMAND)}`, {
@@ -228,7 +268,7 @@ export function bootstrapTrustedSource({
       '--target-worktree', targetRoot,
       '--json',
     ]
-    const proofRun = run('pnpm', proofArgs, { cwd: verifiedDestination.identity.root })
+    const proofRun = run('pnpm', proofArgs, commandOptions)
     const proofPayload = parseJsonLine(proofRun.stdout)
     if (proofRun.status !== 0 || proofRun.error) {
       return stopped('BLOCKED_EXTERNAL', `The registered Architecture A proof could not run successfully from D; preserve D and stop: ${commandFailureReason(proofRun, PROOF_COMMAND)}`, {
@@ -241,7 +281,7 @@ export function bootstrapTrustedSource({
       })
     }
 
-    const contextRun = run('pnpm', ['run', CONTEXT_COMMAND, '--', binding.issueNumber, '--target-worktree', targetRoot, '--json'], { cwd: verifiedDestination.identity.root })
+    const contextRun = run('pnpm', ['run', CONTEXT_COMMAND, '--', binding.issueNumber, '--target-worktree', targetRoot, '--json'], commandOptions)
     const contextPayload = parseJsonLine(contextRun.stdout)
     if (contextRun.status !== 0 || contextRun.error || !contextPayload) {
       return stopped('BLOCKED_EXTERNAL', `Fresh target-mode Context could not run from D or return JSON; preserve D and stop: ${commandFailureReason(contextRun, CONTEXT_COMMAND)}`, {

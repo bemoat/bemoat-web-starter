@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { cpSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -6,8 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { parseCommandInvocation } from '../../scripts/cli/command-invocation.ts'
 import { getCommandContract } from '../../scripts/cli/command-contract.ts'
-import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
+import { runContextCommand, type ContextCommandResult, type ContextCommandRunner } from '../../scripts/context/runtime.ts'
 import { validateContext } from '../../scripts/context/trusted-source-bootstrap-validation.ts'
+import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
+import { COMMITTED_WIP_PATHS } from '../../scripts/context/committed-wip-recovery.ts'
 
 const COMMAND = 'bemoat:context:bootstrap-source'
 const REPO = 'bemoat/bemoat-web-starter'
@@ -24,10 +27,149 @@ const HANDOFF_COMMENT_ID = '6088681412'
 const HANDOFF_DIGEST = 'f'.repeat(64)
 const RECOVERY = 'bemoat:context:recover-committed-wip'
 const CONTEXT = 'bemoat:context'
+const repositoryRoot = realpathSync(resolve('.'))
 const runtimePath = resolve('scripts/context/trusted-source-bootstrap.ts')
 const runtimeAvailable = existsSync(runtimePath)
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+
+function copyRuntimeProject(from: string, to: string) {
+  cpSync(join(from, 'scripts'), join(to, 'scripts'), { recursive: true })
+  for (const file of ['.gitignore', 'package.json', 'pnpm-lock.yaml']) {
+    copyFileSync(join(from, file), join(to, file))
+  }
+}
+
+function snapshotTree(root: string): string {
+  const entries: unknown[] = []
+  const visit = (directory: string, prefix = '') => {
+    for (const name of readdirSync(directory).sort()) {
+      const path = join(directory, name)
+      const relativePath = prefix ? `${prefix}/${name}` : name
+      const info = lstatSync(path)
+      if (info.isSymbolicLink()) entries.push(['link', relativePath, readlinkSync(path)])
+      else if (info.isDirectory()) {
+        entries.push(['directory', relativePath, info.mode & 0o777])
+        visit(path, relativePath)
+      } else if (info.isFile()) {
+        entries.push(['file', relativePath, info.mode & 0o777, createHash('sha256').update(readFileSync(path)).digest('hex')])
+      } else entries.push(['other', relativePath, info.mode & 0o777])
+    }
+  }
+  visit(root)
+  return JSON.stringify(entries)
+}
+
+function initializeDisposableGitRoot(root: string) {
+  const commands: Array<[string, string[]]> = [
+    ['git', ['init', '--quiet', '--initial-branch=main']],
+    ['git', ['config', 'user.name', 'Bemoat Test Fixture']],
+    ['git', ['config', 'user.email', 'fixture@example.invalid']],
+    ['git', ['add', '.']],
+    ['git', ['commit', '--quiet', '-m', 'fixture']],
+  ]
+  for (const [command, args] of commands) {
+    const result = runContextCommand(command, args, { cwd: root })
+    if (result.status !== 0 || result.error) throw new Error(result.stderr || result.error?.message || `${command} failed`)
+  }
+}
+
+function createDisposableExternalCommandStubs(root: string, source: string, target: string, destination: string) {
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  const handoff: HandoffRecord = {
+    schema_version: 2,
+    record_type: 'HANDOFF',
+    objective_mode: 'read_only',
+    repository: REPO,
+    issue_number: '627',
+    objective: 'Objective 1 — read-only contract and transition trace: characterize the authorized recovery proof.',
+    permitted_scope: ['Read-only evidence characterization.'],
+    prohibited_scope: ['No source edits or future-objective authorization.'],
+    executing_agent: 'Codex #627 Execution Controller',
+    provider: 'OpenAI',
+    branch: TARGET_BRANCH,
+    exact_head: BASE_A,
+    protected_base: { branch: 'main', sha: BASE_A },
+    pr: null,
+    verified_evidence: [{ kind: 'authority', value: 'Read-only objective authority.', url: null }],
+    route: 'IMPLEMENT',
+    next_action: { route: 'IMPLEMENT', description: 'Run fresh Context before later work.' },
+    stop_conditions: ['Do not modify the target during proof.'],
+    local_durability: { required: true, durable: true, reason: null },
+  }
+  const handoffComment = {
+    id: Number(HANDOFF_COMMENT_ID),
+    body: renderHandoffComment(handoff),
+    html_url: `https://github.com/${REPO}/issues/627#issuecomment-${HANDOFF_COMMENT_ID}`,
+    issue_url: `https://api.github.com/repos/${REPO}/issues/627`,
+    user: { id: 36528988, login: 'bemoat' },
+  }
+  const policyContent = '---\npolicy_id: bemoat-mission-control\nversion: 1.7.0\ncanonical_repository: bemoat/bemoat-web-starter\ntrusted_founder_login: bemoat\n---\n'
+  const data = {
+    repository: REPO,
+    source,
+    target,
+    destination,
+    main: LIVE_MAIN,
+    targetHead: TARGET_HEAD,
+    targetTree: TARGET_TREE,
+    handoffComment,
+    changedPaths: COMMITTED_WIP_PATHS,
+    wipSubject: 'wip(#627): preserve incomplete multi-objective routing candidate',
+    policy: Buffer.from(policyContent).toString('base64'),
+    issue: {
+      number: 627,
+      title: 'fix: recover committed WIP through trusted source',
+      state: 'OPEN',
+      url: `https://github.com/${REPO}/issues/627`,
+      body: '## Objective\nRecover the committed #627 WIP safely.\n\n## Scope\nUse the verified recovery path.\n\n## Acceptance Criteria\n- Preserve the exact target identity.\n',
+      comments: [] as unknown[],
+    },
+  }
+  const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`
+  const changedPathPrint = COMMITTED_WIP_PATHS.map((path) => ` ${shellQuote(path)}`).join('')
+  const issueJson = shellQuote(JSON.stringify(data.issue))
+  const handoffJson = shellQuote(JSON.stringify(handoffComment))
+  const handoffListJson = shellQuote(JSON.stringify([[handoffComment]]))
+  const policyJson = shellQuote(JSON.stringify({ sha: LIVE_MAIN, encoding: 'base64', content: data.policy }))
+  const mainRefJson = shellQuote(JSON.stringify({ object: { sha: LIVE_MAIN } }))
+  const targetRefJson = shellQuote(JSON.stringify({ object: { sha: TARGET_HEAD } }))
+  const gitStub = `#!/bin/sh\nargs="$*"\ncwd="$(pwd -P)"\ntarget=${shellQuote(realpathSync(target))}\nbase='https://github.com/${REPO}.git'\n` +
+    `case "$args" in\n` +
+    `  'rev-parse --show-toplevel') printf '%s\\n' "$cwd" ;;\n` +
+    `  'rev-parse --git-common-dir') printf '%s\\n' "$cwd/.git" ;;\n` +
+    `  'rev-parse HEAD') if [ "$cwd" = "$target" ]; then printf '%s\\n' '${TARGET_HEAD}'; else printf '%s\\n' '${LIVE_MAIN}'; fi ;;\n` +
+    `  'rev-parse HEAD^{tree}'|'rev-parse ${TARGET_HEAD}^{tree}') printf '%s\\n' '${TARGET_TREE}' ;;\n` +
+    `  'rev-parse ${TARGET_HEAD}^') printf '%s\\n' '${BASE_A}' ;;\n` +
+    `  'show -s --format=%an%n%s ${TARGET_HEAD}') printf '%s\\n' 'Bemoat' 'wip(#627): preserve incomplete multi-objective routing candidate' ;;\n` +
+    `  'diff --name-only -z '*) printf '%s\\0'${changedPathPrint} ;;\n` +
+    `  'merge-base --is-ancestor ${BASE_A} ${TARGET_HEAD}') exit 0 ;;\n` +
+    `  'merge-base --is-ancestor ${TARGET_HEAD} ${BASE_A}') exit 1 ;;\n` +
+    `  'status --porcelain=v1 --untracked-files=all'|'status --short') ;;\n` +
+    `  'remote get-url origin'|'remote get-url upstream') printf '%s\\n' "$base" ;;\n` +
+    `  'symbolic-ref --quiet --short HEAD'|'branch --show-current') if [ "$cwd" = "$target" ]; then printf '%s\\n' '${TARGET_BRANCH}'; else printf '%s\\n' 'main'; fi ;;\n` +
+    `  'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') if [ "$cwd" = "$target" ]; then printf '%s\\n' 'origin/${TARGET_BRANCH}'; else printf '%s\\n' 'origin/main'; fi ;;\n` +
+    `  'rev-parse --verify --quiet refs/remotes/origin/main') if [ "$cwd" = "$target" ]; then printf '%s\\n' '${TARGET_HEAD}'; else printf '%s\\n' '${LIVE_MAIN}'; fi ;;\n` +
+    `  'rev-parse --verify --quiet refs/remotes/origin/${TARGET_BRANCH}') printf '%s\\n' '${TARGET_HEAD}' ;;\n` +
+    `  'ls-remote --heads '* ) branch=""; for arg do branch="$arg"; done; branch="\${branch#refs/heads/}"; case "$branch" in main) printf '%s\\trefs/heads/main\\n' '${LIVE_MAIN}' ;; '${TARGET_BRANCH}') printf '%s\\trefs/heads/${TARGET_BRANCH}\\n' '${TARGET_HEAD}' ;; esac ;;\n` +
+    `  'worktree list --porcelain') printf 'worktree %s\\nHEAD %s\\nbranch refs/heads/%s\\n' "$cwd" '${TARGET_HEAD}' '${TARGET_BRANCH}' ;;\n` +
+    `  *) exit 0 ;;\nesac\n`
+  const ghStub = `#!/bin/sh\nargs="$*"\ncase "$args" in\n` +
+    `  'issue view '*) printf '%s\\n' ${issueJson} ;;\n` +
+    `  'pr list '*) printf '%s\\n' '[]' ;;\n` +
+    `  'api repos/${REPO}/git/ref/heads/main') printf '%s\\n' ${mainRefJson} ;;\n` +
+    `  'api repos/${REPO}/git/ref/heads/${encodeURIComponent(TARGET_BRANCH)}') printf '%s\\n' ${targetRefJson} ;;\n` +
+    `  'api repos/${REPO}/issues/comments/${HANDOFF_COMMENT_ID}') printf '%s\\n' ${handoffJson} ;;\n` +
+    `  'api --paginate --slurp repos/${REPO}/issues/627/comments') printf '%s\\n' ${handoffListJson} ;;\n` +
+    `  'api repos/${REPO}/contents/docs/mission-control/mission-control-guide.md?ref=${LIVE_MAIN}') printf '%s\\n' ${policyJson} ;;\n` +
+    `  'api repos/${REPO}/rulesets?includes_parents=true') printf '%s\\n' '[]' ;;\n` +
+    `  'api repos/${REPO}/branches/main/protection'|'api repos/${REPO}/git/ref/heads/dev') printf '%s\\n' '404 not found' >&2; exit 1 ;;\n` +
+    `  *) printf 'offline fixture: %s\\n' "$args" >&2; exit 1 ;;\nesac\n`
+  writeFileSync(join(bin, 'git'), gitStub, { mode: 0o755 })
+  writeFileSync(join(bin, 'gh'), ghStub, { mode: 0o755 })
+  return bin
+}
 
 it('registers the setup-only public contract, package script, and JSON help inputs', () => {
   const contract = getCommandContract(COMMAND)
@@ -57,7 +199,7 @@ it('has a runtime seam for injected read and clone evidence', () => {
   expect(runtimeAvailable, 'expected scripts/context/trusted-source-bootstrap.ts').toBe(true)
 })
 
-type Fixture = { source: string; target: string; destination: string; marker: string; calls: Array<{ command: string; args: string[]; cwd: string }>; run: ContextCommandRunner }
+type Fixture = { source: string; target: string; destination: string; marker: string; calls: Array<{ command: string; args: string[]; cwd: string; env?: NodeJS.ProcessEnv; result?: ContextCommandResult }>; run: ContextCommandRunner }
 const ok = (stdout = ''): ContextCommandResult => ({ status: 0, stdout, stderr: '', error: null })
 const fail = (stderr = 'fixture failure'): ContextCommandResult => ({ status: 1, stdout: '', stderr, error: null })
 function pullPayload(overrides: Record<string, unknown> = {}) {
@@ -171,10 +313,15 @@ type FixtureOptions = {
   pull?: Record<string, unknown>
   githubMainSha?: string
   remoteMainSha?: string
+  liveMainPackageJson?: string
+  liveMainLockfile?: string
   githubDevSha?: string
   remoteDevSha?: string
   contextHelpUnavailable?: boolean
   mainDriftAfterClone?: string
+  realDRuntime?: boolean
+  missingResolver?: boolean
+  missingSourceDependency?: boolean
 }
 
 function fixture(settings: FixtureOptions = {}): Fixture {
@@ -186,17 +333,54 @@ function fixture(settings: FixtureOptions = {}): Fixture {
   const source = join(root, 'execution'); const target = join(root, 'target'); const destination = join(root, 'source-D')
   const marker = join(destination, 'preserve.txt')
   mkdirSync(source); mkdirSync(target)
+  if (settings.realDRuntime) {
+    copyRuntimeProject(repositoryRoot, source)
+    if (settings.missingResolver) rmSync(join(source, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.mjs'))
+  }
+  else {
+    const sourceContext = join(source, 'scripts', 'context')
+    mkdirSync(sourceContext, { recursive: true })
+    if (!settings.missingResolver) {
+      copyFileSync(
+        join(repositoryRoot, 'scripts', 'context', 'trusted-source-bootstrap-dependency-resolver.mjs'),
+        join(sourceContext, 'trusted-source-bootstrap-dependency-resolver.mjs'),
+      )
+    }
+    for (const file of ['package.json', 'pnpm-lock.yaml']) copyFileSync(join(repositoryRoot, file), join(source, file))
+  }
+  if (!settings.missingSourceDependency) {
+    if (settings.realDRuntime) {
+      const fixtureNodeModules = join(source, 'node_modules')
+      mkdirSync(fixtureNodeModules)
+      cpSync(realpathSync(join(repositoryRoot, 'node_modules', 'zod')), join(fixtureNodeModules, 'zod'), { recursive: true })
+    } else {
+      mkdirSync(join(source, 'node_modules'))
+    }
+  }
+  const externalBin = settings.realDRuntime ? createDisposableExternalCommandStubs(root, source, target, destination) : null
   if (settings.existingDestination) {
     mkdirSync(destination)
-    if (settings.destinationHasMarker !== false) writeFileSync(marker, 'preserve destination')
+    if (settings.realDRuntime) {
+      copyRuntimeProject(source, destination)
+      mkdirSync(join(destination, '.next'))
+      writeFileSync(join(destination, '.next', 'preserve-ignored.txt'), 'keep this ignored fixture file')
+      if (settings.destinationHasMarker !== false) writeFileSync(marker, 'preserve destination')
+      initializeDisposableGitRoot(destination)
+    } else if (settings.destinationHasMarker !== false) writeFileSync(marker, 'preserve destination')
   }
   const calls: Fixture['calls'] = []
   let cloneAttempted = false
   const run: ContextCommandRunner = (command, args, commandOptions = {}) => {
-    const cwd = commandOptions.cwd ?? source; const key = args.join(' '); calls.push({ command, args: [...args], cwd })
+    const cwd = commandOptions.cwd ?? source; const key = args.join(' '); calls.push({ command, args: [...args], cwd, env: commandOptions.env })
     if (command === 'git' && args[0] === 'clone') {
       cloneAttempted = true
       if (!existsSync(destination)) mkdirSync(destination)
+      if (settings.realDRuntime) {
+        copyRuntimeProject(source, destination)
+        mkdirSync(join(destination, '.next'))
+        writeFileSync(join(destination, '.next', 'preserve-ignored.txt'), 'keep this ignored fixture file')
+        initializeDisposableGitRoot(destination)
+      }
       if (settings.cloneFailure) writeFileSync(marker, 'partial clone')
       return settings.cloneFailure ? fail('simulated partial clone failure') : ok()
     }
@@ -214,6 +398,8 @@ function fixture(settings: FixtureOptions = {}): Fixture {
     if (command === 'git' && key === 'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') return ok((cwd === target ? settings.targetUpstream ?? 'origin/fix/627-seamless-multi-objective-continuation' : 'origin/main') + '\n')
     if (command === 'git' && key === 'rev-parse --verify --quiet refs/remotes/origin/main') return ok((cwd === destination ? settings.destinationTracking ?? LIVE_MAIN : MERGE) + '\n')
     if (command === 'git' && key === 'ls-remote --heads origin refs/heads/main') return ok(((cwd === source && cloneAttempted ? settings.mainDriftAfterClone : undefined) ?? settings.remoteMainSha ?? LIVE_MAIN) + '\trefs/heads/main\n')
+    if (command === 'git' && key === `show ${LIVE_MAIN}:package.json`) return ok(settings.liveMainPackageJson ?? readFileSync(join(source, 'package.json'), 'utf8'))
+    if (command === 'git' && key === `show ${LIVE_MAIN}:pnpm-lock.yaml`) return ok(settings.liveMainLockfile ?? readFileSync(join(source, 'pnpm-lock.yaml'), 'utf8'))
     if (command === 'git' && key === 'ls-remote --heads origin refs/heads/dev') return settings.remoteDevSha ? ok(settings.remoteDevSha + '\trefs/heads/dev\n') : ok('')
     if (command === 'git' && key === 'ls-remote --heads origin refs/heads/fix/627-seamless-multi-objective-continuation') return ok((settings.targetLiveSha ?? TARGET_HEAD) + '\trefs/heads/fix/627-seamless-multi-objective-continuation\n')
     if (command === 'gh' && key === 'api repos/' + REPO + '/git/ref/heads/fix%2F627-seamless-multi-objective-continuation') return ok(JSON.stringify({ object: { sha: settings.targetLiveSha ?? TARGET_HEAD } }))
@@ -223,6 +409,13 @@ function fixture(settings: FixtureOptions = {}): Fixture {
       ? ok(JSON.stringify({ object: { sha: settings.githubDevSha } }))
       : fail('dev branch does not exist')
     if (command === 'gh' && key.startsWith('api repos/' + REPO + '/compare/')) return ok(JSON.stringify(compare))
+    if (command === 'pnpm' && settings.realDRuntime) {
+      const baseEnv = commandOptions.env ?? process.env
+      const env = { ...baseEnv, PATH: `${externalBin}:${baseEnv.PATH ?? ''}` }
+      const childResult = runContextCommand(command, args, { ...commandOptions, env })
+      calls[calls.length - 1]!.result = childResult
+      return childResult
+    }
     if (command === 'pnpm' && args.includes(RECOVERY) && args.includes('--help')) return settings.proofHelpResult ?? ok(JSON.stringify(successfulHelpPayload(
       RECOVERY, 'A', ['issue_number', 'expected_repository', 'expected_branch', 'expected_base_branch', 'expected_base_sha', 'expected_handoff_comment_id', 'expected_handoff_head', 'expected_wip_head', 'expected_wip_tree', 'target_worktree'], [], settings.proofHelpOverrides,
     )))
@@ -258,6 +451,35 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
             // Fault injection: the final absence evidence has just been read; another actor now owns this path.
             mkdirSync(f.destination)
             writeFileSync(f.marker, 'concurrently created destination')
+          }
+          return state
+        },
+      }
+    })
+    try {
+      const runtime = await import('../../scripts/context/trusted-source-bootstrap.ts') as { bootstrapTrustedSource: (input: {
+        sourceCwd: string; prNumber: string; targetWorktree: string; destination: string; run: ContextCommandRunner
+      }) => unknown }
+      return runtime.bootstrapTrustedSource({ sourceCwd: f.source, prNumber: PR, targetWorktree: f.target, destination: f.destination, run: f.run })
+    } finally {
+      vi.doUnmock(preflightPath)
+      vi.resetModules()
+    }
+  }
+
+  async function invokeWithRuntimeDriftAfterFinalAbsenceCheck(f: Fixture) {
+    const preflightPath = '../../scripts/context/trusted-source-bootstrap-preflight.ts'
+    let destinationChecks = 0
+    vi.resetModules()
+    vi.doMock(preflightPath, async (importOriginal) => {
+      const original = await importOriginal<typeof import('../../scripts/context/trusted-source-bootstrap-preflight.ts')>()
+      return {
+        ...original,
+        canonicalDestination(path: string) {
+          const state = original.canonicalDestination(path)
+          if (path === f.destination && !state.exists && !state.reason && ++destinationChecks === 2) {
+            // Fault injection: source runtime bytes drift after the final D-absence readback.
+            writeFileSync(join(f.source, 'package.json'), '{"name":"raced-source","dependencies":{"zod":"4.4.3"}}')
           }
           return state
         },
@@ -316,6 +538,18 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     expect(result.details.objective_edit_authority_granted).toBe(false)
   })
 
+  // Authority: source resolver and package/lock identity must be rechecked after the final absent-D readback; a source package drift at that boundary must stop before mkdir/clone.
+  it('stops before destination reservation when source runtime bytes drift after the final absence check', async () => {
+    const f = fixture({ liveMainPackageJson: readFileSync(join(repositoryRoot, 'package.json'), 'utf8') })
+    const result = await invokeWithRuntimeDriftAfterFinalAbsenceCheck(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+
+    expect(result).toMatchObject({ route: 'STOP', mutationPerformed: false, details: { objective_edit_authority_granted: false } })
+    expect(result.classification).toBe('EVIDENCE_CONFLICT')
+    expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+    expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
+    expect(existsSync(f.destination)).toBe(false)
+  })
+
   it('clones verified live main to the explicit D, then discovers, proves, and runs target Context from D', async () => {
     const f = fixture(); const result = await invoke(f) as { classification: string; mutationPerformed: boolean; route: string; details: Record<string, unknown> }
     expect(result, JSON.stringify({ result, calls: f.calls })).toMatchObject({ classification: 'SUCCESS', mutationPerformed: true, route: 'STOP', details: { objective_edit_authority_granted: false, actual_context_route: 'STOP', target_worktree: f.target } })
@@ -332,6 +566,121 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     expect(f.calls.filter((call) => call.command === 'git' && call.args.join(' ') === 'rev-parse --git-common-dir').map((call) => call.cwd)).toEqual(expect.arrayContaining([f.source, f.target, f.destination]))
     expect(f.calls.filter((call) => call.command === 'pnpm').every((call) => call.cwd === f.destination)).toBe(true)
   })
+
+  // Authority: the current canonical Issue #630 Objective, Scope, and five Acceptance Criteria require registered safe help, Architecture A proof, and target Context to run from D with a constrained source-backed read-only resolver; package.json and pnpm-lock.yaml must match; D receives no installs or tracked/ignored/hidden writes. All four registered subprocesses are real; their Git/GitHub reads are answered by read-only disposable fixture executables.
+  it('runs registered safe help, Architecture A proof, and target Context from D through source-only resolution without changing D', async () => {
+    const f = fixture({ realDRuntime: true })
+    const fakeGitProbe = runContextCommand('git', ['rev-parse', '--show-toplevel'], {
+      cwd: f.target,
+      env: { ...process.env, PATH: `${resolve(f.source, '..', 'bin')}:${process.env.PATH ?? ''}` },
+    })
+    expect(fakeGitProbe.stdout.trim()).toBe(realpathSync(f.target))
+    let treeAfterClone: string | null = null
+    const fixtureRun = f.run
+    f.run = (command, args, options = {}) => {
+      const result = fixtureRun(command, args, options)
+      if (command === 'git' && args[0] === 'clone' && existsSync(f.destination) && treeAfterClone === null) {
+        treeAfterClone = snapshotTree(f.destination)
+      }
+      return result
+    }
+
+    const result = await invoke(f) as { classification: string; mutationPerformed: boolean; route: string; details: Record<string, unknown> }
+    const registeredRuns = f.calls.filter((call) => call.command === 'pnpm')
+    const cloneCall = f.calls.find((call) => call.command === 'git' && call.args[0] === 'clone')
+    const targetAndDestinationGitReads = f.calls.filter((call) =>
+      call.command === 'git' && call.args[0] !== 'clone' && [f.target, f.destination].includes(call.cwd),
+    )
+
+    expect(result, JSON.stringify({ result, calls: registeredRuns.map(({ command, args, cwd, result: child }) => ({ command, args, cwd, child })) })).toMatchObject({
+      classification: 'SUCCESS', mutationPerformed: true, route: 'STOP',
+      details: { objective_edit_authority_granted: false, actual_context_route: 'STOP', target_worktree: f.target },
+    })
+    expect(registeredRuns.map((call) => call.cwd)).toEqual([f.destination, f.destination, f.destination, f.destination])
+    expect(registeredRuns.every((call) => call.env?.GIT_OPTIONAL_LOCKS === '0')).toBe(true)
+    expect(registeredRuns.map((call) => call.args.includes('--help')
+      ? (call.args.includes(RECOVERY) ? 'proof-help' : 'context-help')
+      : call.args.includes(RECOVERY) ? 'proof' : 'context')).toEqual(['proof-help', 'context-help', 'proof', 'context'])
+    expect(cloneCall?.args).toEqual([
+      'clone', '--branch', 'main', '--single-branch', '--no-tags', '--no-recurse-submodules',
+      `https://github.com/${REPO}.git`, f.destination,
+    ])
+    expect(cloneCall?.env).toBeUndefined()
+    expect(targetAndDestinationGitReads.length).toBeGreaterThan(0)
+    expect(targetAndDestinationGitReads.every((call) => call.env?.GIT_OPTIONAL_LOCKS === '0')).toBe(true)
+    expect(registeredRuns.every((call) => call.env !== undefined)).toBe(true)
+    expect(result.details.architecture_a_proof).toMatchObject({
+      command: RECOVERY, classification: 'SUCCESS', outcome: 'SUCCESS', mutation_performed: false,
+    })
+    expect(result.details.fresh_context).toMatchObject({
+      command: CONTEXT, mode: 'context', issue_number: '627', mutation_performed: false,
+      repository: { nameWithOwner: REPO }, local_git: { branch: TARGET_BRANCH, head: TARGET_HEAD, clean: true },
+    })
+    expect(existsSync(join(f.destination, 'node_modules'))).toBe(false)
+    expect(readFileSync(join(f.source, 'package.json'))).toEqual(readFileSync(join(f.destination, 'package.json')))
+    expect(readFileSync(join(f.source, 'pnpm-lock.yaml'))).toEqual(readFileSync(join(f.destination, 'pnpm-lock.yaml')))
+    expect(treeAfterClone).not.toBeNull()
+    expect(snapshotTree(f.destination)).toBe(treeAfterClone)
+    const trackedStatus = runContextCommand('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: f.destination })
+    const allStatus = runContextCommand('git', ['status', '--short', '--ignored', '--untracked-files=all'], { cwd: f.destination })
+    expect(trackedStatus.status).toBe(0)
+    expect(trackedStatus.stdout).toBe('')
+    expect(allStatus.status).toBe(0)
+    expect(allStatus.stdout).toContain('!! .next/')
+  }, 15_000)
+
+  // Authority: D must be an exact-live-main clone, while its resolver executes scripts from the verified source checkout. Source package metadata that differs from the exact live-main blobs cannot establish that runtime safely and must fail before reserving D.
+  it.each([
+    ['package.json', 'liveMainPackageJson', '{"name":"changed-source","dependencies":{"zod":"4.4.3"}}'],
+    ['pnpm-lock.yaml', 'liveMainLockfile', "lockfileVersion: '9.0'\nsettings: {autoInstallPeers: false}\n"],
+  ] as const)('stops before D creation when source %s differs from the exact live-main blob', async (file, liveMainSetting, changedSourceContents) => {
+    const liveMainContents = readFileSync(join(repositoryRoot, file), 'utf8')
+    const f = fixture({
+      realDRuntime: true,
+      [liveMainSetting]: liveMainContents,
+    })
+    writeFileSync(join(f.source, file), changedSourceContents)
+
+    const result = await invoke(f) as { route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+
+    expect(result).toMatchObject({ route: 'STOP', mutationPerformed: false, details: { objective_edit_authority_granted: false } })
+    expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+    expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
+    expect(existsSync(f.destination)).toBe(false)
+  })
+
+  // Authority: Issue #630 Acceptance Criteria require package manifest and lockfile parity and fail-closed behavior for either mismatch. They do not prescribe a more specific classification or require a particular order among read-only checks.
+  it.each([
+    ['package manifest', 'package.json', '{"name":"source","dependencies":{"zod":"4.4.3"}}', '{"name":"destination","dependencies":{"zod":"4.4.3"}}'],
+    ['lockfile', 'pnpm-lock.yaml', "lockfileVersion: '9.0'\nsettings: {autoInstallPeers: true}\n", "lockfileVersion: '9.0'\nsettings: {autoInstallPeers: false}\n"],
+  ])('fails closed when the D %s differs from the verified source', async (_label, file, sourceContents, destinationContents) => {
+    const f = fixture({ realDRuntime: true, existingDestination: true, destinationHasMarker: false })
+    writeFileSync(join(f.source, file), sourceContents)
+    writeFileSync(join(f.destination, file), destinationContents)
+
+    const before = readFileSync(join(f.destination, file), 'utf8')
+    const result = await invoke(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+
+    expect(result.classification).not.toBe('SUCCESS')
+    expect(result.route).toBe('STOP')
+    expect(result.details.objective_edit_authority_granted).toBe(false)
+    expect(result.mutationPerformed).toBe(false)
+    expect(readFileSync(join(f.destination, file), 'utf8')).toBe(before)
+  })
+
+  // Authority: Issue #630 requires missing dependencies to fail closed while D remains unchanged; this negative story uses a source fixture with no node_modules so no package can be silently borrowed or installed.
+  it('stops without writes when the verified source lacks an approved dependency', async () => {
+    const f = fixture({ realDRuntime: true, missingSourceDependency: true })
+    const result = await invoke(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+
+    expect(result.classification).not.toBe('SUCCESS')
+    expect(result.route).toBe('STOP')
+    expect(result.details.objective_edit_authority_granted).toBe(false)
+    expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+    expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
+    expect(existsSync(f.destination)).toBe(false)
+  })
+
   it('stops before clone when compare evidence does not prove merged correction is on live main', async () => {
     const f = fixture({ compare: { status: 'diverged', ahead_by: 1, behind_by: 1, base_commit: { sha: MERGE }, merge_base_commit: { sha: 'd'.repeat(40) } } })
     try { await invoke(f) } catch { /* A thrown STOP is acceptable at this injected seam. */ }
@@ -473,6 +822,57 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     expect(f.calls.filter((call) => call.command === 'pnpm')).toHaveLength(4)
   })
 
+  // Authority: the merged #630 acceptance criteria permit D subprocesses only through the verified source-backed read-only runtime; without its source resolver, bootstrap must stop before destination reservation or clone.
+  it('stops before destination creation when the verified source resolver is missing', async () => {
+    const f = fixture({ realDRuntime: true, missingResolver: true })
+    const result = await invoke(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+
+    expect(result).toMatchObject({ classification: 'BLOCKED_EXTERNAL', route: 'STOP', mutationPerformed: false, details: { objective_edit_authority_granted: false } })
+    expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
+    expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+    expect(existsSync(f.destination)).toBe(false)
+  })
+
+  // Authority: a failed source-only preflight must leave a pre-existing D explicitly preserved and classified for safe retry.
+  it('records an existing D as preserved when source dependency preflight fails', async () => {
+    const f = fixture({ realDRuntime: true, missingSourceDependency: true, existingDestination: true })
+    const result = await invoke(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+
+    expect(result).toMatchObject({
+      classification: 'BLOCKED_EXTERNAL', route: 'STOP', mutationPerformed: false,
+      details: {
+        objective_edit_authority_granted: false,
+        destination: f.destination,
+        destination_preserved_on_stop: true,
+        destination_state: 'REUSED',
+      },
+    })
+    expect(readFileSync(f.marker, 'utf8')).toBe('preserve destination')
+    expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+    expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
+  })
+
+  // Authority: the verified source runtime must be conflict-free before any child command or destination mutation; Node's short and long require preload options can replace the trusted resolver.
+  it.each([
+    ['short -r option', '-r fixture-preload'],
+    ['quoted short -r option', '"-r" fixture-preload'],
+    ['long --require option', '--require fixture-preload'],
+    ['--import option', '--import fixture-preload'],
+    ['--loader option', '--loader fixture-preload'],
+  ])('stops before destination creation when NODE_OPTIONS contains a %s', async (_label, nodeOptions) => {
+    const f = fixture({ realDRuntime: true })
+    vi.stubEnv('NODE_OPTIONS', nodeOptions)
+    try {
+      const result = await invoke(f) as { classification: string; route: string; mutationPerformed: boolean; details: Record<string, unknown> }
+      expect(result).toMatchObject({ route: 'STOP', mutationPerformed: false, details: { objective_edit_authority_granted: false } })
+      expect(f.calls.some((call) => call.command === 'pnpm')).toBe(false)
+      expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+      expect(existsSync(f.destination)).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it.each(['source', 'target'] as const)('rejects D that shares the %s Git common directory', async (sharedCommonDir) => {
     const f = fixture({ existingDestination: true, sharedCommonDir })
     const result = await invoke(f) as { classification: string; mutationPerformed: boolean }
@@ -530,11 +930,12 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     ['GitHub and origin main disagree', { remoteMainSha: 'd'.repeat(40) }],
   ])('preserves roots and stops before clone for %s', async (_story, settings) => {
     const f = fixture(settings)
+    const sourceBefore = snapshotTree(f.source)
     const result = await invoke(f) as { route: string; mutationPerformed: boolean }
     expect(result).toMatchObject({ route: 'STOP', mutationPerformed: false })
     expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
     expect(readdirSync(f.target)).toEqual([])
-    expect(readdirSync(f.source)).toEqual([])
+    expect(snapshotTree(f.source)).toBe(sourceBefore)
   })
 
   it.each([
