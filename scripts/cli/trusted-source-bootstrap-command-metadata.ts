@@ -28,7 +28,7 @@ export function trustedSourceBootstrapCommands(dependencies: CommandMetadataDepe
       tier: 'A',
       entrypoint: 'scripts/agent-context-bootstrap-source.ts',
       purpose: 'Acquire or verify one explicit independent exact-live source clone for the approved #630 correction handoff.',
-      operation: 'Verify the merged #630 PR and its exact merge commit on live main, verify original #627 B read-only, clone live main only to one explicit absent destination or reuse that same exact-live independent clone on retry, then run registered safe help, Architecture A proof, and fresh target Context from D. No objective-edit authority is granted.',
+      operation: 'Verify the merged #630 PR and its exact merge commit on live main, verify original #627 B read-only, atomically reserve and clone live main only at one explicit absent destination or reuse that same exact-live independent clone on retry, then run registered safe help, Architecture A proof, and fresh target Context from D. No objective-edit authority is granted.',
       accepted_pre_states: [
         'The command runs after the #630 correction PR has merged, from the clean #630 topic checkout whose attached branch and exact HEAD match that merged PR head; the PR is explicitly named by the caller and links to Issue 630.',
         'The original #627 B path is explicit and proves the fixed canonical root, branch, exact B/tree, clean status, canonical origin, exact upstream, and exact live B ref. The destination is one explicit absolute path, absent for first acquisition or already a uniquely valid exact-live independent D for an identical retry.',
@@ -47,9 +47,9 @@ export function trustedSourceBootstrapCommands(dependencies: CommandMetadataDepe
         'The #630 command source is a canonical clean Git root on an attached branch, with canonical origin and a full HEAD. The explicitly supplied merged PR number must identify a closed merged PR linked to #630 whose base is canonical main and whose head repository, branch, and exact SHA match the current source checkout.',
         'The approved-base rule must be proven: GitHub must report dev absent and git ls-remote origin refs/heads/dev must be empty. If dev exists or either read is unavailable or ambiguous, stop; do not silently select main. GitHub main and git ls-remote origin/main must then agree on one exact live SHA. GitHub compare from the PR merge commit to that exact SHA must prove the merge commit is an ancestor (merge-base equals the PR merge SHA, behind_by is zero, and status is ahead or identical). Re-read dev absence and main and require no drift around acquisition.',
         'The explicit original #627 B root must be canonical, clean, non-overlapping with the #630 source, canonical-origin, attached to fix/627-seamless-multi-objective-continuation, at exact B 9c057c2a741d361b6138b95ff115bd3e56049fbd and tree 717a04a858b4768deddf814822e3467407606f11, tracking origin/the bound branch, with GitHub and origin live topic refs both exactly B.',
-        'The explicit absolute destination must not equal, contain, or be contained by the #630 source or original #627 B root. If absent, clone canonical main into only this destination without shallow, reference, submodule, or lifecycle setup; verify its clean attached main branch, canonical origin, origin/main upstream and tracking SHA, HEAD equal exact captured live main, and Git common directory distinct from both source and B. If present, do not modify it and accept only the same complete exact-live independent D proof.',
+        'The explicit absolute destination must not equal, contain, or be contained by the #630 source or original #627 B root. If absent, reserve this exact path atomically with exclusive directory creation before cloning canonical main without shallow, reference, submodule, or lifecycle setup; if another process occupies it first, stop and preserve it without cloning. Verify the clone’s clean attached main branch, canonical origin, origin/main upstream and tracking SHA, HEAD equal exact captured live main, and Git common directory distinct from both source and B. If present, do not modify it and accept only the same complete exact-live independent D proof.',
         `From D, run registered safe JSON help for ${PROOF} and ${CONTEXT}; validate each reported command and required target-mode inputs. Then run ${PROOF} with the fixed #627 A/B/tree/handoff binding and explicit B path; require its successful read-only Architecture A result with route STOP, reentry false, objective_edit_authority_granted false, and next action fresh Context. Then run fresh ${CONTEXT} 627 --target-worktree B --json from D and retain its actual returned route and complete evidence in result details.`,
-        'This command can create only the explicit destination through git clone. It does not install dependencies, execute lifecycle scripts, edit either source or target, mutate GitHub, change refs in existing repositories, or grant objective-edit authority. The fresh target Context is the only authority check for subsequent work.',
+        'This command may create only the explicit destination by atomically reserving that absent path and cloning into it. It does not install dependencies, execute lifecycle scripts, edit either source or target, mutate GitHub, change refs in existing repositories, or grant objective-edit authority. The fresh target Context is the only authority check for subsequent work.',
       ],
       reads: [
         'the explicit #630 source root and merged pull request, GitHub dev absence and exact origin/dev absence, GitHub main and exact origin/main refs, and GitHub compare evidence from PR merge commit to live main',
@@ -58,8 +58,8 @@ export function trustedSourceBootstrapCommands(dependencies: CommandMetadataDepe
         'registered safe help, Architecture A proof, and fresh target-mode Context JSON outputs run from D',
       ],
       writes: [
-        'May create the explicit destination only by a normal full git clone of canonical main when the destination is absent; never write to the #630 source or original #627 target.',
-        'No GitHub or remote mutation, no dependency installation, no lifecycle scripts, and no other local filesystem or Git mutation. Preserve partial, occupied, conflicting, or invalid destination paths.',
+        'Atomically reserve the explicit destination with exclusive directory creation before invoking git clone; if the destination is occupied by another process, stop and preserve it without cloning. On clone failure, partial destination contents and the reservation are preserved; never delete, reset, clean, overwrite, or replace them. Never write to the #630 source or original #627 target.',
+        'No GitHub or remote mutation, no dependency installation, no lifecycle scripts, and no other local filesystem or Git mutation beyond the explicit destination reservation and normal full clone of canonical main.',
       ],
       success_classifications: ['SUCCESS'],
       stop_classifications: ['UNSUPPORTED_PRE_STATE', 'STATE_CONFLICT', 'HEAD_DRIFT', 'BLOCKED_EXTERNAL', 'EVIDENCE_CONFLICT', 'AMBIGUOUS_RESULT'],
@@ -77,7 +77,7 @@ export function trustedSourceBootstrapCommands(dependencies: CommandMetadataDepe
       },
       role_contracts: {
         controller: 'objective-edit authority is always false; a successful bootstrap is setup evidence only and does not choose or authorize an Issue objective.',
-        runtime: 'may create only the one explicit absent D path by clone; all proof, help, and Context subprocesses run with D as cwd; no dependency installation or lifecycle scripts.',
+        runtime: 'may atomically reserve only the one explicit absent D path and clone into that reserved path; on occupation or failure it preserves the path and stops. All proof, help, and Context subprocesses run with D as cwd; no dependency installation or lifecycle scripts.',
       },
       next_action_rules: [
         { classification: 'SUCCESS', next_action: nextAction('STOP', null, 'The observed target Context route and complete evidence are in details. Reconstruct fresh Context before any later work; this bootstrap grants no objective-edit authority.') },
@@ -88,7 +88,7 @@ export function trustedSourceBootstrapCommands(dependencies: CommandMetadataDepe
       }],
       parser_owner: 'scripts/agent-context-bootstrap-source.ts',
       safe_help_invocation: `pnpm run ${COMMAND} -- --help --json`,
-      last_validation_before_mutation: 'Immediately before clone, re-read the clean #630 branch/HEAD, exact merged PR binding, original #627 B identity, GitHub and origin dev absence, GitHub and origin main, compare ancestry, and explicit destination absence. Clone only the explicit destination. After clone, prove exact D and re-read all fixed roots, live dev absence, and live main before and after registered help, proof, and fresh Context.',
+      last_validation_before_mutation: 'Immediately before destination reservation, re-read the clean #630 branch/HEAD, exact merged PR binding, original #627 B identity, GitHub and origin dev absence, GitHub and origin main, compare ancestry, and explicit destination absence. Atomically reserve only the explicit destination; if occupied, preserve it and stop without cloning. Clone into the reserved destination. After clone, prove exact D and re-read all fixed roots, live dev absence, and live main before and after registered help, proof, and fresh Context.',
       post_write_readback: 'If a clone was attempted, preserve its result even on failure. Require destination canonical root, clean main branch, exact HEAD and origin/main tracking, canonical origin/upstream, independent Git common directory, and exact live main. The output always reports mutation_performed accurately, actual Context route when observed, STOP next action, and objective_edit_authority_granted false.',
     }),
   }

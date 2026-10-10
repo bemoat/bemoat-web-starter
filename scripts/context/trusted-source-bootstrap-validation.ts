@@ -71,6 +71,7 @@ export function validateContext(payload: Record<string, unknown> | null, { liveM
   const nextAction = payload.next_action
   const issue = payload.issue
   const validActionTypes = ['COMMAND', 'OPEN_PR', 'FOUNDER_GATE', 'COMPLETE', 'STOP']
+  if ((payload.route === 'FOUNDER_GATE') !== (nextAction.type === 'FOUNDER_GATE')) return false
   return repository.nameWithOwner === COMMITTED_WIP_BINDING.repository &&
     protectedBase.branch === BASE_BRANCH && protectedBase.sha === liveMain &&
     issue.number === COMMITTED_WIP_BINDING.issueNumber &&

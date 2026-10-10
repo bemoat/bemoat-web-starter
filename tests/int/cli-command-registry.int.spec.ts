@@ -12,6 +12,7 @@ import {
   getCommandContract,
   validateCommandContractRegistry,
 } from '../../scripts/cli/command-contract.ts'
+import { createHelpEnvelopeV1 } from '../../scripts/cli/command-help.ts'
 
 type JsonRecord = Record<string, unknown>
 type PackageJson = { scripts: Record<string, string> }
@@ -271,6 +272,19 @@ describe('Task 1 command contract registry', () => {
       multiple: false,
     }))
     expect(contract?.optional_flags?.filter((input) => input.name === 'target_worktree')).toHaveLength(1)
+  })
+
+  // Oracle: the approved #630 acquisition command is limited to the caller's explicit D; native exact-head review #5479644848 requires atomic no-clobber reservation before clone, preserving any concurrently occupied or partial destination.
+  it('publishes explicit destination reservation and no-clobber guarantees in bootstrap-source help', () => {
+    const contract = getCommandContract('bemoat:context:bootstrap-source')
+    expect(contract).not.toBeNull()
+    const help = createHelpEnvelopeV1(contract) as JsonRecord
+    const writes = (help.writes as string[]).join('\n')
+
+    expect(writes).toMatch(/atomic(?:ally)?[^\n]*reserv(?:e|ation)[^\n]*explicit destination/i)
+    expect(writes).toMatch(/reserv(?:e|ation)[^\n]*before[^\n]*clone/i)
+    expect(writes).toMatch(/(?:concurrent|occupied|no.clobber)[^\n]*(?:stop|preserv)|(?:stop|preserv)[^\n]*(?:concurrent|occupied|no.clobber)/i)
+    expect(writes).toMatch(/partial[^\n]*preserv/i)
   })
 
   it('requires every schema-v1 command field and existing entrypoint', () => {

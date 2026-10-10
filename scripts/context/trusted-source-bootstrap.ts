@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 
 import { COMMITTED_WIP_BINDING } from './committed-wip-recovery.ts'
@@ -135,11 +136,27 @@ export function bootstrapTrustedSource({
       if (destinationBeforeClone.reason || destinationBeforeClone.exists || destinationBeforeClone.canonical !== destinationState.canonical) {
         return stopped('STATE_CONFLICT', destinationBeforeClone.reason ?? 'The explicit destination changed after its absence check; preserve it and stop.', { currentHead: source.head })
       }
+      try {
+        // Claim an absent destination atomically. `git clone` accepts an existing
+        // empty directory, so checking absence alone would still let us populate
+        // a path another actor created between validation and clone.
+        mkdirSync(destinationState.canonical)
+      } catch (error) {
+        const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : null
+        return stopped(
+          code === 'EEXIST' ? 'STATE_CONFLICT' : 'BLOCKED_EXTERNAL',
+          code === 'EEXIST'
+            ? 'The explicit destination was created after its absence check; preserve it and stop without cloning.'
+            : `The explicit destination could not be reserved without replacing existing state: ${error instanceof Error ? error.message : String(error)}`,
+          { currentHead: source.head },
+        )
+      }
+      mutationPerformed = true
+      details = { ...details, destination: destinationState.canonical, destination_preserved_on_stop: true, destination_state: 'RESERVED' }
       const clone = run('git', [
         'clone', '--branch', BASE_BRANCH, '--single-branch', '--no-tags', '--no-recurse-submodules',
         `https://github.com/${REPOSITORY}.git`, destinationState.canonical,
       ], { cwd: sourceRoot })
-      mutationPerformed = true
       details = { ...details, destination: destinationState.canonical, destination_preserved_on_stop: true, destination_state: 'CLONE_ATTEMPTED' }
       if (clone.status !== 0 || clone.error) {
         return stopped('BLOCKED_EXTERNAL', `Exact-live main clone failed; any partial destination was preserved: ${commandFailureReason(clone, 'git clone')}`, {

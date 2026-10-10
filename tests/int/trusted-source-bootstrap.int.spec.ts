@@ -2,11 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdir
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { parseCommandInvocation } from '../../scripts/cli/command-invocation.ts'
 import { getCommandContract } from '../../scripts/cli/command-contract.ts'
 import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
+import { validateContext } from '../../scripts/context/trusted-source-bootstrap-validation.ts'
 
 const COMMAND = 'bemoat:context:bootstrap-source'
 const REPO = 'bemoat/bemoat-web-starter'
@@ -242,6 +243,65 @@ describeRuntime('trusted-source bootstrap injected-runner characterization', () 
     const runtime = await import(moduleUrl) as { bootstrapTrustedSource: (input: Record<string, unknown>) => unknown }
     return runtime.bootstrapTrustedSource({ sourceCwd: f.source, prNumber: PR, targetWorktree: binding.targetWorktree ?? f.target, destination: binding.destination ?? f.destination, run: f.run })
   }
+
+  async function invokeWithFinalAbsenceRace(f: Fixture) {
+    const preflightPath = '../../scripts/context/trusted-source-bootstrap-preflight.ts'
+    let destinationChecks = 0
+    vi.resetModules()
+    vi.doMock(preflightPath, async (importOriginal) => {
+      const original = await importOriginal<typeof import('../../scripts/context/trusted-source-bootstrap-preflight.ts')>()
+      return {
+        ...original,
+        canonicalDestination(path: string) {
+          const state = original.canonicalDestination(path)
+          if (path === f.destination && !state.exists && !state.reason && ++destinationChecks === 2) {
+            // Fault injection: the final absence evidence has just been read; another actor now owns this path.
+            mkdirSync(f.destination)
+            writeFileSync(f.marker, 'concurrently created destination')
+          }
+          return state
+        },
+      }
+    })
+    try {
+      const runtime = await import('../../scripts/context/trusted-source-bootstrap.ts') as { bootstrapTrustedSource: (input: {
+        sourceCwd: string; prNumber: string; targetWorktree: string; destination: string; run: ContextCommandRunner
+      }) => unknown }
+      return runtime.bootstrapTrustedSource({ sourceCwd: f.source, prNumber: PR, targetWorktree: f.target, destination: f.destination, run: f.run })
+    } finally {
+      vi.doUnmock(preflightPath)
+      vi.resetModules()
+    }
+  }
+
+  // Oracle: live-main setupBaseRecoveryRoute emits STOP + COMMAND with `bemoat:context:recover-setup`; the native exact-head review requires that pair to remain acceptable while rejecting FOUNDER_GATE + COMMAND. These validator stories vary only the pair and do not claim the target Context producer emits setup recovery for retained B.
+  it('accepts the canonical STOP plus setup-recovery COMMAND pair', () => {
+    const payload = successfulContextPayload({
+      route: 'STOP',
+      next_action: { type: 'COMMAND', command: 'bemoat:context:recover-setup', description: 'Run exact bound setup recovery.' },
+    })
+    expect(validateContext(payload, { liveMain: LIVE_MAIN })).toBe(true)
+  })
+
+  it('rejects FOUNDER_GATE paired with COMMAND in nested Context evidence', () => {
+    const payload = successfulContextPayload({
+      route: 'FOUNDER_GATE',
+      next_action: { type: 'COMMAND', command: 'bemoat:context:recover-setup', description: 'Run setup recovery.' },
+    })
+    expect(validateContext(payload, { liveMain: LIVE_MAIN })).toBe(false)
+  })
+
+  it('preserves a destination created after the final absence check and never invokes clone', async () => {
+    const f = fixture()
+    const result = await invokeWithFinalAbsenceRace(f) as { classification: string; mutationPerformed: boolean; details: Record<string, unknown> }
+    expect(existsSync(f.destination)).toBe(true)
+    expect(readFileSync(f.marker, 'utf8')).toBe('concurrently created destination')
+    expect(f.calls.some((call) => call.command === 'git' && call.args[0] === 'clone')).toBe(false)
+    expect(result.classification).not.toBe('SUCCESS')
+    expect(result.mutationPerformed).toBe(false)
+    expect(result.details.objective_edit_authority_granted).toBe(false)
+  })
+
   it('clones verified live main to the explicit D, then discovers, proves, and runs target Context from D', async () => {
     const f = fixture(); const result = await invoke(f) as { classification: string; mutationPerformed: boolean; route: string; details: Record<string, unknown> }
     expect(result, JSON.stringify({ result, calls: f.calls })).toMatchObject({ classification: 'SUCCESS', mutationPerformed: true, route: 'STOP', details: { objective_edit_authority_granted: false, actual_context_route: 'STOP', target_worktree: f.target } })
