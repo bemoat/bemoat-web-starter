@@ -65,7 +65,9 @@ describe('structural protection guard', () => {
     expect((await guard()).map((entry: { rule: string }) => entry.rule)).toEqual([])
     expect(grandfathered).toHaveLength(4)
     expect(JSON.parse(readFileSync(join(root, 'scripts/structural-protection-manifest.json'), 'utf8'))).toEqual(manifest())
-    expect(scriptInventory(root)).toBe(110)
+    // The bounded Architecture A recovery adds the command entrypoint and
+    // its context proof module to the production script inventory.
+    expect(scriptInventory(root)).toBe(112)
   })
 
   it('keeps the planning runtime within the default ceiling without a grandfathered exception', async () => {

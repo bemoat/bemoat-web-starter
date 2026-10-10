@@ -43,6 +43,13 @@ successful proof, including an exact reread of the same binding, returns
 `SUCCESS` and remains STOP with next action COMMAND `bemoat:context`: run
 registered CLI Discovery, then fresh Context with `--target-worktree`. That
 Context alone can authorize later work; drift or ambiguous reread is STOP.
+A same-worktree Context run from preserved target B therefore remains STOP and
+must not fall through to generic `IMPLEMENT`. Fresh Context target mode derives
+the proof again, without persisting it, from a distinct current merged
+protected-main source and one explicit target worktree. Only an exact per-run
+proof may route bounded `IMPLEMENT` reentry for the current #627 RED/incomplete
+objective; current-head STOP, FOUNDER_GATE, and COMPLETE evidence keeps
+precedence.
 
 Safe help:
 

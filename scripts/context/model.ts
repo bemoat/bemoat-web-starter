@@ -256,6 +256,21 @@ export interface NoPrImplementationBaseAncestryProof {
   behindBy: 0
 }
 
+/** Per-run read-only proof for exact #627 committed-WIP reentry. */
+export interface CommittedWipProof {
+  status: 'PROVEN'
+  repository: string
+  issue_number: string
+  branch: string
+  protected_base: { branch: string; historical_sha: string; live_sha: string }
+  historical_handoff: { comment_id: string; exact_head: string }
+  distinct_roots: boolean
+  source: { root: string; head: string; clean: boolean; accessible: boolean }
+  target: { root: string; head: string; tree: string; upstream: string; clean: boolean; accessible: boolean }
+  ancestry: { historical_to_target: 'STRICT_ANCESTOR' | 'NOT_ANCESTOR'; target_to_historical: 'STRICT_ANCESTOR' | 'NOT_ANCESTOR' }
+  provenance: { author: string; subject: string; paths: string[] }
+}
+
 export interface NormalizedContextEvidence {
   repository: RepositoryEvidence
   protectedBase: ProtectedBaseEvidence
@@ -271,6 +286,8 @@ export interface NormalizedContextEvidence {
   setupBaseRecovery?: SetupBaseRecoveryEvidence | null
   historicalBlockerResolutionProofs?: HistoricalBlockerResolutionProof[]
   noPrImplementationBaseAncestryProofs?: NoPrImplementationBaseAncestryProof[]
+  /** Internal read-only proof; createContextOutput intentionally omits this field. */
+  committedWipProof?: CommittedWipProof
   /** Read-only proof for one uniquely consumed old no-PR Founder gate. */
   historicalNoPrFounderGateReplayProofs?: HistoricalNoPrFounderGateReplayProof[]
   evidenceErrors: string[]

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { getCommandContract } from '../../scripts/cli/command-contract.ts'
+import { collectCommittedWipContextProof } from '../../scripts/context/committed-wip-context-proof.ts'
 import { renderHandoffComment, type HandoffRecord } from '../../scripts/handoff/schema.ts'
 import { recoverCommittedWip, COMMITTED_WIP_BINDING } from '../../scripts/context/committed-wip-recovery.ts'
 import type { ContextCommandResult, ContextCommandRunner } from '../../scripts/context/runtime.ts'
@@ -49,19 +50,36 @@ function canonicalHandoffBody(): string {
     objective_mode: 'read_only',
     repository: REPOSITORY,
     issue_number: ISSUE,
-    objective: 'Objective 1 — Preserve incomplete multi-objective routing candidate.',
-    permitted_scope: ['read-only characterization', 'durable evidence reconstruction'],
-    prohibited_scope: ['source mutation', 'Objective 2', 'merge'],
-    executing_agent: 'Codex',
+    objective: 'Objective 1 — read-only contract and transition trace: determine whether the reported intra-Issue continuation ambiguity demonstrates a merged policy or Context gap; provide the minimal behavior specification and regression requirements.',
+    permitted_scope: [
+      'Read-only inspection of the merged Mission Control guide, Execution contract, project loader, registered Context help/semantics, Issue #627, and public documentary #624 comments.',
+      'Characterize Objective 1 only and report evidence, the minimum correction proposal if supported, and bounded positive/negative regression requirements.',
+    ],
+    prohibited_scope: [
+      'No #627 Objective 2 or later work, source/test/document edits, or future-objective pre-authorization.',
+      'No inspection or mutation of #624 local worktrees, branches, code, files, or historical comments.',
+      'No PR, merge, deploy, production, migration, secret, or unrelated Issue operation.',
+    ],
+    executing_agent: 'Codex #627 Execution Controller',
     provider: 'OpenAI',
     branch: BRANCH,
     exact_head: BASE_A,
     protected_base: { branch: 'main', sha: BASE_A },
     pr: null,
-    verified_evidence: [{ kind: 'historical-context', value: 'Objective 1 HANDOFF at immutable head A.', url: null }],
+    verified_evidence: [
+      { kind: 'authority', value: 'Retained fresh #627 Context returned route IMPLEMENT and next_action.type COMMAND on this exact clean, durable branch; issue.scope was null. The Context result was not rerun after the user\'s instruction.', url: null },
+      { kind: 'authority', value: 'The user selected #627 Objective 1 only under the reported Issue-level COMMAND. The live Issue orders Objective 1 first and defines it as read-only contract/transition characterization; no later objective is authorized.', url: 'https://github.com/bemoat/bemoat-web-starter/issues/627' },
+      { kind: 'authority', value: 'The merged policy and loader require one bounded objective at a time, automatic same-session continuation only for the newly authorized objective, and fresh Context before choosing a later objective.', url: 'https://github.com/bemoat/bemoat-web-starter/blob/0e99786f0b087de46a2518d5874beb999892dd6c/docs/mission-control/mission-control-guide.md' },
+      { kind: 'authority', value: 'Public #624 evidence documents STOP and mid-objective Context friction but does not establish a fresh authorized post-checkpoint COMMAND that was ignored; Objective 1 found no demonstrated policy violation or basis for requiring objective_id/non-null scope.', url: 'https://github.com/bemoat/bemoat-web-starter/issues/624#issuecomment-6087620865' },
+      { kind: 'validation-proof', value: '{"status":"PASS","tier":"read-only","command":"pnpm run bemoat:guard:safety","exact_head":"0e99786f0b087de46a2518d5874beb999892dd6c"}', url: null },
+    ],
     route: 'IMPLEMENT',
-    next_action: { route: 'IMPLEMENT', description: 'Continue only under fresh Context authority.' },
-    stop_conditions: ['Stop on missing, conflicting, or non-durable evidence.'],
+    next_action: { route: 'IMPLEMENT', description: 'Objective 1 read-only characterization is complete. Run registered CLI Discovery and fresh Context before selecting any later objective; no future objective is pre-authorized.' },
+    stop_conditions: [
+      'Do not begin Objective 2 or later work until fresh Context independently authorizes it.',
+      'Do not edit #627 source or test files without the separately required first-edit authorization and workflow prerequisites.',
+      'If repository, branch, head, base, Issue, or PR identity changes, reconstruct authority before continuing.',
+    ],
     local_durability: { required: true, durable: true, reason: null },
   }
   return renderHandoffComment(record)
@@ -344,6 +362,36 @@ describe('Architecture A committed RED-WIP reentry runtime proof', () => {
     expect(result.details.canonical_target_root).toBe(state.target)
     expect(state.calls.some(({ command, args }) => command === 'git' && args[0] === 'show' && args.includes(HEAD_B))).toBe(true)
     expect(state.calls.some(({ command, args }) => command === 'git' && args[0] === 'diff' && args.includes(BASE_A) && args.includes(HEAD_B))).toBe(true)
+    expectNoMutation(state)
+  })
+
+  it('collects the registered verifier proof with live D beyond historical A', () => {
+    const state = fixture({
+      sourceHead: CURRENT_D,
+      sourceTracking: CURRENT_D,
+      sourceLiveRefs: [CURRENT_D, CURRENT_D],
+    })
+    const collected = collectCommittedWipContextProof({
+      sourceCwd: state.source,
+      targetWorktree: state.target,
+      run: state.run,
+    })
+
+    expect(collected.error).toBeNull()
+    if (!collected.proof) throw new Error(collected.error ?? 'Expected a committed-WIP proof')
+    expect(collected.proof).toMatchObject({
+      status: 'PROVEN',
+      repository: REPOSITORY,
+      issue_number: ISSUE,
+      branch: BRANCH,
+      distinct_roots: true,
+      protected_base: { branch: 'main', historical_sha: BASE_A, live_sha: CURRENT_D },
+      historical_handoff: { comment_id: HANDOFF_COMMENT, exact_head: BASE_A },
+      source: { root: state.source, head: CURRENT_D, clean: true, accessible: true },
+      target: { root: state.target, head: HEAD_B, tree: TREE_B, upstream: `origin/${BRANCH}`, clean: true, accessible: true },
+      ancestry: { historical_to_target: 'STRICT_ANCESTOR', target_to_historical: 'NOT_ANCESTOR' },
+      provenance: { author: WIP_AUTHOR, subject: WIP_SUBJECT, paths: [...WIP_PATHS] },
+    })
     expectNoMutation(state)
   })
 

@@ -26,7 +26,7 @@ export const COMMITTED_WIP_BINDING = {
   handoffAuthorId: '36528988',
 } as const
 
-const COMMITTED_WIP_PATHS = [
+export const COMMITTED_WIP_PATHS = [
   'docs/agent-loop/role-handoff-contract.md',
   'docs/mission-control/mission-control-guide.md',
   'scripts/context/evidence.ts',
