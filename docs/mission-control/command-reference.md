@@ -28,6 +28,29 @@ authority. After PR creation, the prior `pr: null` HANDOFF remains historical
 pre-PR evidence and does not supersede the strict identity checks for current
 PR HANDOFFs.
 
+## Committed-WIP reentry proof
+
+`bemoat:context:recover-committed-wip` is an explicit Tier-A, read-only proof
+run from the current merged, exact-live protected-main source against one
+distinct, explicit target worktree. It binds #627's immutable Objective 1
+HANDOFF at A (comment `6088681412`), exact committed WIP head B and tree, strict
+A-to-B ancestry, canonical repository/branch/base identities, clean durable
+roots, and the preserved commit's provenance. It re-reads the bound evidence
+and fails closed on wrong, missing, competing, forged, modified, stale, dirty,
+or unsupported state. It performs no writes, treats RED WIP as incomplete, and
+does not authorize GREEN, Objective N+1, or any objective edits. On proof
+success or an identical retry, the result remains STOP with next action
+COMMAND `bemoat:context`: run registered CLI Discovery, then fresh Context
+with `--target-worktree`. That Context alone can authorize later work.
+
+Safe help:
+
+    pnpm run bemoat:context:recover-committed-wip -- --help --json
+
+Representative syntax:
+
+    pnpm run bemoat:context:recover-committed-wip -- <issue-number> --expected-repository <owner/name> --expected-branch <branch> --expected-base-branch <branch> --expected-base-sha <A> --expected-handoff-comment-id <id> --expected-handoff-head <A> --expected-wip-head <B> --expected-wip-tree <tree> --target-worktree <absolute-path> --json
+
 ## STOP blocker resolution evidence
 
 An authorized Founder may append one `## BLOCKER_RESOLUTION` Issue comment for
