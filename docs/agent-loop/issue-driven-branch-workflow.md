@@ -17,6 +17,39 @@ When creating or normalizing a GitHub issue from a conversation, use
 structure instead of duplicating issue-shaping guidance in multiple workflow
 docs.
 
+## Verified Base Acquisition at Startup
+
+After registered CLI Discovery and fresh Context, use the verified live
+protected base according to the checkout state:
+
+- **Clean attached checkout at the exact live protected-base SHA:** use the
+  durable zero-delta Issue-branch bootstrap below, based on that verified SHA.
+- **Clean stale protected checkout in the ordinary same-worktree path:**
+  perform only the exact
+  `bemoat:context:recover-setup` recovery and binding emitted by fresh Context.
+  Its eligibility and readback requirements are defined by the merged
+  [execution handoff contract §12](../mission-control/execution-handoff-contract.md#clean-stale-protected-base-setup-recovery).
+  Historical exact-target cases, including a target that predates recovery
+  emission, follow only their applicable §12 path.
+- **Already on the queried Issue branch:** preserve its existing work in place.
+  Do not implicitly pull, rebase, reset, merge, or otherwise synchronize it to
+  the protected base. Follow fresh Context and use only an exact recovery it
+  prescribes.
+- **Dirty with unrelated work, divergent, wrong-origin, ambiguous, detached,
+  or otherwise unsupported state:** stop. Preserve task-intentional WIP on an
+  existing Issue branch as described above. For a wrong-Issue workspace, use only the
+  canonical [§12 workspace-acquisition path](../mission-control/execution-handoff-contract.md#wrong-issue-workspace-acquisition)
+  when every stated predicate qualifies; it does not authorize objective edits.
+
+Context is read-only. Follow only an exact bounded recovery it prescribes; any
+§12 exception—including historical exact-target `recover-setup`, Bridge B, and
+wrong-Issue workspace acquisition—applies only under its own predicates and
+scope.
+Do not fetch or pull unconditionally, infer a fallback recovery, or treat setup
+as authorization to edit. See the [command
+reference](../mission-control/command-reference.md) and the merged execution
+handoff contract for the governing command and recovery contracts.
+
 ## Required first steps (before any file edit)
 
 For issue-based work, do not edit files first.
