@@ -197,31 +197,50 @@ The documentation makes clear that:
 For issue-based work, follow
 `docs/agent-loop/issue-driven-branch-workflow.md`.
 
-For issue-based work, do not edit files first.
-Run:
+For issue-based work, do not edit files first. Read the issue or task,
+`AGENTS.md`, and `docs/agent-loop/README.md`; inspect `git status` and the
+current branch. Stop if the working tree has unrelated staged, unstaged, or
+untracked changes. If a Git command fails or any state risks overwriting human
+work, report the blocker and do not edit files. Never modify `main` directly or
+implement routine work on `dev`. If on a clean `main` or `dev`, complete the linked
+[durable zero-delta branch bootstrap](docs/agent-loop/issue-driven-branch-workflow.md#durable-zero-delta-branch-bootstrap)
+and verify the resulting issue branch is clean and durable before continuing.
+
+### Pre-Context dependency preparation
+
+After branch preflight has verified canonical origin and the exact live
+approved-base SHA identity, require the applicable section 12 ancestry case
+(current live base for ordinary setup, or the bounded historical-base
+zero-delta case) and a clean, durable development Issue checkout whose
+uniquely established branch belongs to the queried Issue
+and satisfies the merged execution handoff contract's section 12 predicates,
+run its exact frozen-lockfile setup before CLI Discovery, safe help, or fresh
+Context:
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>
+```
+
+Source D remains under its existing no-install/no-`node_modules` contract; do
+not install dependencies there. If the checkout, toolchain, or install options
+are unsupported or the section 12 evidence is missing or conflicting, stop
+without a fallback. Dependency preparation grants no Context route, objective
+edit, or first-edit authority.
+
+Only after that setup succeeds, perform registered CLI Discovery and fresh
+Context:
 
 ```bash
 pnpm run bemoat:context -- --help --json
 pnpm run bemoat:context <issue-number>
 ```
 
-If the blocker is a dirty working tree, unrelated repo state, a failed git
-command, or anything that risks overwriting human work, report the blocker and
-do not edit files. If the only blocker is a clean protected or integration
-branch, treat it as branch setup: follow the
+If the only blocker is a clean protected or integration branch, treat it as
+branch setup: follow the
 [durable zero-delta branch bootstrap](docs/agent-loop/issue-driven-branch-workflow.md#durable-zero-delta-branch-bootstrap)
-to create, publish, and read back the issue-related topic branch, then rerun
-`pnpm run bemoat:context <issue-number>`. A local-only branch is not durable
-and must remain fail-closed.
-
-1. Read the issue or task, `AGENTS.md`, and `docs/agent-loop/README.md`.
-2. Run `git status` and confirm the current branch.
-3. Stop if the working tree has unrelated staged, unstaged, or untracked
-   changes.
-4. Never modify `main` directly.
-5. Do not implement routine work directly on `dev`.
-6. If on a clean `main` or `dev`, complete the durable zero-delta branch
-   bootstrap before editing, then rerun the issue preflight.
+to create, publish, and read back the issue-related topic branch, then repeat
+the section 12 dependency setup and CLI Discovery/Context sequence above. A
+local-only branch is not durable and must remain fail-closed.
 
 Branch naming:
 
@@ -270,7 +289,9 @@ automatically unless the user explicitly overrides it, for example "do not
 commit" or "docs only, no PR."
 
 1. Read `AGENTS.md` and `docs/agent-loop/README.md`.
-2. Reconstruct context with `pnpm run bemoat:context <issue-number>`.
+2. After the clean durable development-checkout setup and CLI Discovery in
+   **Required First Steps Before File Edits**, reconstruct context with
+   `pnpm run bemoat:context <issue-number>`.
 3. Classify task size using `docs/agent-loop/checklist.md` and use the minimum
    useful process for that tier.
 4. Run the branch gates above.

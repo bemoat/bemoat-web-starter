@@ -41,10 +41,10 @@ State repository, Issue, applicable PR, branch and exact head, approved protecte
 State the one objective authorized by fresh Context, its acceptance criteria, and its in-scope boundary. If Global MC cannot run repository-local CLI, identify the objective candidate from the verified Issue as pending fresh Execution/IDE Context authorization; only a fresh Context result with `next_action.type: COMMAND` authorizes mutation for that objective.
 
 ## 3. Verified live authority / route
-State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context or canonical wrong-Issue workspace acquisition under section 12 may precede a later `COMMAND`, and then only within that recovery's scope. The other exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. None authorizes objective mutation. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or an explicitly authorized pre-COMMAND recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
+State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Before CLI Discovery, Execution/IDE MC may perform only the verified development-checkout dependency preparation in section 12; this setup step adds no route or objective-work authority. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context or canonical wrong-Issue workspace acquisition under section 12 may precede a later `COMMAND`, and then only within that recovery's scope. The other exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. None authorizes objective mutation. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or an explicitly authorized pre-COMMAND recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
 
 ## 4. Startup / reconstruction instructions
-Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, perform registered CLI Discovery with its declared safe help, and run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
+Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, and classify the checkout. Only on a clean, durable development Issue checkout satisfying every section 12 predicate, perform the exact section 12 frozen-lockfile dependency preparation before CLI Discovery. Source D remains under its no-install/no-`node_modules` contract; if setup is unsupported or required evidence is missing, stop without a fallback. After successful setup, perform registered CLI Discovery with its declared safe help, then run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. The setup step is not a Context route and grants no objective-work or first-edit authority. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
 
 ## 5. Permitted scope
 List only the current objective's bounded work. The list does not authorize a new objective, future Issue, or action beyond the live Context route.
@@ -80,7 +80,7 @@ identity or controller ownership.
 
 If a worker cannot be created or fails, retry or reassign that bounded role when safe, or STOP and report the execution limitation. The controller must not silently take over objective execution. Model routing remains advisory; model/provider substitution does not change these roles. If the host genuinely lacks worker capability, state that compatibility limitation and do not claim the worker-capable topology is satisfied; this contract defines no alternative execution route.
 
-No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery in section 12 is satisfied. Canonical pre-COMMAND workspace acquisition and zero-delta branch bootstrap are setup authority only, not substantive objective execution; workspace acquisition is limited to the clean, isolated preparation described there and grants no objective-work authority. After routing, authorized objective or recovery mutation remains worker-owned, and the controller verifies the durable result. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
+No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery in section 12 is satisfied. The single pre-Context dependency preparation in section 12 is an additional setup-only exception, permitted only on the verified development checkout and before CLI Discovery; it grants no objective-work authority. Canonical pre-COMMAND workspace acquisition and zero-delta branch bootstrap are setup authority only, not substantive objective execution; workspace acquisition is limited to the clean, isolated preparation described there and grants no objective-work authority. After routing, authorized objective or recovery mutation remains worker-owned, and the controller verifies the durable result. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
 
 ## 9. Validation requirements
 Discover public commands before use. Run focused regressions and the repository-required validation tier for the changed files; report exact commands and results. Require exact-head CI and independent review when current policy requires them. Do not invent a validation tier or claim checks that were not run.
@@ -202,8 +202,12 @@ For `FOUNDER_GATE`, do not mutate and return to Founder once for the required
 decision, then stop at the gate. For `STOP`, unsupported state, or evidence
 conflict, do not mutate the authorized objective; stop fail-closed and report
 the exact blocker. The only pre-COMMAND exceptions are an exact existing-branch
-recovery prescribed by fresh Context or the canonical wrong-Issue workspace
-acquisition below. Neither exception authorizes objective work. Missing,
+recovery prescribed by fresh Context, canonical wrong-Issue workspace
+acquisition below, and the single pre-Context dependency preparation in section
+12. On an eligible verified development Issue checkout, this preparation is
+setup-only and occurs before CLI Discovery, followed only by registered CLI
+Discovery and fresh Context; it grants no objective-work authority. Neither
+recovery exception authorizes objective work. Missing,
 ambiguous, conflicting, or unsupported recovery remains STOP. If evidence
 changes before execution, reconstruct again. Do not pre-authorize
 future objectives; a separate real gate still controls when required. On
@@ -398,8 +402,11 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
    checks, then read back the pushed branch. Never invent ownership or
    overwrite an existing branch.
 
-   After either checkout path completes, immediately rerun registered CLI
-   Discovery and fresh Context by running
+   When the acquired target is a verified development Issue checkout, complete
+   the `Pre-Context dependency preparation` step below before Discovery. Source
+   D remains under its no-install/no-`node_modules` contract. After either
+   checkout path completes, immediately rerun registered CLI Discovery and
+   fresh Context by running
    `pnpm run bemoat:context <issue-number> --json` in the acquired workspace.
    Registered
    CLI Discovery is still required; fresh Context is still required; and
@@ -426,6 +433,48 @@ and do not ask the Founder to run Git clone/fetch/checkout commands manually.
 Do not alter the original wrong-Issue checkout. This does not change #571 Bridge
 B, which owns protected-main command-source reachability for evaluating an
 unchanged stale target.
+
+### Pre-Context dependency preparation
+
+For a development Issue checkout only, dependency preparation before registered
+CLI Discovery is permitted only after verifying the canonical repository root
+and `origin` against live GitHub identity, the approved-base branch identity and
+exact live approved-base SHA against both live GitHub and `git ls-remote` of
+canonical origin. The queried Issue and its handoff must uniquely establish
+one Issue-owned topic branch; competing or ambiguous branch candidates are
+`STOP`. Require a clean, attached, durable Issue branch whose canonical
+`origin/<branch>` upstream and exact live remote topic ref must both equal
+`HEAD`.
+In the ordinary case, require the exact live approved-base SHA to be an
+ancestor of `HEAD`. The only post-merge zero-delta case is an existing
+controller continuing on its existing Issue branch: use the historical
+approved-base SHA recorded in durable pre-merge evidence. Require this branch
+to be clean, attached, and durable; `HEAD` exactly equals the recorded
+historical approved-base SHA, and its canonical upstream and exact live remote
+topic ref equal `HEAD`. The recorded historical approved-base SHA is an
+ancestor of the current live approved-base SHA. This case does not authorize
+branch synchronization and does not select or grant a Context route. It permits only
+`pnpm install --frozen-lockfile --ignore-scripts --store-dir
+<task-local-store>`, followed by registered CLI Discovery and fresh Context.
+Use a Node version that
+satisfies `package.json`'s `engines.node` and matches the checked-in CI Node
+version. Use the pnpm version configured by checked-in CI and verify it against
+`package.json`'s `engines.pnpm` and the `pnpm-lock.yaml` lockfile version;
+`package.json` has no `packageManager` field, so do not infer a pnpm version
+from that field. Verify the active pnpm supports the frozen-lockfile,
+ignore-scripts, and store-dir options. Capture the `package.json` and
+`pnpm-lock.yaml` identities before installation. Run only
+`pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>`;
+lifecycle scripts must not run, and writes must be bounded to this checkout's
+`node_modules` and that task-local package store, the only permitted write
+locations. Afterwards, verify
+unchanged `HEAD`, branch, upstream, manifest and lockfile identities, and
+tracked cleanliness. Dirty, wrong-origin, conflicting, unsupported, failed, or
+changed state is `STOP`. All other stale or conflicting states remain `STOP`;
+do not invent a fallback route. Source D is
+explicitly excluded under its existing no-install/no-`node_modules` contract.
+Successful setup permits only registered CLI Discovery followed by fresh
+Context; it grants no `COMMAND`, objective edit, or first-edit authority.
 
 ### Bridge B: stale target predates recovery emission
 
@@ -472,7 +521,7 @@ before its next route can be selected. Every other `STOP`, including a stale Con
 any additional conflict, remains `STOP`.
 
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. The single pre-Context dependency preparation under section 12 is allowed only as verified setup before initial CLI Discovery on an eligible development Issue checkout; after Discovery or a fresh `STOP`, it is unavailable and never grants objective-work authority. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.
