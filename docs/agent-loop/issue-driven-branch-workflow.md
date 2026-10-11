@@ -52,21 +52,44 @@ handoff contract for the governing command and recovery contracts.
 
 ## Required first steps (before any file edit)
 
-For issue-based work, do not edit files first.
-Run:
+For issue-based work, do not edit files first. Read the issue or task and
+canonical agent instructions, then inspect `git status` and the current branch.
+Stop for unrelated staged, unstaged, or untracked work. If a Git command fails
+or any state risks overwriting human work, report the blocker and do not edit
+files. Never edit `main` or implement routine work on `dev`. If the checkout is
+a clean `main` or `dev`, complete and verify the durable zero-delta Issue-branch
+bootstrap below before continuing. A local-only branch is not durable.
+
+### Pre-Context dependency preparation
+
+After branch preflight has verified a clean, canonical, durable development Issue
+checkout, canonical origin and exact live approved-base SHA identity, and one
+uniquely established topic branch owned by the queried Issue, require the
+applicable section 12 ancestry case (current-base ancestry for ordinary setup,
+or its bounded historical-base zero-delta case) in the merged execution
+handoff contract before CLI Discovery, safe help, or fresh Context:
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>
+```
+
+Source D remains under its existing no-install/no-`node_modules` contract. Do
+not install there. If the checkout, toolchain, command options, or identity
+evidence is unsupported, missing, stale, or conflicting, stop without a
+fallback. This setup grants no Context route or objective/first-edit authority.
+
+Only after that setup succeeds, run registered CLI Discovery and fresh Context:
 
 ```bash
 pnpm run bemoat:context -- --help --json
 pnpm run bemoat:context <issue-number>
 ```
 
-If the blocker is a dirty working tree, unrelated repo state, a failed git
-command, or anything that risks overwriting human work, report the blocker and
-do not edit files. If the only blocker is a clean protected or integration
-branch, treat it as branch setup: complete the
+If the only blocker is a clean protected or integration branch, treat it as
+branch setup: complete the
 [durable zero-delta branch bootstrap](#durable-zero-delta-branch-bootstrap),
-rerun `pnpm run bemoat:context <issue-number>`, and continue only after the
-preflight passes. Creating a local-only branch is not sufficient.
+then repeat the section 12 dependency setup and CLI Discovery/Context sequence
+above. Continue only after the preflight passes.
 
 For a clean canonical protected branch that is strictly behind its exact live
 protected base, follow only the recovery command and binding returned by fresh

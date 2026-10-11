@@ -5,11 +5,17 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const loaderPath = 'prompts/mission-control/chatgpt-project-loader.md'
+const agentInstructions = readFileSync(resolve(root, 'AGENTS.md'), 'utf8')
+const issueBranchWorkflow = readFileSync(resolve(root, 'docs/agent-loop/issue-driven-branch-workflow.md'), 'utf8')
 const loader = readFileSync(resolve(root, loaderPath), 'utf8')
 const normalizedLoader = loader.replace(/\s+/g, ' ')
+const normalizedAgentInstructions = agentInstructions.replace(/\s+/g, ' ')
+const normalizedIssueBranchWorkflow = issueBranchWorkflow.replace(/\s+/g, ' ')
 const executionHandoff = readFileSync(resolve(root, 'docs/mission-control/execution-handoff-contract.md'), 'utf8')
+const contextStoryMatrix = readFileSync(resolve(root, 'docs/agent-loop/context-story-matrix.md'), 'utf8')
 const commandReference = readFileSync(resolve(root, 'docs/mission-control/command-reference.md'), 'utf8')
 const normalizedExecutionHandoff = executionHandoff.replace(/\s+/g, ' ')
+const normalizedContextStoryMatrix = contextStoryMatrix.replace(/\s+/g, ' ')
 const normalizedCommandReference = commandReference.replace(/\s+/g, ' ')
 const hasHardCodedSolMediumControllerDefault = (text: string) => text
   .split(/[.;]\s+/)
@@ -170,6 +176,124 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(continuationContract).toMatch(/multiple plausible Issue workspaces\/branches.*dirty or non-durable state.*wrong\/noncanonical repository or origin.*conflicting\/stale live-base evidence.*conflicting existing target branch ownership.*filesystem\/network\/host capability prevents isolated safe provisioning/i)
     expect(continuationContract).toMatch(/if the agent can create and verify the isolated sibling checkout but the host cannot switch\/rebind its effective workspace\/root.*prepare the workspace completely first.*report the exact verified path as the single operator action.*do not ask the Founder to run Git clone\/fetch\/checkout commands manually/i)
     expect(continuationContract).toMatch(/no new general scheduler or worktree manager/i)
+  })
+
+  // Oracle: #632 Objective A's acceptance criteria and the user's request for
+  // one minimal policy amendment specify the eligible development checkout,
+  // exact frozen install, bounded effects, and negative exclusions. The test
+  // protects the requested post-merge contract; it grants no present authority.
+  // Setup is followed only by Discovery + fresh Context, without a Context route.
+  it('limits pre-Context dependency preparation to verified development checkouts and setup-only continuation', () => {
+    const dependencyPreparation = normalizedExecutionHandoff
+      .split('### Pre-Context dependency preparation')[1]
+      ?.split('### Bridge B: stale target predates recovery emission')[0] ?? ''
+
+    expect(dependencyPreparation).not.toBe('')
+    expect(dependencyPreparation).toMatch(/development Issue checkout/i)
+    expect(dependencyPreparation).toMatch(/queried Issue and its handoff must uniquely establish one Issue-owned topic branch/i)
+    expect(dependencyPreparation).toMatch(/canonical origin/i)
+    expect(dependencyPreparation).toMatch(/exact live approved.base SHA/i)
+    expect(dependencyPreparation).toMatch(/clean, attached, durable Issue branch.*upstream/i)
+    expect(dependencyPreparation).toMatch(/exact live remote topic ref must both equal `HEAD`/i)
+    expect(dependencyPreparation).toMatch(/Node version.*engines\.node.*checked-in CI Node version/i)
+    expect(dependencyPreparation).toMatch(/pnpm version configured by checked-in CI.*engines\.pnpm.*pnpm-lock\.yaml.*lockfile version/i)
+    expect(dependencyPreparation).toMatch(/package\.json` has no `packageManager` field/i)
+    expect(dependencyPreparation).toMatch(/package\.json.*pnpm-lock\.yaml/i)
+    expect(dependencyPreparation).toMatch(/pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>/i)
+    expect(dependencyPreparation).toMatch(/no lifecycle scripts|lifecycle scripts.*(?:must not run|disabled|not execute)/i)
+    expect(dependencyPreparation).toMatch(/writes must be bounded to this checkout's `node_modules` and that task.local package store/i)
+    expect(dependencyPreparation).toMatch(/unchanged.*(?:package\.json.*pnpm-lock\.yaml|manifest.*lockfile).*identit/i)
+    expect(dependencyPreparation).toMatch(/tracked.*clean|clean.*tracked/i)
+    expect(dependencyPreparation).toMatch(/HEAD.*unchanged|unchanged.*HEAD/i)
+    expect(dependencyPreparation).toMatch(/dirty|wrong.*origin|origin.*wrong|drift|mismatch|unsupported/i)
+    expect(dependencyPreparation).toMatch(/STOP/i)
+    expect(dependencyPreparation).toMatch(/Source D.*no.install|no.install.*Source D/i)
+    expect(dependencyPreparation).toMatch(/registered CLI Discovery.*fresh Context/i)
+    expect(dependencyPreparation).toMatch(/no .*COMMAND.*first.edit.*authority|grants no .*objective.*authority/i)
+
+    expect(normalizedContextStoryMatrix).toMatch(/Pre.Context dependency preparation is setup.only.*Issue #632 Objective A criteria/i)
+    expect(normalizedContextStoryMatrix).toMatch(/development Issue checkout.*frozen.lockfile.*ignore.scripts/i)
+    expect(normalizedContextStoryMatrix).toMatch(/Source D.*no.install|no.install.*Source D/i)
+  })
+
+  // Oracle: #632 Objective A requires setup-only eligibility for an Issue
+  // checkout; the user's post-merge direction returns to the existing #632
+  // controller under freshly verified authority. Assert the generic bounded
+  // historical-base state and that setup grants no sync or Context route.
+  it('limits post-merge stale-base setup to the exact zero-delta historical-base tip', () => {
+    const dependencyPreparation = normalizedExecutionHandoff
+      .split('### Pre-Context dependency preparation')[1]
+      ?.split('### Bridge B: stale target predates recovery emission')[0] ?? ''
+    const postMergeStart = dependencyPreparation.toLowerCase().indexOf('post-merge')
+    const postMergeCase = postMergeStart < 0 ? '' : dependencyPreparation.slice(postMergeStart)
+
+    expect(postMergeCase).not.toBe('')
+    expect(postMergeCase).toMatch(/`?HEAD`? exactly equals the recorded historical approved-base SHA/i)
+    expect(postMergeCase).toMatch(/this branch to be clean, attached, and durable/i)
+    expect(postMergeCase).toMatch(/exact live remote topic ref equal `HEAD`/i)
+    expect(postMergeCase).toMatch(/recorded historical approved-base SHA.*ancestor of the current live approved-base SHA/i)
+    expect(dependencyPreparation).toMatch(/all other stale or conflicting states? (?:remain|are) `STOP`/i)
+    expect(postMergeCase).toMatch(/only `pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>`.*registered CLI Discovery.*fresh Context/i)
+    expect(postMergeCase).toMatch(/does not authorize (?:a )?branch synchronization/i)
+    expect(postMergeCase).toMatch(/does not select or grant a Context route/i)
+
+    expect(normalizedContextStoryMatrix).toMatch(/#632 Objective A.*post.merge.*historical approved.base SHA.*ancestor of the current live approved.base SHA/i)
+  })
+
+  // Oracle: #632 Objective A requests merged authority for this pre-Context
+  // operation only as bounded setup, never as an objective route. Section 8
+  // and the STOP rule enumerate permitted pre-COMMAND work, so the exception
+  // must be explicit there after the amendment merges.
+  it('includes dependency preparation in the setup-only pre-COMMAND exception list', () => {
+    const sectionTwelveStopParagraph = normalizedExecutionHandoff
+      .split('For `STOP`, unsupported state')[1]
+      ?.split('### Exact bounded recovery')[0] ?? ''
+    const preCommandExceptions = normalizedExecutionHandoff
+      .split('A pre-COMMAND recovery is permitted only when')[1]
+      ?.split('Canonical pre-COMMAND workspace acquisition')[0] ?? ''
+    const stopConditions = normalizedExecutionHandoff
+      .split('## 13. Stop conditions')[1]
+      ?.split('## 14. Founder decision status')[0] ?? ''
+
+    expect(sectionTwelveStopParagraph).toMatch(/only pre.COMMAND exceptions.*exact existing.branch recovery.*canonical wrong.Issue workspace acquisition.*single pre.Context dependency preparation.*setup.only.*before CLI Discovery/i)
+    expect(sectionTwelveStopParagraph).toMatch(/grants no objective.work authority/i)
+    expect(preCommandExceptions).toMatch(/pre.Context dependency preparation.*section 12/i)
+    expect(preCommandExceptions).toMatch(/setup.only.*no objective.work authority/i)
+    expect(stopConditions).toMatch(/pre.Context dependency preparation.*section 12/i)
+  })
+
+  // Oracle: AGENTS.md and the issue-driven branch workflow currently require
+  // registered safe help before Context. #632 Objective A inserts only its
+  // eligible development-checkout setup before help; Source D remains excluded
+  // under #630's explicit no-install contract.
+  it('puts eligible development-checkout dependency preparation before Discovery in issue startup instructions', () => {
+    const startupInstructions = [
+      [
+        'AGENTS.md',
+        normalizedAgentInstructions
+          .split('## Required First Steps Before File Edits')[1]
+          ?.split('## Default Agent Workflow')[0] ?? '',
+      ],
+      [
+        'docs/agent-loop/issue-driven-branch-workflow.md',
+        normalizedIssueBranchWorkflow
+          .split('## Required first steps (before any file edit)')[1]
+          ?.split('## Durable zero-delta branch bootstrap')[0] ?? '',
+      ],
+    ] as const
+
+    for (const [path, instructions] of startupInstructions) {
+      const setupPosition = instructions.indexOf('Pre-Context dependency preparation')
+      const discoveryPosition = instructions.indexOf('pnpm run bemoat:context -- --help --json')
+      const contextPosition = instructions.indexOf('pnpm run bemoat:context <issue-number>')
+
+      expect(setupPosition, `${path}: pre-Context setup instructions`).toBeGreaterThanOrEqual(0)
+      expect(setupPosition, `${path}: setup precedes safe help`).toBeLessThan(discoveryPosition)
+      expect(discoveryPosition, `${path}: safe help precedes fresh Context`).toBeLessThan(contextPosition)
+      expect(instructions).toMatch(/verified.*development Issue checkout/i)
+      expect(instructions).toMatch(/canonical origin.*approved.base SHA|approved.base SHA.*canonical origin/i)
+      expect(instructions).toMatch(/Source D.*no.install|no.install.*Source D/i)
+    }
   })
 
   // Oracle: Founder decision #565 comment 5991707507 and the Context Story
