@@ -1,0 +1,86 @@
+{
+  "record_type": "independent_harness_flow_oracle",
+  "issue_number": 643,
+  "source_oracle": "docs/mission-control/flow-oracle.json",
+  "source_oracle_issue": 642,
+  "authority": [
+    {
+      "source": "docs/mission-control/mission-control-guide.md",
+      "rules": [
+        "Run registered CLI Discovery and use its declared safe help invocation before invoking a retained Bemoat command.",
+        "CLI help is read-only and changes no GitHub, branch, or local workflow state.",
+        "Context is read-only; Handoff records evidence but does not authorize a new objective or grant approval.",
+        "Only one bounded objective may execute at a time; durable result and Handoff precede fresh Context and authorization for the next objective.",
+        "STOP and FOUNDER_GATE are human-owned boundaries; no autonomous merge, approval, or invented authority."
+      ]
+    },
+    {
+      "source": "docs/agent-loop/context-story-matrix.md",
+      "rules": [
+        "Assert a specific route only when canonical authority uniquely determines it.",
+        "Where authority only forbids an outcome, assert the exclusion without inventing a fallback.",
+        "Where multiple outcomes remain plausible, classify SPEC_GAP and stop before encoding a route."
+      ]
+    },
+    {
+      "source": "https://github.com/bemoat/bemoat-web-starter/issues/643",
+      "criteria": ["C01", "C02", "C03", "C04", "C05", "C06", "C07"]
+    }
+  ],
+  "public_cli": {
+    "discovery": {
+      "invocation": "pnpm --silent run bemoat:context -- --help --json",
+      "expected": { "mode": "help", "classification": "HELP", "writes": [] }
+    },
+    "context_help": {
+      "invocation": "pnpm --silent run bemoat:context -- --help --json",
+      "expected": { "command": "bemoat:context", "mode": "help", "classification": "HELP", "writes": [] }
+    },
+    "handoff_help": {
+      "invocation": "pnpm --silent run bemoat:handoff -- --help --json",
+      "expected": { "command": "bemoat:handoff", "mode": "help", "classification": "HELP", "writes": ["exactly one top-level Issue HANDOFF comment; no other protocol mutation"] }
+    },
+    "help_side_effects": []
+  },
+  "objective_lifecycle": {
+    "sequence": ["A", "B", "C", "D"],
+    "authorization_per_objective": [
+      "fresh registered CLI Discovery and Context for A",
+      "durable A result, required HANDOFF, then fresh Context before B",
+      "durable B result, required HANDOFF, then fresh Context before C",
+      "durable C result, required HANDOFF, then fresh Context before D"
+    ],
+    "prohibited": [
+      "pre-authorize a future objective",
+      "advance based on session memory, labels, or a prior objective's authorization",
+      "treat HANDOFF as permission or approval",
+      "continue through STOP or FOUNDER_GATE without the separately required authority"
+    ]
+  },
+  "failure_labels": [
+    { "id": "F01", "status": "SPEC_GAP", "expected_route": null, "expected_action": null, "exclude": ["assumed recovery", "COMMAND", "PASS from label alone"] },
+    { "id": "F02", "status": "SPEC_GAP", "expected_route": null, "expected_action": null, "exclude": ["WIP loss", "invented fallback", "destructive cleanup", "silent sync", "mutation at STOP"] },
+    { "id": "F03", "status": "SPEC_GAP", "expected_route": null, "expected_action": null, "exclude": ["timestamp-based selection", "route invention", "competing-record mutation"] },
+    { "id": "F04", "status": "SPEC_GAP", "expected_route": null, "expected_action": null, "exclude": ["assume STOP or FOUNDER_GATE from label alone", "worker mutation", "generic STOP-to-gate conversion"] },
+    { "id": "F05", "status": "SPEC_GAP", "expected_route": null, "expected_action": null, "exclude": ["choose VERIFY, REVIEW, FIX, or STOP from label alone", "stale proof reuse", "merge", "completion claim"] },
+    { "id": "F06", "status": "SPEC_GAP", "expected_route": null, "expected_action": null, "exclude": ["invent Objective N+1 action", "dynamic scheduling", "sibling-Child execution", "recovery from prose"] }
+  ],
+  "capability_boundary": {
+    "id": "UNREACHABLE-TIER2-SPAWNED-HOST",
+    "status": "UNREACHABLE",
+    "expected_route": null,
+    "expected_action": null,
+    "exclude": ["claim spawned-host PASS without native continuity evidence", "simulate spawning with prose", "claim unavailable capability was tested"]
+  },
+  "isolation_and_cleanup": {
+    "required": [
+      "all repositories, refs, evidence fixtures, traces, and cleanup targets are test-owned disposable resources",
+      "preserve original checkout and unrelated refs/WIP",
+      "no production GitHub mutation or writes outside the owned sandbox",
+      "cleanup removes only resources created and owned by this run",
+      "retain sanitized trace evidence after cleanup",
+      "verify ownership and post-cleanup absence before reporting cleanup success"
+    ],
+    "prohibited": ["delete outside-owned paths", "erase original WIP", "report cleanup success without readback"]
+  }
+}

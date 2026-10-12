@@ -1,0 +1,7 @@
+{
+  "evidence_class": "SYNTHETIC",
+  "fixture_id": "local-git-origin-roundtrip",
+  "purpose": "Exercise an owned local Git remote without supplying synthetic data to Context.",
+  "context_input": false,
+  "expected_observation": "A commit pushed to the disposable bare remote is readable from a disposable clone."
+}
