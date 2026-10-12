@@ -3,7 +3,9 @@
 Canonical harness protocol for Core and multi-stage work across Bemoat starter and child projects.
 
 Do **not** introduce `implementation-stage.md`, a Project Status Card, or any
-second committed progress file. The current cross-agent protocol is
+second committed progress file, Parent/Child ledger, machine-readable graph,
+or second router.
+The current cross-agent protocol is
 `bemoat:context` → one bounded objective → `bemoat:handoff` → fresh GitHub
 reconstruction. Use the existing GitHub and PR artifacts with clear
 responsibility boundaries.
@@ -12,7 +14,7 @@ responsibility boundaries.
 
 ```text
 Implementation Plan
-= roadmap, Tasks, Slices, ordering, dependencies, contracts, and verification requirements
+= roadmap, Tasks, Slices, implementation dependencies, contracts, and verification requirements
 
 Main GitHub Issue checklist
 = durable cross-session project stage and first incomplete milestone
@@ -26,8 +28,9 @@ Pull Request + exact-head CI
 .superpowers/sdd/progress.md
 = temporary local/session execution tracker while an agent is working
 
-Execution ledger
-= audit history for commits, RED/GREEN evidence, reviews, and residual risks
+Existing execution ledger
+= audit history only for commits, RED/GREEN evidence, reviews, and residual risks;
+it is not a Parent/Child state store or execution authority
 ```
 
 ### Implementation Plan
@@ -43,9 +46,11 @@ The Implementation Plan is the canonical **roadmap and execution contract**. It 
 
 The plan must **not** become a duplicate current-state dashboard. Task-step checkboxes inside a plan may remain execution instructions, but they are **not** the durable cross-session project stage.
 
-### Main GitHub Issue
+### Main GitHub Issue / Parent Issue
 
-The Main Issue checklist is the canonical **durable project stage** for Core or multi-stage initiatives. Keep it concise. It owns:
+The Main Issue checklist is the canonical **durable project stage** for Core or
+multi-stage initiatives. For a decomposed initiative, that Main Issue serves as
+the Parent Issue. Keep it concise. It owns:
 
 - completed durable milestones
 - the first incomplete milestone
@@ -56,11 +61,48 @@ The Main Issue checklist is the canonical **durable project stage** for Core or 
 - current founder gate
 - one next permitted action
 
-Do **not** copy full command logs, RED/GREEN transcripts, CI output, review transcripts, bundle reports, or long commit histories into the Main Issue. Those belong in Task Issues, PRs, and execution ledgers.
+Do **not** copy full command logs, RED/GREEN transcripts, CI output, review
+transcripts, bundle reports, or long commit histories into the Main/Parent
+Issue. Those belong in the owning Task/Child Issue, PR, CI evidence, HANDOFF,
+or existing audit ledger.
+
+The Parent is coordination/readback only. Its ordered Child map and
+dependencies are ordinary Markdown Issue links/checklists, fixed before
+execution, and are not a machine-readable graph or authorization source. A
+Parent may point at the active Child/PR/gate only after the pointer and status
+are verified from the owning artifact.
+
+### Parent and Child responsibility boundary
+
+The Parent records only the goal/invariants, short decision references, the
+immutable ordered Child map and fixed dependency IDs, `DONE`/`BLOCKED`/
+`DEFERRED`, one active Child/PR/gate, and one next permitted action. It does
+not own a Child's implementation, test transcript, review, CI, or HANDOFF.
+An Implementation Plan may retain detailed implementation ordering and
+verification requirements, but it must not become a competing Parent status
+store or alter the Parent's fixed child map.
+
+Each Child remains a normal Active Task Issue with one active Objective and
+Scope, exact plain-text workflow metadata, a Parent link, fixed prerequisites,
+bounded acceptance criteria, allowed/forbidden effects, an authority-backed
+oracle/verification plan, a Child-only finish condition, and source links. The
+Child, its PR, exact-head CI, and applicable HANDOFF own the result; the Parent
+only reads back verified status and pointers.
+
+When Child completion is proven, it does not authorize or self-advance a
+sibling. A different Issue requires fresh Global MC reconstruction and a
+destination-specific Execution handoff. The existing #627 same-Issue
+continuation remains valid only when the same Issue/session/workspace and
+fresh authority still identify that continuation; it is not a cross-Issue
+Parent-to-sibling shortcut.
 
 ### Active Task Issue
 
-Canonical source for bounded scope, acceptance criteria, allowed and forbidden files, required tests and evidence, review findings, and task-specific founder gates.
+Canonical source for a standalone Single Task or bounded Child scope,
+acceptance criteria, allowed and forbidden files/effects, required tests and
+evidence, review findings, and task-specific Founder gates. A Child must be
+self-contained; it must not require a sibling's prose to select its Objective
+or Scope.
 
 ### Pull Request
 
@@ -130,6 +172,11 @@ Adapt milestones to the initiative. Recommended form:
 One concrete action only.
 ```
 
+For Parent/Child initiatives, the checklist above is a concise readback of
+verified child milestones, not a second progress ledger. Do not mark a Child
+complete from a Parent checkbox alone, and do not treat a completed Child as a
+permission to begin its sibling.
+
 ## Durable checklist completion rules
 
 | Milestone | Check only when |
@@ -172,6 +219,13 @@ Update the Main Issue when a durable gate changes. This is the preferred place t
 
 Update the Main Issue when merge evidence is confirmed in the approved base branch.
 
+### Illustrative Parent/Child map
+
+The canonical non-mutating #637 Parent plus proposed A → B → C → D checklist
+map is in [issue-intake-contract.md](./issue-intake-contract.md). It is an
+ordinary-link/readback example only: it does not create or rewrite #637 or any
+other Issue, change #637's active scope, or authorize execution.
+
 ## New-session resume protocol
 
 ```text
@@ -185,6 +239,12 @@ Main GitHub Issue
 ```
 
 Do not read the entire Implementation Plan merely to determine the current stage when the Main Issue already identifies the active milestone and relevant plan section.
+
+If the next permitted action names a Child, verify that Child's own Issue,
+prerequisite IDs, branch/PR/head, exact-head CI, review, and applicable
+HANDOFF. Do not infer a Child's authority from the Parent map, a checked
+Parent item, or a sibling result. If the next work is a different Issue, begin
+with fresh Global MC reconstruction and a destination-specific handoff.
 
 ## Agent completion protocol
 

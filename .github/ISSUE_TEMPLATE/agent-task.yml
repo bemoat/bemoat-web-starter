@@ -9,6 +9,10 @@ body:
       value: |
         Use this template for work delegated to coding agents. Keep scope explicit so agents do not edit the wrong repo or forbidden paths. Mission Control workflow metadata below is required. API/connector-created Issues must include the same declarations as plain text in the Issue body; follow docs/agent-loop/issue-intake-contract.md.
 
+        Keep one Single Task Issue when one independently verifiable bounded outcome has shared scope, ownership, and gate; ordinary substeps do not require child Issues. Use a Parent plus separate Child Task Issues only for separately deliverable objectives, materially different scope/owners/PR or review gates, or context-noise/objective-selection risk. A Parent is coordination/readback only; a Child is the self-contained execution contract.
+
+        The repository/project dropdown below is landing metadata, not execution scope. The required `Scope boundaries` field is the one active execution Scope consumed by Context. Keep exactly one active Objective (the form label is the compatibility alias `Goal`) and exactly one active Scope (the form label is the compatibility alias `Scope boundaries`); do not add duplicate aliases.
+
   - type: textarea
     id: context
     attributes:
@@ -25,7 +29,7 @@ body:
     id: goal
     attributes:
       label: Goal
-      description: One clear outcome in plain language.
+      description: One clear active execution objective in plain language. `Goal` is the parser-compatible form label for `Objective`.
       placeholder: Add X so that Y works for Z.
     validations:
       required: true
@@ -57,13 +61,27 @@ body:
   - type: dropdown
     id: scope
     attributes:
-      label: Scope
-      description: Where should this work land?
+      label: Repository / project scope
+      description: Where should this work land? This landing choice is not the execution Scope used by Context.
       options:
         - bemoat-web-starter (reusable infrastructure)
         - Child project (project-specific)
         - Docs / CI / agent-loop only
         - Unsure — triage first
+    validations:
+      required: true
+
+  - type: textarea
+    id: execution_scope
+    attributes:
+      label: Scope boundaries
+      description: The one bounded execution Scope. State allowed work and forbidden effects/paths. This parser-compatible heading must not be duplicated by another Scope or Scope boundaries heading.
+      placeholder: |
+        Allowed:
+        - docs/agent-loop/...
+        Forbidden:
+        - Create or rewrite unrelated Issues
+        - Production, migration, secret, or deploy changes
     validations:
       required: true
 
@@ -106,8 +124,8 @@ body:
   - type: input
     id: main_issue
     attributes:
-      label: Main Issue (Core / multi-stage)
-      description: Durable project-stage tracker. Example `#106` or `owner/repo#106`. Leave blank for Small tasks.
+      label: Main Issue / Parent Issue (Core / multi-stage)
+      description: Durable project-stage or Parent pointer. For a Child, enter its Parent Issue here; the form label remains parser-compatible. Example `#106` or `owner/repo#106`. Leave blank for standalone Single Task Issues.
       placeholder: "#106"
     validations:
       required: false
@@ -142,8 +160,8 @@ body:
   - type: textarea
     id: durable_progress
     attributes:
-      label: Durable Progress (Main Issue only)
-      description: Concise milestone checklist for the Main Issue. Task Issues link here instead of duplicating.
+      label: Durable Progress (Parent / Main Issue only)
+      description: Concise Parent/Main Issue milestone checklist. Child Task Issues link here instead of duplicating state; do not use this as execution authorization.
       placeholder: |
         ## Durable Progress
 
