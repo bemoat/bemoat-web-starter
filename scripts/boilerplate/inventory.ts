@@ -60,6 +60,7 @@ export const managedPaths = [
   'tests/int/mission-control-loader-router.int.spec.ts',
   'tests/int/handoff-schema.int.spec.ts', 'tests/int/handoff-transport.int.spec.ts', 'tests/int/handoff-validation-proof.int.spec.ts', 'tests/int/handoff-cli.int.spec.ts', 'tests/int/handoff-skill.int.spec.ts',
   'tests/int/agent-checkpoint-guidance.int.spec.ts',
+  'tests/int/verify-harness-flow-oracle.int.spec.ts',
   'tests/int/red-wip-checkpoint.int.spec.ts',
   'tests/int/guard-pack.int.spec.ts', 'tests/int/guard-planning-contract.int.spec.ts',
   'tests/int/env-placeholder-guard-boundary.int.spec.ts',
@@ -88,6 +89,7 @@ export const managedPaths = [
   'tests/fixtures/guard', 'tests/fixtures/planning', 'tests/fixtures/acceptance',
   'tests/fixtures/boilerplate-sync', 'tests/fixtures/child-shape',
   'tests/fixtures/node-api-buffer',
+  'tests/fixtures/verify-harness-flow/oracle.json',
 ]
 
 export const seedOnlyPaths = [

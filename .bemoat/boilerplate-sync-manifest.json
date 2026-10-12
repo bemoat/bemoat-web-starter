@@ -147,6 +147,7 @@
     "tests/int/handoff-cli.int.spec.ts",
     "tests/int/handoff-skill.int.spec.ts",
     "tests/int/agent-checkpoint-guidance.int.spec.ts",
+    "tests/int/verify-harness-flow-oracle.int.spec.ts",
     "tests/int/red-wip-checkpoint.int.spec.ts",
     "tests/int/guard-pack.int.spec.ts",
     "tests/int/guard-planning-contract.int.spec.ts",
@@ -180,7 +181,8 @@
     "tests/fixtures/acceptance",
     "tests/fixtures/boilerplate-sync",
     "tests/fixtures/child-shape",
-    "tests/fixtures/node-api-buffer"
+    "tests/fixtures/node-api-buffer",
+    "tests/fixtures/verify-harness-flow/oracle.json"
   ],
   "seedOnlyPaths": [
     "src/app/(frontend)",
