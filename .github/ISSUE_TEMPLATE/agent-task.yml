@@ -9,9 +9,11 @@ body:
       value: |
         Use this template for work delegated to coding agents. Keep scope explicit so agents do not edit the wrong repo or forbidden paths. Mission Control workflow metadata below is required. API/connector-created Issues must include the same declarations as plain text in the Issue body; follow docs/agent-loop/issue-intake-contract.md.
 
-        Keep one Single Task Issue when one independently verifiable bounded outcome has shared scope, ownership, and gate; ordinary substeps do not require child Issues. Use a Parent plus separate Child Task Issues only for separately deliverable objectives, materially different scope/owners/PR or review gates, or context-noise/objective-selection risk. A Parent is coordination/readback only; a Child is the self-contained execution contract.
+        Keep one Single Task Issue when one independently verifiable bounded outcome has shared scope, ownership, and gate; ordinary substeps do not require child Issues. Use a Parent plus separate Child Task Issues only for separately deliverable objectives, materially different scope/owners/PR or review gates, or context-noise/objective-selection risk. A Parent is coordination/readback only; a Child is the self-contained execution contract. The Parent map is only a readback projection of the canonical predeclared Implementation Plan/Main Issue order and dependencies; it is not a second ledger or authority source.
 
-        The repository/project dropdown below is landing metadata, not execution scope. The required `Scope boundaries` field is the one active execution Scope consumed by Context. Keep exactly one active Objective (the form label is the compatibility alias `Goal`) and exactly one active Scope (the form label is the compatibility alias `Scope boundaries`); do not add duplicate aliases.
+        This execution form is for a Context-executable Single Task or Child Task. A coordination-only Parent is not a Context-executable Task; do not route a Parent to `bemoat:context` solely because it contains descriptive Goal/Scope text. Keep Parent content as coordination/readback and use a Main/Parent pointer from the executable Task or Child. A standalone Single Task remains valid and still uses the required metadata above.
+
+        The repository/project dropdown below is landing metadata, not execution scope. The required `Scope boundaries` field is the one active execution Scope consumed by Context. Keep exactly one active Objective (the form label is the compatibility alias `Goal`) and exactly one active Scope (the form label is the compatibility alias `Scope boundaries`); do not add duplicate aliases. A missing, stale, unverified, or mismatching Parent readback does not authorize Child selection; fail closed for the accountable owner.
 
   - type: textarea
     id: context
@@ -124,8 +126,8 @@ body:
   - type: input
     id: main_issue
     attributes:
-      label: Main Issue / Parent Issue (Core / multi-stage)
-      description: Durable project-stage or Parent pointer. For a Child, enter its Parent Issue here; the form label remains parser-compatible. Example `#106` or `owner/repo#106`. Leave blank for standalone Single Task Issues.
+      label: Main Issue / Parent pointer (Executable Task / Child)
+      description: For an executable Single Task or Child, point to the existing Main/Parent Issue; the form label remains parser-compatible. This pointer does not make the Issue a coordination Parent or authorize work. Example `#106` or `owner/repo#106`. Leave blank for standalone Single Task Issues.
       placeholder: "#106"
     validations:
       required: false
@@ -160,8 +162,8 @@ body:
   - type: textarea
     id: durable_progress
     attributes:
-      label: Durable Progress (Parent / Main Issue only)
-      description: Concise Parent/Main Issue milestone checklist. Child Task Issues link here instead of duplicating state; do not use this as execution authorization.
+      label: Durable Progress (Main / Parent readback only)
+      description: Concise verified Main/Parent progress projection. Preserve the first incomplete milestone, current Slice/Task, relevant plan section, blocker/dependency, and Founder gate where applicable; do not use this as execution authorization.
       placeholder: |
         ## Durable Progress
 
@@ -172,12 +174,13 @@ body:
         - [ ] PR merged into the approved base branch
 
         ## Current Stage
+        - First incomplete milestone:
         - Current Slice:
         - Current Task or gate:
         - Active Task Issue:
         - Active PR:
         - Relevant plan section:
-        - Blocking findings:
+        - Current blocker or dependency:
         - Founder gate:
 
         ## Next Permitted Action

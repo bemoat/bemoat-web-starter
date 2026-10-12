@@ -38,7 +38,7 @@ it is not a Parent/Child state store or execution authority
 The Implementation Plan is the canonical **roadmap and execution contract**. It owns:
 
 - Task and Slice definitions
-- ordering and dependencies
+- predeclared Child ordering and dependencies for decomposed initiatives
 - architecture and interface contracts
 - scope and non-scope
 - deliverables
@@ -61,26 +61,41 @@ the Parent Issue. Keep it concise. It owns:
 - current founder gate
 - one next permitted action
 
+For a Parent/Child initiative, the existing Implementation Plan/Main Issue
+contract is the single canonical predeclared source for Child ordering and
+fixed prerequisite/dependency edges. The Parent map is only a verified
+readback projection of that source, never a second dependency ledger. The
+Parent projection must retain the first incomplete milestone, current Slice /
+Task / gate, relevant plan section, current blocker or dependency, and Founder
+gate where applicable. Concise readback must not drop these durable Main Issue
+fields.
+
 Do **not** copy full command logs, RED/GREEN transcripts, CI output, review
 transcripts, bundle reports, or long commit histories into the Main/Parent
 Issue. Those belong in the owning Task/Child Issue, PR, CI evidence, HANDOFF,
 or existing audit ledger.
 
 The Parent is coordination/readback only. Its ordered Child map and
-dependencies are ordinary Markdown Issue links/checklists, fixed before
-execution, and are not a machine-readable graph or authorization source. A
-Parent may point at the active Child/PR/gate only after the pointer and status
-are verified from the owning artifact.
+dependencies are ordinary Markdown Issue links/checklists that project the
+canonical predeclared Plan/Main contract; they are not a machine-readable
+graph, second ledger, or authorization source. Before any Child is selected,
+Global MC must verify the projection against that source and current durable
+evidence. A missing, stale, unverified, or mismatching source or Parent map
+fails closed with `STOP`; no Child selection, reorder, repair, or start is
+permitted. A Parent may point at the active Child/PR/gate only after the
+pointer and status are verified from the owning artifact.
 
 ### Parent and Child responsibility boundary
 
 The Parent records only the goal/invariants, short decision references, the
-immutable ordered Child map and fixed dependency IDs, `DONE`/`BLOCKED`/
-`DEFERRED`, one active Child/PR/gate, and one next permitted action. It does
-not own a Child's implementation, test transcript, review, CI, or HANDOFF.
-An Implementation Plan may retain detailed implementation ordering and
-verification requirements, but it must not become a competing Parent status
-store or alter the Parent's fixed child map.
+verified projection of the canonical ordered Child map and fixed dependency
+IDs, completed milestones and the first incomplete milestone, current Slice /
+Task / gate, relevant plan section, current blocker or dependency, Founder
+gate where applicable, `DONE`/`BLOCKED`/`DEFERRED`, one active Child/PR/gate,
+and one next permitted action. It does not own a Child's implementation, test
+transcript, review, CI, or HANDOFF. The Implementation Plan/Main Issue
+contract remains the single predeclared order/dependency source; the Parent
+does not alter it or maintain a competing state store.
 
 Each Child remains a normal Active Task Issue with one active Objective and
 Scope, exact plain-text workflow metadata, a Parent link, fixed prerequisites,
@@ -159,12 +174,13 @@ Adapt milestones to the initiative. Recommended form:
 
 ## Current Stage
 
+- First incomplete milestone:
 - Current Slice:
 - Current Task or gate:
 - Active Task Issue:
 - Active PR:
 - Relevant plan section:
-- Blocking findings:
+- Current blocker or dependency:
 - Founder gate:
 
 ## Next Permitted Action
@@ -242,9 +258,11 @@ Do not read the entire Implementation Plan merely to determine the current stage
 
 If the next permitted action names a Child, verify that Child's own Issue,
 prerequisite IDs, branch/PR/head, exact-head CI, review, and applicable
-HANDOFF. Do not infer a Child's authority from the Parent map, a checked
-Parent item, or a sibling result. If the next work is a different Issue, begin
-with fresh Global MC reconstruction and a destination-specific handoff.
+HANDOFF, and compare its Parent readback map with the canonical predeclared
+Plan/Main contract. Do not infer a Child's authority from the Parent map, a
+checked Parent item, or a sibling result. A stale, unverified, or mismatching
+map is `STOP`. If the next work is a different Issue, begin with fresh Global
+MC reconstruction and a destination-specific handoff.
 
 ## Agent completion protocol
 

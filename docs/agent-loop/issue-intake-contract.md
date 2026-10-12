@@ -82,6 +82,20 @@ The point where this issue is complete without expanding into future work.
 Sections with no meaningful content may be omitted. Do not add filler merely to
 complete the template.
 
+### Execution Task and coordination Parent boundary
+
+The `agent-task` Issue Form and its API/connector equivalent are execution
+intake paths for a Context-executable Single Task or Child Task. A standalone
+Single Task remains valid and still requires the same plain-text metadata, one
+active Objective, one active Scope, bounded acceptance criteria, and finish
+condition. A Child additionally points to its Parent and fixed prerequisites.
+
+A coordination-only Parent is not an executable Task Issue. Its descriptive
+Goal/Objective or Scope text does not make it eligible for `bemoat:context`, and
+Global MC must not route a Parent to Context solely because those headings are
+present. The Parent is a readback projection for coordination; the executable
+Single Task or Child carries the Context-required scope and authority inputs.
+
 ### Execution objective and scope headings
 
 For an execution Task Issue, use exactly one active `## Objective` and exactly
@@ -130,11 +144,26 @@ sibling. Use ordinary Markdown Issue links and checklists for the ordered map;
 do not add a machine-readable graph, dynamic planner, scheduler, second router,
 ledger, or native GitHub Sub-issue API dependency.
 
+The existing canonical Implementation Plan/Main Issue contract is the one
+predeclared source for Child ordering and fixed prerequisite/dependency edges.
+The Parent map is only a concise readback projection of that source: it may
+point to verified entries, but cannot add, reorder, skip, or advance them. The
+projection must be compared with the canonical source and current durable
+evidence before any Child is selected. A missing, stale, unverified, or
+mismatching source or Parent map is an ambiguity: fail closed with `STOP`, and
+do not infer a replacement order, repair the map as execution work, or invent a
+Context route.
+
 A Parent contains only:
 
 - the program goal and invariants that every Child must preserve;
 - short links/references to accepted decisions and source authority;
-- an immutable ordered Child map with fixed prerequisite/dependency pointers;
+- an ordered Child map and fixed prerequisite/dependency pointers as verified
+  readback from the canonical predeclared source;
+- completed durable milestones and the first incomplete milestone;
+- the current Slice / Task / gate, relevant plan section, and current blocker
+  or dependency;
+- the current Founder gate where applicable;
 - a current status of `DONE`, `BLOCKED`, or `DEFERRED`;
 - one active Child, PR, and gate as verified pointers; and
 - one next permitted action.
@@ -142,7 +171,8 @@ A Parent contains only:
 Keep historical transcripts, test logs, repeated policy text, detailed PR
 evidence, and Child implementation notes in their owning Issues, PRs, CI
 checks, or HANDOFFs. A Parent may record only verified readback of those
-artifacts.
+artifacts. Concise means omitting transcripts, not omitting the canonical Main
+Issue progress fields above.
 
 ## Child Task Issue contract
 
@@ -183,8 +213,10 @@ freshly valid authority, not to Parent-to-sibling movement.
 
 ## API and connector-created Issues
 
-The API path must emit the same declarations and execution structure as the
-form path. A programmatically created execution Issue body maps the form's
+The API path for a Single Task or Child must emit the same declarations and
+execution structure as the form path. A coordination-only Parent is not
+routed to `bemoat:context` solely because its body contains descriptive
+Objective/Scope headings. A programmatically created execution Issue body maps the form's
 semantic fields to plain text: `## Context`, one `## Objective` (the form's
 `Goal` compatibility label is also accepted), `## Acceptance Criteria`, one
 `## Scope` containing allowed work and forbidden effects/paths (the form's
