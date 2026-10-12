@@ -1,0 +1,554 @@
+{
+  "oracle_version": "1.1.0",
+  "record_type": "verification_only_oracle",
+  "issue_number": "642",
+  "artifact_status": "DESCRIPTIVE_ONLY",
+  "freshness": {
+    "captured_on": "2026-10-12",
+    "protected_base": {
+      "branch": "main",
+      "sha": "89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610",
+      "url": "https://github.com/bemoat/bemoat-web-starter/tree/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610"
+    },
+    "policy": {
+      "id": "bemoat-mission-control",
+      "version": "1.7.0",
+      "path": "docs/mission-control/mission-control-guide.md",
+      "blob_sha": "d587ff2c6ac4a314b193e321613c3299c83b6da5",
+      "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/mission-control/mission-control-guide.md"
+    }
+  },
+  "purpose": "Compare observed native Harness behavior with independently sourced expectations. This file is not executable routing, authorization, scheduling, state, permission, or test-runner logic.",
+  "authority": {
+    "precedence": [
+      "merged protected-main policy and live loader",
+      "registered public CLI contract and fresh bemoat:context output",
+      "durable Git/GitHub Issue, PR, CI, review, and merge evidence",
+      "story-first canonical invariants",
+      "this descriptive oracle only for comparison"
+    ],
+    "sources": [
+      {
+        "path": "docs/mission-control/mission-control-guide.md",
+        "blob_sha": "d587ff2c6ac4a314b193e321613c3299c83b6da5",
+        "sections": ["Current protocol", "Bounded objective execution", "Review and correction boundaries", "Safety and durability", "Child synchronization", "Historical evidence"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/mission-control/mission-control-guide.md"
+      },
+      {
+        "path": "prompts/mission-control/chatgpt-project-loader.md",
+        "blob_sha": "bab021b898743e06a1f4c31b335f588bbc358946",
+        "sections": ["Always load", "Load a phase contract only when triggered", "Global/Execution separation"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/prompts/mission-control/chatgpt-project-loader.md"
+      },
+      {
+        "path": "docs/mission-control/command-reference.md",
+        "blob_sha": "a6d19adab4f7b171dd90110f7637929dbf9c201e",
+        "sections": ["Context", "STOP blocker resolution evidence", "Handoff", "Semantic review evidence", "Stop conditions"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/mission-control/command-reference.md"
+      },
+      {
+        "path": "docs/mission-control/execution-handoff-contract.md",
+        "blob_sha": "c0d972299ee5b64c396db7633f9e638487048aa9",
+        "sections": ["1. Repository / Issue / PR identity", "3. Verified live authority / route", "8. Execution / delegation rules", "12. Continuation rule", "13. Stop conditions", "14. Founder decision status"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/mission-control/execution-handoff-contract.md"
+      },
+      {
+        "path": "docs/agent-loop/context-story-matrix.md",
+        "blob_sha": "f9f2712dfed8a8c1a2c10117a376e0c524a057f4",
+        "sections": ["Canonical invariants", "Lifecycle transitions", "Resolved continuation decision"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/agent-loop/context-story-matrix.md"
+      },
+      {
+        "path": "docs/agent-loop/issue-driven-branch-workflow.md",
+        "blob_sha": "e687ac27dc7fe31f371412a48139f8323b8a0ffc",
+        "sections": ["Required first steps", "Pre-Context dependency preparation", "Post-preflight implementation trigger", "Validation before PR and merge"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/agent-loop/issue-driven-branch-workflow.md"
+      },
+      {
+        "path": "docs/agent-loop/role-handoff-contract.md",
+        "blob_sha": "17020df9d1e38a2ba4fd9b6b4f46aca8745a6f32",
+        "sections": ["Required binding", "Evidence rules", "Review and correction", "Pre-merge checklist reconciliation gate"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/blob/89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610/docs/agent-loop/role-handoff-contract.md"
+      },
+      {
+        "path": "https://github.com/bemoat/bemoat-web-starter/issues/641#issuecomment-6126430652",
+        "sections": ["Child A durable HANDOFF", "A04 F01-F06 characterization", "A05 host feasibility", "A06 scope disposition"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/issues/641#issuecomment-6126430652"
+      },
+      {
+        "path": "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119109505",
+        "sections": ["DD-01 objective and ownership", "DD-02 bounded objective progression", "DD-03 independent evidence"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119109505"
+      },
+      {
+        "path": "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524",
+        "sections": ["DD-04 Blueprint/oracle boundary", "DD-05 archive-first legacy disposition", "DD-06 Tester tiers and F01-F06 examples"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524"
+      },
+      {
+        "path": "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119483283",
+        "sections": ["DD-07 publication and provenance", "DD-08 route/action independence", "DD-09 unresolved gaps and disposition"],
+        "url": "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119483283"
+      }
+    ]
+  },
+  "independence_rules": {
+    "oracle_is_not_input_to_system_under_test": true,
+    "expected_values_are_derived_only_from_cited_authority": true,
+    "do_not_derive_expected_values_from_flow_blueprint": true,
+    "never_compute_next_action_from_route": true,
+    "native_context_action_must_be_observed_independently": true,
+    "never_grant_command": true,
+    "never_grant_complete": true,
+    "never_select_evidence_by_timestamp_or_comment_order": true,
+    "recovery_command_rule": "Any recovery command string is descriptive only and must be observed from fresh native Context; this oracle never grants a command.",
+    "ambiguous_route_action_or_owner_mapping": "SPEC_GAP",
+    "status_vocabulary": ["UNIQUE", "SPEC_GAP", "UNREACHABLE"]
+  },
+  "stable_step_ids": [
+    "AB01",
+    "AB02",
+    "AB03",
+    "AB04",
+    "AB05",
+    "AB06",
+    "AB07",
+    "AB08",
+    "AB09",
+    "AB10",
+    "AB11",
+    "AB12",
+    "AB13"
+  ],
+  "proposed_step_ids": ["PT01", "PT02", "PT03", "PT04"],
+  "precondition_profiles": {
+    "positive_lawful_unique": {
+      "applies_to": ["HP-01", "HP-02", "HP-03", "HP-04", "HP-05", "HP-06", "HP-07", "EXCEPTION-DETACHED-SOURCE", "EXCEPTION-PR-NUMBERED-BRANCH", "GATE-01", "REC-01", "REC-02", "REC-03", "REC-04"],
+      "predicates": [
+        "repository identity is exactly bemoat/bemoat-web-starter",
+        "the queried Issue owns the examined branch and any active PR",
+        "protected base is main@89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610 and required base ancestry is proven",
+        "the exact branch/head/upstream/PR identity is read back from native Git/GitHub evidence",
+        "no higher-precedence STOP or evidence conflict competes with the named positive/lawful scenario"
+      ]
+    },
+    "negative_stop_failure": {
+      "applies_to": ["STOP-01", "STOP-02", "STOP-03", "STOP-04"],
+      "predicates": [
+        "the scenario is defined by its named missing, stale, dirty, unsupported, conflicting, malformed, or wrong-identity evidence",
+        "do not require positive ownership, clean durability, exact ancestry, or current-head predicates that the failure evidence omits or contradicts",
+        "do not infer a route, action, owner, or recovery from the failed identity/evidence record"
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "HP-01",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB01", "AB03", "AB05", "AB06", "AB07"],
+      "preconditions": [
+        "Open Issue with one bounded objective and no active PR.",
+        "Clean durable Issue branch has exact canonical upstream and remote readback.",
+        "All positive_lawful_unique predicates hold for Issue #642."
+      ],
+      "expected_behavior": {
+        "native_route": "IMPLEMENT",
+        "assertion": "Fresh Context may authorize the bounded implementation route; the native action is a separate observed field and is not derived here."
+      },
+      "expected_observation": {
+        "status": "SPEC_GAP",
+        "native_route": "IMPLEMENT",
+        "native_next_action_type": null,
+        "reason": "Authority uniquely identifies the route but does not publish a generic action tuple for every eligible implementation state; observe both fields from fresh native Context."
+      },
+      "expected_exclusions": ["A local-only branch must not be treated as durable implementation authority."],
+      "prohibited_effects": ["No edit before the explicit first-edit trigger.", "No future-objective advancement."],
+      "owner": {
+        "actor": "distinct implementation worker after fresh Context and first-edit trigger",
+        "next_lawful_owner": "implementation worker within the Issue scope"
+      },
+      "evidence": {
+        "required": ["fresh Context JSON", "branch/HEAD/upstream/remote identity", "first-edit trigger"],
+        "readback": ["tracked diff/status and focused proof"]
+      },
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #1", "execution-handoff-contract:Sections 3, 8, 12"]
+    },
+    {
+      "id": "HP-02",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB10"],
+      "preconditions": ["Active PR is current-base and exact-head CI is pending.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "VERIFY", "assertion": "Verify exact-head CI before any later review or merge decision."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "VERIFY", "native_next_action_type": null, "reason": "The route is source-backed, but no generic action tuple is uniquely specified; observe native Context."},
+      "expected_exclusions": ["Pending CI cannot be treated as passing CI."],
+      "prohibited_effects": ["No Founder merge and no completion claim from pending CI."],
+      "owner": {"actor": "deterministic verifier", "next_lawful_owner": "native Context after exact-head CI evidence"},
+      "evidence": {"required": ["active PR identity", "current head", "CI status"], "readback": ["CI result bound to the same exact head"]},
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #2", "command-reference:Context"]
+    },
+    {
+      "id": "HP-03",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB07", "AB10"],
+      "preconditions": ["Active PR has failed exact-head CI.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "FIX", "assertion": "A bounded correction is required; old proof is not reused."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "FIX", "native_next_action_type": null, "reason": "The correction route is source-backed, but the native action tuple is not generic; observe native Context and route correction to the implementation worker."},
+      "expected_exclusions": ["Failed CI cannot route to Founder merge or terminal completion."],
+      "prohibited_effects": ["No unrelated refactor or scope expansion.", "No stale-head verification."],
+      "owner": {"actor": "implementation worker for the authorized correction", "next_lawful_owner": "fresh exact-head verification"},
+      "evidence": {"required": ["failed exact-head CI record", "authorized correction scope"], "readback": ["new exact head and focused/full proof"]},
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #2 and #3", "mission-control-guide:Review and correction boundaries"]
+    },
+    {
+      "id": "HP-04",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB10"],
+      "preconditions": ["Active PR has green exact-head CI and no submitted semantic review.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "REVIEW", "assertion": "An independent semantic review is required before the Founder gate."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "REVIEW", "native_next_action_type": null, "reason": "Fresh exact-head evidence uniquely requires review, but the action tuple is not generically specified; observe native Context."},
+      "expected_exclusions": ["Green CI alone is not review evidence."],
+      "prohibited_effects": ["No self-review and no merge while review is absent."],
+      "owner": {"actor": "independent semantic reviewer", "next_lawful_owner": "native Context after exact-head review"},
+      "evidence": {"required": ["green exact-head CI", "missing-review evidence"], "readback": ["submitted native review bound to exact head"]},
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #2", "command-reference:Semantic review evidence"]
+    },
+    {
+      "id": "HP-05",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB10", "AB11"],
+      "preconditions": ["Exact-head CI and independent semantic review are both valid and current.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "FOUNDER_GATE", "assertion": "The candidate is presented to the Founder; the agent still has no merge authority."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "FOUNDER_GATE", "native_next_action_type": null, "reason": "The Founder boundary is uniquely identified, but no action tuple is granted by this oracle; observe native Context."},
+      "expected_exclusions": ["A valid review does not silently become a merge."],
+      "prohibited_effects": ["No autonomous merge, approval, or gate consumption by a worker."],
+      "owner": {"actor": "Founder", "next_lawful_owner": "Founder decision followed by fresh Context"},
+      "evidence": {"required": ["exact-head CI", "submitted review", "PR/base/head identity"], "readback": ["Founder decision and native PR merge evidence, if any"]},
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #2", "mission-control-guide:Safety and durability"]
+    },
+    {
+      "id": "HP-06",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB12"],
+      "preconditions": ["Native GitHub evidence proves a valid merged PR and merge commit with no competing conflict.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "COMPLETE", "assertion": "Fresh Context may observe terminal completion from native merge evidence."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "COMPLETE", "native_next_action_type": null, "reason": "Terminal route is source-backed, but completion is never granted by this oracle and no generic action tuple is assumed; observe fresh native Context."},
+      "expected_exclusions": ["This oracle cannot declare completion before fresh Context."],
+      "prohibited_effects": ["No new objective begins from this record."],
+      "owner": {"actor": "native Context and Founder readback", "next_lawful_owner": "Global MC only for a separately selected Issue"},
+      "evidence": {"required": ["merged PR", "merge commit", "current repository/Issue identity"], "readback": ["fresh Context terminal result"]},
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #7", "mission-control-guide:Safety and durability"]
+    },
+    {
+      "id": "HP-07",
+      "kind": "HAPPY_PATH",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB10"],
+      "preconditions": ["Active PR has a new exact head with fresh green CI, while the prior review is stale and no current-head review is present.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "REVIEW", "assertion": "Fresh current-head evidence requires independent review; stale review alone is not a STOP."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "REVIEW", "native_next_action_type": null, "reason": "Fresh CI and stale-review evidence uniquely establish REVIEW, but the native action tuple is not generic; observe fresh Context."},
+      "expected_exclusions": ["Do not classify stale review alone as STOP-04 when fresh CI on the new head canonically requires REVIEW."],
+      "prohibited_effects": ["No reviewer/verifier correction mutation.", "No merge or completion from stale review."],
+      "owner": {"actor": "independent semantic reviewer", "next_lawful_owner": "native Context after exact-head review"},
+      "evidence": {"required": ["old review identity", "new PR head", "fresh CI bound to new head"], "readback": ["new native review bound to exact current head"]},
+      "authority_refs": ["context-story-matrix:Lifecycle transitions #2", "command-reference:Semantic review evidence"]
+    },
+    {
+      "id": "EXCEPTION-DETACHED-SOURCE",
+      "kind": "SETUP_EXCEPTION",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB03", "AB05"],
+      "preconditions": ["The command source is detached exactly at protected main SHA 89d5eaaac02bc8ac24ea27c3a8900c6ce6abc610; the target state is separately checked for support, cleanliness, durability, and Issue ownership.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"assertion": "Exact-SHA detached protected-main command sources are supported; only an unsupported, dirty, or non-durable target state is a setup STOP."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": null, "native_next_action_type": null, "reason": "This exception fixes a STOP exclusion; the post-check route/action must be observed from fresh native Context."},
+      "expected_exclusions": ["Do not STOP solely because the command source is detached at the exact protected-main SHA."],
+      "prohibited_effects": ["No target reset, rebase, stash, or objective mutation from this exception."],
+      "owner": {"actor": "Execution/IDE setup owner", "next_lawful_owner": "native Context after target identity readback"},
+      "evidence": {"required": ["source detached HEAD exact SHA", "target cleanliness/durability/ownership readback"], "readback": ["fresh Context after target checks"]},
+      "authority_refs": ["issue-driven-branch-workflow:Required first steps", "execution-handoff-contract:Repository / Issue / PR identity"]
+    },
+    {
+      "id": "EXCEPTION-PR-NUMBERED-BRANCH",
+      "kind": "SETUP_EXCEPTION",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB03", "AB05", "AB10"],
+      "preconditions": ["The local numbered branch spelling differs from the queried Issue number, but the live PR branch, exact head, protected base, repository, and Issue ownership all match.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"assertion": "An active-PR exact-identity match is supported despite local numbered-branch spelling; only a true branch/head/base/Issue identity mismatch is STOP."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": null, "native_next_action_type": null, "reason": "The exception determines an identity exclusion, not a generic route/action; observe fresh native Context."},
+      "expected_exclusions": ["Do not STOP solely on the local numeric branch spelling when exact live PR identity matches."],
+      "prohibited_effects": ["No branch rename, switch, merge, or mutation merely to normalize a number."],
+      "owner": {"actor": "native Context / verifier", "next_lawful_owner": "native route owner after exact identity readback"},
+      "evidence": {"required": ["queried Issue", "live PR branch/head/base", "repository identity", "local branch readback"], "readback": ["fresh Context bound to the same exact identity"]},
+      "authority_refs": ["context-story-matrix:Canonical invariants", "execution-handoff-contract:Repository / Issue / PR identity"]
+    },
+    {
+      "id": "STOP-01",
+      "kind": "STOP_FAILURE",
+      "status": "UNIQUE",
+      "precondition_profile": "negative_stop_failure",
+      "step_ids": ["AB03", "AB05", "AB13"],
+      "preconditions": ["Required repository, branch, head, durability, policy, or GitHub evidence is missing, stale, contradictory, or ambiguous."],
+      "expected_behavior": {"native_route": "STOP", "assertion": "Native Context fails closed and preserves the named blocker until an exact lawful recovery or evidence owner resolves it."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "STOP", "native_next_action_type": null, "reason": "STOP is uniquely required, but the action tuple depends on the exact blocker; observe fresh native Context and never infer a recovery command."},
+      "expected_exclusions": ["Expected native behavior is fail-closed STOP; do not invent an alternate route or owner."],
+      "prohibited_effects": ["No objective mutation, retry against unchanged evidence, or inferred Founder gate."],
+      "owner": {"actor": "native Context", "next_lawful_owner": "owner named by live blocker evidence; otherwise operator/access owner"},
+      "evidence": {"required": ["exact blocker classification", "native route/action pair"], "readback": ["fresh Context after the exact lawful recovery, if one exists"]},
+      "authority_refs": ["mission-control-guide:Review and correction boundaries", "command-reference:Stop conditions", "context-story-matrix:Canonical invariants"]
+    },
+    {
+      "id": "STOP-02",
+      "kind": "STOP_FAILURE",
+      "status": "UNIQUE",
+      "precondition_profile": "negative_stop_failure",
+      "step_ids": ["AB03", "AB05", "AB13"],
+      "preconditions": ["Target checkout is dirty, unsupported, unpushed, wrong-origin, local-only, or otherwise not durable; an exact-SHA detached protected-main command source alone is supported and is not this STOP."],
+      "expected_behavior": {"native_route": "STOP", "assertion": "Only the unsupported, dirty, or non-durable target state is fail-closed; an exact-SHA detached protected-main command source remains supported."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "STOP", "native_next_action_type": null, "reason": "The fail-closed route is source-backed, but recovery/action varies by target defect; observe fresh native Context."},
+      "expected_exclusions": ["Do not route to implementation, review, merge, or completion."],
+      "prohibited_effects": ["No reset, stash, rebase, destructive cleanup, or WIP loss."],
+      "owner": {"actor": "native Context / setup owner", "next_lawful_owner": "operator or exact recovery owner from fresh Context"},
+      "evidence": {"required": ["local Git status, branch, upstream, origin, and exact head"], "readback": ["clean durable identity after only the prescribed recovery"]},
+      "authority_refs": ["context-story-matrix:Canonical invariants", "issue-driven-branch-workflow:Required first steps"]
+    },
+    {
+      "id": "STOP-03",
+      "kind": "STOP_FAILURE",
+      "status": "UNIQUE",
+      "precondition_profile": "negative_stop_failure",
+      "step_ids": ["AB03", "AB05", "AB13"],
+      "preconditions": ["A numbered local branch belongs to a different queried Issue, or active PR branch/head identity does not match; a local numbered-branch spelling difference is not a STOP when live PR branch, exact head, base, repository, and Issue ownership match."],
+      "expected_behavior": {"native_route": "STOP", "assertion": "Wrong Issue or mismatched live identity fails closed; exact identity can proceed even when local numbered-branch spelling differs."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "STOP", "native_next_action_type": null, "reason": "The identity-conflict route is source-backed, but its action tuple depends on the exact mismatch; observe fresh native Context."},
+      "expected_exclusions": ["Do not guess a branch, PR, or Issue owner."],
+      "prohibited_effects": ["No edit, merge, branch overwrite, or unrelated-work switch."],
+      "owner": {"actor": "native Context", "next_lawful_owner": "exact verified workspace recovery or operator at STOP"},
+      "evidence": {"required": ["queried Issue", "local branch/head", "live branch/PR identity"], "readback": ["fresh Context after exact switch recovery, if uniquely prescribed"]},
+      "authority_refs": ["context-story-matrix:Canonical invariants", "execution-handoff-contract:Wrong-Issue workspace acquisition"]
+    },
+    {
+      "id": "STOP-04",
+      "kind": "STOP_FAILURE",
+      "status": "UNIQUE",
+      "precondition_profile": "negative_stop_failure",
+      "step_ids": ["AB05", "AB09", "AB13"],
+      "preconditions": ["Native Handoff/review/Founder evidence is malformed, competing, wrong-identity, or cannot be bound to one exact head; stale review alone is excluded when fresh exact-head CI on a new head canonically requires REVIEW."],
+      "expected_behavior": {"native_route": "STOP", "assertion": "Malformed, competing, or wrong-identity evidence fails closed; stale review alone with fresh CI routes to REVIEW rather than STOP."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "STOP", "native_next_action_type": null, "reason": "STOP is unique only for malformed/competing/wrong-identity evidence; the action tuple must be observed from fresh native Context."},
+      "expected_exclusions": ["Do not select the newest comment, timestamp, or preferred prose as authority."],
+      "prohibited_effects": ["No completion, merge, implementation, or blocker resolution from malformed evidence."],
+      "owner": {"actor": "native Context", "next_lawful_owner": "specific evidence owner or Founder only where the canonical contract names a Founder decision"},
+      "evidence": {"required": ["immutable native record identities and exact-head comparison"], "readback": ["new canonical evidence plus fresh Context"]},
+      "authority_refs": ["mission-control-guide:Safety and durability", "command-reference:Semantic review evidence", "role-handoff-contract:Evidence rules"]
+    },
+    {
+      "id": "GATE-01",
+      "kind": "FOUNDER_GATE",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB11"],
+      "preconditions": ["Fresh Context returns an exact, applicable FOUNDER_GATE.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"native_route": "FOUNDER_GATE", "assertion": "Return to the Founder for the actual decision; do not emit a mutation-capable continuation."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": "FOUNDER_GATE", "native_next_action_type": null, "reason": "The gate boundary is source-backed, but this oracle cannot grant a decision or generic action tuple; observe native Context."},
+      "expected_exclusions": ["A gate does not imply approval, merge, or COMMAND."],
+      "prohibited_effects": ["No worker mutation or autonomous decision."],
+      "owner": {"actor": "Founder", "next_lawful_owner": "Founder decision; then fresh Context"},
+      "evidence": {"required": ["exact gate identity and current repository/Issue/head binding"], "readback": ["immutable Founder decision, if published, and fresh Context"]},
+      "authority_refs": ["execution-handoff-contract:Sections 12, 13, 14", "mission-control-guide:Safety and durability"]
+    },
+    {
+      "id": "REC-01",
+      "kind": "LAWFUL_RECOVERY",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB03", "AB04", "AB05"],
+      "preconditions": ["Fresh Context explicitly emits the registered exact setup recovery for an eligible clean protected-base checkout.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"assertion": "Perform only the registered recovery under its binding, then rerun CLI Discovery and fresh Context. Any command text is descriptive and must be observed from fresh native Context; this oracle never grants it."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": null, "native_next_action_type": null, "reason": "The recovery command is only native Context output; the post-recovery route/action is not generic and must be reread fresh."},
+      "expected_exclusions": ["Recovery grants no objective-edit authority and is not a generic fallback."],
+      "prohibited_effects": ["No reset, rebase, stash, unrelated synchronization, or objective edit."],
+      "owner": {"actor": "registered recovery command owner", "next_lawful_owner": "Execution/IDE after fresh Context"},
+      "evidence": {"required": ["fresh recovery binding", "exact live protected-base SHA", "clean target identity"], "readback": ["post-recovery exact base/branch/upstream state and fresh Context"]},
+      "authority_refs": ["execution-handoff-contract:Clean stale protected-base setup recovery", "command-reference:Context"]
+    },
+    {
+      "id": "REC-02",
+      "kind": "LAWFUL_RECOVERY",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB03", "AB04", "AB05"],
+      "preconditions": ["Fresh Context identifies exactly one clean durable canonical workspace for the Issue or active PR.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"assertion": "Switch only to the exact verified workspace, then rerun registered Discovery and fresh Context. Any command text is descriptive and must be observed from fresh native Context; this oracle never grants it."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": null, "native_next_action_type": null, "reason": "The exact switch is native Context output; the post-switch route/action is not generic and must be reread fresh."},
+      "expected_exclusions": ["Multiple, stale, dirty, or ambiguous candidates remain STOP."],
+      "prohibited_effects": ["No checkout of an invented branch, sync, reset, edit, or future-objective start."],
+      "owner": {"actor": "Execution/IDE setup owner", "next_lawful_owner": "native Context after readback"},
+      "evidence": {"required": ["unique branch/head/origin/upstream/Issue binding"], "readback": ["same exact binding after switch and fresh Context"]},
+      "authority_refs": ["execution-handoff-contract:Wrong-Issue workspace acquisition", "context-story-matrix:Lifecycle transitions #6"]
+    },
+    {
+      "id": "REC-03",
+      "kind": "LAWFUL_RECOVERY",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB07", "AB10"],
+      "preconditions": ["A stale active PR satisfies every narrow native sync-base/Bridge B predicate.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"assertion": "Run only the registered protected-main synchronization command; the resulting head requires fresh exact-head CI and review. Any command text is descriptive and must be observed from fresh native Context; this oracle never grants it."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": null, "native_next_action_type": null, "reason": "The narrow recovery may be native-authorized, but the resulting route/action depends on fresh exact-head evidence and must be reread."},
+      "expected_exclusions": ["A stale Context alone does not authorize direct Git synchronization."],
+      "prohibited_effects": ["No direct fetch/merge/push outside the registered contract, no metadata mutation, and no merge."],
+      "owner": {"actor": "registered sync-base command owner", "next_lawful_owner": "fresh Context and exact-head verifier"},
+      "evidence": {"required": ["same Issue/PR/base/head", "old-base ancestry", "clean durable target", "merge-tree preflight"], "readback": ["exact pushed head and fresh Context"]},
+      "authority_refs": ["execution-handoff-contract:Bridge B", "context-story-matrix:Resolved continuation decision"]
+    },
+    {
+      "id": "REC-04",
+      "kind": "LAWFUL_RECOVERY",
+      "status": "UNIQUE",
+      "precondition_profile": "positive_lawful_unique",
+      "step_ids": ["AB05", "AB09", "AB13"],
+      "preconditions": ["One named blocker in an applicable exact-head STOP has one valid canonical resolution.", "All positive_lawful_unique predicates hold for Issue #642."],
+      "expected_behavior": {"assertion": "Remove only the named blocker from recomputation; the STOP remains immutable history and fresh Context decides what remains. Any command text is descriptive and must be observed from fresh native Context; this oracle never grants it."},
+      "expected_observation": {"status": "SPEC_GAP", "native_route": null, "native_next_action_type": null, "reason": "Resolution does not predetermine a route/action; fresh native Context must be observed after the named evidence change."},
+      "expected_exclusions": ["A resolution is not implementation, review, merge, deployment, migration, or terminal authority."],
+      "prohibited_effects": ["No broad blocker clearing or inferred next objective."],
+      "owner": {"actor": "trusted Founder for the named resolution", "next_lawful_owner": "native Context after readback"},
+      "evidence": {"required": ["exact STOP comment/blocker identity", "strict resolution body", "trusted Founder identity"], "readback": ["immutable native comment and fresh Context"]},
+      "authority_refs": ["command-reference:STOP blocker resolution evidence", "mission-control-guide:Safety and durability"]
+    },
+    {
+      "id": "GAP-ROUTE-ACTION",
+      "kind": "AMBIGUITY",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB05"],
+      "preconditions": ["A source or fixture provides a route label without a uniquely bound native action, or presents a competing route/action pair."],
+      "expected_exclusions": ["Do not compute an action from the route; do not choose a fallback action."],
+      "prohibited_effects": ["No COMMAND, COMPLETE, or recovery authority from this oracle."],
+      "owner": {"actor": "protocol/spec owner", "next_lawful_owner": "Founder-approved canonical contract change or native Context evidence"},
+      "evidence": {"required": ["all competing source records and their exact identities"], "readback": ["no route/action assertion until authority is unique"]},
+      "authority_refs": ["context-story-matrix:Canonical invariants", "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-04"]
+    },
+    {
+      "id": "GAP-OBJECTIVE-N1",
+      "kind": "AMBIGUITY",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB09", "AB12"],
+      "preconditions": ["Objective N has durable evidence but the lawful mechanism for selecting Objective N+1 is not uniquely specified by current authority."],
+      "expected_exclusions": ["Do not treat completion, Handoff, diagram, or this oracle as authorization for Objective N+1."],
+      "prohibited_effects": ["No dynamic scheduler, Issue rewrite, self-advance, or sibling-Child start."],
+      "owner": {"actor": "Founder/policy owner", "next_lawful_owner": "fresh Context only after a separately authorized scope contract"},
+      "evidence": {"required": ["durable Objective N result", "Handoff/readback", "current Issue sequence and merged policy"], "readback": ["fresh Context for the next separately authorized objective"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119109505:DD-02", "mission-control-guide:Bounded objective execution"]
+    },
+    {
+      "id": "GAP-COMPETING-EVIDENCE",
+      "kind": "AMBIGUITY",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB05", "AB13"],
+      "preconditions": ["Native records compete but the available fixture does not prove one applicable identity-bound record."],
+      "expected_exclusions": ["Do not resolve competition by timestamp, comment order, recency, or prose preference."],
+      "prohibited_effects": ["No route selection, completion, merge, blocker clearing, or objective mutation."],
+      "owner": {"actor": "native Context / protocol owner", "next_lawful_owner": "evidence owner at STOP"},
+      "evidence": {"required": ["complete immutable record set and exact identity comparisons"], "readback": ["fresh canonical evidence before any route assertion"]},
+      "authority_refs": ["mission-control-guide:Safety and durability", "command-reference:Stop conditions"]
+    },
+    {
+      "id": "F01",
+      "kind": "CHILD_A_FAILURE_LABEL",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB03", "AB04", "AB05"],
+      "preconditions": ["Child A's F01 label is applied to setup/root/branch/dependency failure examples from DD-06."],
+      "expected_exclusions": ["The label does not uniquely determine one route/action/owner mapping; compare the actual native evidence instead."],
+      "prohibited_effects": ["No assumed recovery, COMMAND, or PASS from the label."],
+      "owner": {"actor": "independent Tester in future Child C, if reachable", "next_lawful_owner": "native evidence owner or protocol owner"},
+      "evidence": {"required": ["exact injected fault, local/GitHub trace, and fresh Context output"], "readback": ["observed route/action pair and side-effect audit"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "issue-641 HANDOFF A04"]
+    },
+    {
+      "id": "F02",
+      "kind": "CHILD_A_FAILURE_LABEL",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB03", "AB05", "AB13"],
+      "preconditions": ["Child A's F02 label is applied to dirty/WIP/stale-state examples from DD-06."],
+      "expected_exclusions": ["The label alone does not select whether a prescribed recovery exists; assert only no WIP loss and no invented fallback."],
+      "prohibited_effects": ["No destructive cleanup, silent sync, or mutation at STOP."],
+      "owner": {"actor": "native Context and setup owner", "next_lawful_owner": "exact recovery owner or operator at STOP"},
+      "evidence": {"required": ["pre-state Git evidence and fresh Context output"], "readback": ["preserved WIP and exact post-recovery identity, if recoverable"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "context-story-matrix:Canonical invariants"]
+    },
+    {
+      "id": "F03",
+      "kind": "CHILD_A_FAILURE_LABEL",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB05", "AB09", "AB13"],
+      "preconditions": ["Child A's F03 label is applied to evidence-conflict examples from DD-06."],
+      "expected_exclusions": ["The label does not uniquely identify the applicable conflict class or lawful next owner."],
+      "prohibited_effects": ["No timestamp-based selection, route invention, or competing-record mutation."],
+      "owner": {"actor": "native Context", "next_lawful_owner": "evidence/protocol owner after exact conflict classification"},
+      "evidence": {"required": ["all conflicting native/local records"], "readback": ["one unique repaired evidence set and fresh Context"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "mission-control-guide:Safety and durability"]
+    },
+    {
+      "id": "F04",
+      "kind": "CHILD_A_FAILURE_LABEL",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB05", "AB11", "AB13"],
+      "preconditions": ["Child A's F04 label is applied to valid STOP/FOUNDER_GATE examples from DD-06."],
+      "expected_exclusions": ["The label cannot decide whether the observed boundary is STOP or FOUNDER_GATE without the exact native evidence."],
+      "prohibited_effects": ["No worker mutation, Founder-decision assumption, or generic STOP-to-gate conversion."],
+      "owner": {"actor": "native Context", "next_lawful_owner": "Founder only for an exact FOUNDER_GATE; otherwise named STOP owner"},
+      "evidence": {"required": ["native route/action and exact gate/blocker identity"], "readback": ["Founder decision or exact recovery plus fresh Context"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "execution-handoff-contract:Sections 13 and 14"]
+    },
+    {
+      "id": "F05",
+      "kind": "CHILD_A_FAILURE_LABEL",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB05", "AB10", "AB11"],
+      "preconditions": ["Child A's F05 label is applied to missing review/exact-head CI examples from DD-06."],
+      "expected_exclusions": ["The label alone does not choose VERIFY, REVIEW, FIX, or STOP for every possible missing/stale combination."],
+      "prohibited_effects": ["No stale proof reuse, merge, or completion claim."],
+      "owner": {"actor": "deterministic verifier / independent reviewer", "next_lawful_owner": "native Context after exact-head evidence"},
+      "evidence": {"required": ["PR/base/head identity", "CI/review records and freshness"], "readback": ["exact current-head evidence and native Context"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "context-story-matrix:Lifecycle transitions #2-#4"]
+    },
+    {
+      "id": "F06",
+      "kind": "CHILD_A_FAILURE_LABEL",
+      "status": "SPEC_GAP",
+      "step_ids": ["AB09", "AB12", "AB13"],
+      "preconditions": ["Child A's F06 label is applied to invalid Objective advancement or recovery examples from DD-06."],
+      "expected_exclusions": ["No current authority uniquely maps the label to an Objective N+1 action; preserve the lawful boundary."],
+      "prohibited_effects": ["No dynamic scheduler, sibling-Child execution, or recovery invented from prose."],
+      "owner": {"actor": "Founder/policy owner", "next_lawful_owner": "separately authorized scope owner followed by fresh Context"},
+      "evidence": {"required": ["Objective identity, durable predecessor evidence, and native Context output"], "readback": ["explicit authorized scope and fresh Context before work"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119109505:DD-02", "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "issue-641 HANDOFF A04"]
+    },
+    {
+      "id": "UNREACHABLE-TIER2-SPAWNED-HOST",
+      "kind": "CAPABILITY_BOUNDARY",
+      "status": "UNREACHABLE",
+      "step_ids": ["AB07"],
+      "preconditions": ["Verification would require a genuinely spawned supported-host Agent, disposable sandbox, and Tier-2 agent-continuity proof."],
+      "expected_exclusions": ["Child A did not prove the spawned-host/Tier-2 seam; do not report PASS or simulate it with prose."],
+      "prohibited_effects": ["No real host spawning, production GitHub mutation, pstack cutover, or capability claim in Child B."],
+      "owner": {"actor": "future Child C Tester owner", "next_lawful_owner": "future separately authorized Tester capability owner"},
+      "evidence": {"required": ["host skill discovery, isolated resource proof, real CLI trace"], "readback": ["independent Tier-2 trace and cleanup evidence"]},
+      "authority_refs": ["https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119109505:DD-01", "https://github.com/bemoat/bemoat-web-starter/issues/637#issuecomment-6119352524:DD-06", "issue-641 HANDOFF A05"]
+    }
+  ]
+}
