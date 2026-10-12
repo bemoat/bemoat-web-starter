@@ -1,5 +1,11 @@
 # Sanitized trace contract
 
+The contract below describes the legacy Issue #643 `run-verification.mjs`
+trace. Issue #648 uses the separate `run-synthetic-context.mjs` trace for the
+explicitly opted-in Tier-1 adapter; that trace records `SUPPORTED` for the
+owned adapter boundary, native A→B→C→D observations, per-negative side-effect
+proof, and the separate Tier-2 `UNREACHABLE` boundary.
+
 The runner writes one JSON record after its synthetic workspace cleanup.
 
 - `overall`: `UNREACHABLE` for this runner because registered Context has no

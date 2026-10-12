@@ -11,6 +11,8 @@ import { resolveContextBootstrapRoots, verifyContextBootstrap } from './context/
 import { ContextSyncWorktreeError } from './context/sync-worktree.ts'
 import { COMMITTED_WIP_BINDING } from './context/committed-wip-recovery.ts'
 import { collectCommittedWipContextProof } from './context/committed-wip-context-proof.ts'
+import { runContextCommand } from './context/runtime.ts'
+import { createSyntheticEvidenceRunner } from './test-harness/synthetic-evidence.ts'
 import type { NormalizedContextEvidence, ContextDecision } from './context/model.ts'
 
 function handleInvocationError(error: unknown): boolean {
@@ -113,7 +115,14 @@ function main() {
       bootstrapError = `EVIDENCE_CONFLICT: ${error.message}`
     }
   }
-  const evidence = collectContextEvidence({ cwd, issueNumber })
+  const run = createSyntheticEvidenceRunner({
+    env: process.env,
+    runNative: (command, args, options = {}) => runContextCommand(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+    }),
+  })
+  const evidence = collectContextEvidence({ cwd, env: process.env, issueNumber, run })
   if (bootstrapRoots) {
     const bootstrapErrors = verifyContextBootstrap({ roots: bootstrapRoots, evidence })
     evidence.evidenceErrors.push(...bootstrapErrors)
