@@ -32,6 +32,14 @@ function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 }
 
+function gitOptional(args, cwd) {
+  try {
+    return git(args, cwd)
+  } catch {
+    return null
+  }
+}
+
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
 }
@@ -429,14 +437,15 @@ exec '${nativeGit}' "$@"
 function snapshotOriginalCheckout() {
   // Preserve the complete status snapshot: no path class is exempt from the
   // original checkout/WIP preservation proof.
+  const branch = git(['branch', '--show-current'], repoRoot) || '<detached>'
   const wip = git(['status', '--porcelain=v1', '--untracked-files=all'], repoRoot)
     .split('\n')
     .filter(Boolean)
 
   return {
     head: git(['rev-parse', 'HEAD'], repoRoot),
-    branch: git(['branch', '--show-current'], repoRoot),
-    upstream: git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], repoRoot),
+    branch,
+    upstream: branch === '<detached>' ? null : gitOptional(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], repoRoot),
     refs: git(['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads', 'refs/remotes'], repoRoot).split('\n').filter(Boolean),
     wip,
   }
