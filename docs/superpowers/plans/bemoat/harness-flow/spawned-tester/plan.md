@@ -1,5 +1,21 @@
 # Issue #643 — Spawned Harness Tester pilot
 
+<!-- bemoat-task-identity:start -->
+```yaml
+schema_version: 1
+main_issue: null
+task_key: "issue-643-spawned-harness-tester"
+task_issue_strategy: "existing_dedicated_issue"
+active_task_issue: "#643"
+branch_template: "feat/643-harness-flow-tester"
+transition_target: "REVIEW"
+planning_base_sha: "6b711a693e5df4e831a74b18b5cd2ddae9012512"
+execution_base_rule: "resolve_live_protected_base_at_dispatch"
+paired_spec: null
+paired_plan: null
+```
+<!-- bemoat-task-identity:end -->
+
 > **Execution note:** This plan is subordinate to fresh `bemoat:context 643`
 > and the registered public CLI contracts. It does not grant route, approval,
 > or mutation authority.
