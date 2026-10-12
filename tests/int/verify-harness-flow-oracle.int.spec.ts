@@ -31,6 +31,30 @@ function runPublicHelp(invocation: string) {
   return execFileSync(command, args, { cwd: root, encoding: 'utf8' })
 }
 
+function runVerification() {
+  const runnerPath = resolve(root, '.agents/skills/verify-harness-flow/run-verification.mjs')
+  return JSON.parse(execFileSync(process.execPath, [runnerPath], { cwd: root, encoding: 'utf8' })) as {
+    overall: string
+    context_adapter_boundary: {
+      status: string
+      expected_route: string | null
+      expected_action: string | null
+      blocker: string
+      owner: string
+      supported_adapter: Record<string, unknown> | null
+    }
+    trials: Array<{ id: string; status: string; expected_route: string | null; expected_action: string | null; blocker: string; owner: string }>
+    criteria: Array<{ id: string; status: string; expected_route: string | null; expected_action: string | null; blocker: string; owner: string }>
+    original_checkout: { before: Record<string, unknown>; after: Record<string, unknown>; comparison: { unchanged: boolean } }
+    oracle: {
+      f01_f06: Array<{ id: string; status: string; expected_route: string | null; expected_action: string | null; exclude: string[] }>
+      spawned_host: { id: string; status: string; expected_route: string | null; expected_action: string | null; exclude: string[] }
+    }
+    cleanup: { verified: boolean; owned_workspace_absent: boolean; trace_retained: boolean }
+    trace_path: string
+  }
+}
+
 describe('Issue 643 independent harness-flow oracle', () => {
   it('uses the public registered CLI help contract and leaves local workflow state unchanged', () => {
     const before = { head: git('rev-parse', 'HEAD'), branch: git('branch', '--show-current'), status: git('status', '--porcelain=v1') }
@@ -106,5 +130,62 @@ describe('Issue 643 independent harness-flow oracle', () => {
     expect(skill).toMatch(/SPEC_GAP/i)
     expect(skill).toMatch(/flow-oracle\.json/i)
     expect(skill).toMatch(/spawned[ -]host/i)
+  })
+
+  it('records the real Context adapter boundary and compares runner evidence with the independent oracle', () => {
+    const result = runVerification()
+    const expectedOracle = oracle.failure_labels.map(({ id, status, expected_route, expected_action, exclude }) => ({
+      id, status, expected_route, expected_action, exclude,
+    }))
+
+    expect(result.overall).toBe('UNREACHABLE')
+    expect(result.context_adapter_boundary).toMatchObject({
+      status: 'UNREACHABLE',
+      expected_route: null,
+      expected_action: null,
+    })
+    expect(result.context_adapter_boundary.blocker).toMatch(/no controlled synthetic GitHub evidence adapter/i)
+    expect(result.context_adapter_boundary.owner).toMatch(/CLI adapter owner/i)
+    expect(result.context_adapter_boundary.supported_adapter).toEqual({
+      command: 'bemoat:context',
+      target_worktree: '--target-worktree <absolute-path>',
+      live_github_reads: true,
+      controlled_synthetic_github_evidence: false,
+    })
+
+    expect(result.trials.map(({ id }) => id)).toEqual(['A', 'B', 'C', 'D'])
+    for (const trial of result.trials) {
+      expect(trial).toMatchObject({
+        status: 'UNREACHABLE',
+        expected_route: null,
+        expected_action: null,
+      })
+      expect(trial.blocker).toMatch(/no controlled synthetic GitHub evidence adapter/i)
+      expect(trial.owner).toMatch(/CLI adapter owner/i)
+    }
+    expect(result.criteria.map(({ id }) => id)).toEqual(['C02', 'C03', 'C04', 'C05'])
+    expect(result.criteria.map(({ status }) => status)).toEqual(['UNREACHABLE', 'UNREACHABLE', 'UNREACHABLE', 'UNREACHABLE'])
+    for (const criterion of result.criteria) {
+      expect(criterion.expected_route).toBeNull()
+      expect(criterion.expected_action).toBeNull()
+      expect(criterion.blocker).toMatch(/no controlled synthetic GitHub evidence adapter/i)
+      expect(criterion.owner).toMatch(/CLI adapter owner/i)
+    }
+
+    expect(result.oracle.f01_f06).toEqual(expectedOracle)
+    expect(result.oracle.spawned_host).toEqual({
+      id: oracle.capability_boundary.id,
+      status: oracle.capability_boundary.status,
+      expected_route: oracle.capability_boundary.expected_route,
+      expected_action: oracle.capability_boundary.expected_action,
+      exclude: oracle.capability_boundary.exclude,
+    })
+    expect(result.original_checkout.comparison.unchanged).toBe(true)
+    expect(result.original_checkout.after).toEqual(result.original_checkout.before)
+    expect(result.cleanup).toMatchObject({ verified: true, owned_workspace_absent: true, trace_retained: true })
+    const persistedTrace = JSON.parse(readFileSync(result.trace_path, 'utf8'))
+    expect(persistedTrace.overall).toBe('UNREACHABLE')
+    expect(persistedTrace.cleanup.trace_retained).toBe(true)
+    expect(persistedTrace.oracle.f01_f06).toEqual(expectedOracle)
   })
 })
