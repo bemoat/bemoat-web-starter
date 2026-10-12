@@ -39,7 +39,7 @@ export {
 }
 export { SYNC_MODES }
 
-const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'boat1994/bemoat-web-starter'
+const repo = process.env.BEMOAT_BOILERPLATE_REPO || 'bemoat/bemoat-web-starter'
 const ref = process.env.BEMOAT_BOILERPLATE_REF || 'main'
 const targetRoot = process.cwd()
 const tempRoot = resolve(targetRoot, '.bemoat-check-tmp')
@@ -71,6 +71,15 @@ function isGitRepositoryRoot(cwd: string): boolean {
   }
 }
 
+function normalizeRepositoryIdentity(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\.git$/, '')
+    .replace(/^git@github\.com:/, '')
+    .replace(/^https:\/\/github\.com\//, '')
+}
+
 function getGitOriginRepo(cwd: string): string {
   const remote = execFileSync('git', ['remote', 'get-url', 'origin'], {
     cwd,
@@ -78,11 +87,7 @@ function getGitOriginRepo(cwd: string): string {
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim()
 
-  return remote
-    .replace(/\.git$/, '')
-    .replace(/^git@github.com:/, 'https://github.com/')
-    .replace(/^https:\/\/github.com\//, '')
-    .toLowerCase()
+  return normalizeRepositoryIdentity(remote)
 }
 
 export function isBoilerplateSourceRepository(
@@ -103,7 +108,7 @@ export function isBoilerplateSourceRepository(
 
   try {
     const originRepo = getGitOriginRepo(cwd)
-    return originRepo.endsWith(boilerplateRepo.toLowerCase())
+    return originRepo === normalizeRepositoryIdentity(boilerplateRepo)
   } catch {
     return true
   }

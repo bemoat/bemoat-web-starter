@@ -1,6 +1,7 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import {
   cpSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -1639,6 +1640,177 @@ describe('boilerplate drift check', () => {
     ).toBe(false)
 
     rmSync(fixtureRoot, { recursive: true, force: true })
+  })
+
+  // Oracle: Issue #640 requires the renamed canonical starter to be detected
+  // from its exact current origin, while preserving explicit historical
+  // repository overrides and rejecting wrong-origin lookalikes.
+  it('uses exact canonical origin matching for default and explicit source identities', async () => {
+    const mod = await import('../../scripts/check-boilerplate-drift.ts')
+    const starter = join(fixtureRoot, 'renamed-starter')
+    const historicalStarter = join(fixtureRoot, 'historical-starter')
+    const lookalike = join(fixtureRoot, 'lookalike-starter')
+    const child = join(fixtureRoot, 'child')
+
+    rmSync(fixtureRoot, { recursive: true, force: true })
+    for (const root of [starter, historicalStarter, lookalike, child]) {
+      mkdirSync(root, { recursive: true })
+    }
+
+    for (const root of [starter, historicalStarter, lookalike]) {
+      writeFileSync(join(root, 'package.json'), `${JSON.stringify({ name: 'bemoat-web-starter' })}\n`)
+      execFileSync('git', ['init', '--quiet', root])
+    }
+    writeFileSync(join(child, 'package.json'), `${JSON.stringify({ name: 'child-project' })}\n`)
+
+    execFileSync('git', ['-C', starter, 'remote', 'add', 'origin', 'https://github.com/bemoat/bemoat-web-starter.git'])
+    execFileSync('git', ['-C', historicalStarter, 'remote', 'add', 'origin', 'https://github.com/boat1994/bemoat-web-starter.git'])
+    execFileSync('git', ['-C', lookalike, 'remote', 'add', 'origin', 'https://github.com/evil/boat1994/bemoat-web-starter.git'])
+
+    expect(mod.isBoilerplateSourceRepository(starter)).toBe(true)
+    expect(mod.isBoilerplateSourceRepository(starter, 'bemoat/bemoat-web-starter')).toBe(true)
+    expect(mod.isBoilerplateSourceRepository(historicalStarter)).toBe(false)
+    expect(mod.isBoilerplateSourceRepository(historicalStarter, 'boat1994/bemoat-web-starter')).toBe(true)
+    expect(mod.isBoilerplateSourceRepository(lookalike, 'boat1994/bemoat-web-starter')).toBe(false)
+    expect(mod.isBoilerplateSourceRepository(child)).toBe(false)
+
+    rmSync(fixtureRoot, { recursive: true, force: true })
+  })
+
+  // Oracle: Issue #640 AC02/AC04 require the real registered checker to
+  // short-circuit in the canonical starter before touching .bemoat-check-tmp.
+  it('skips the canonical starter without creating a drift temp root', () => {
+    const tempRoot = resolve(process.cwd(), '.bemoat-check-tmp')
+    const sentinelPath = join(tempRoot, 'sentinel.txt')
+    const sentinelContent = 'pre-existing temp-root sentinel\n'
+    const env = { ...process.env }
+    delete env.BEMOAT_BOILERPLATE_REPO
+    delete env.BEMOAT_BOILERPLATE_REF
+
+    rmSync(tempRoot, { recursive: true, force: true })
+    mkdirSync(tempRoot, { recursive: true })
+    writeFileSync(sentinelPath, sentinelContent)
+
+    try {
+      const result = spawnSync('node', ['scripts/check-boilerplate-drift.ts', '--harness-only'], {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env,
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toContain('Skipping boilerplate drift check in bemoat-web-starter')
+      expect(existsSync(sentinelPath)).toBe(true)
+      expect(statSync(sentinelPath).isFile()).toBe(true)
+      expect(readFileSync(sentinelPath, 'utf8')).toBe(sentinelContent)
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  // Oracle: Issue #640 AC03 requires explicit historical overrides to remain
+  // usable through the registered CLI, including scp-style GitHub origins.
+  it('skips a historical starter through the registered CLI with an explicit override', () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), 'bemoat-640-historical-cli-'))
+    const checkerPath = resolve(process.cwd(), 'scripts/check-boilerplate-drift.ts')
+    const tempRoot = join(fixtureRoot, '.bemoat-check-tmp')
+
+    try {
+      writeFileSync(
+        join(fixtureRoot, 'package.json'),
+        `${JSON.stringify(
+          {
+            name: 'bemoat-web-starter',
+            scripts: { 'boilerplate:check': `node ${checkerPath}` },
+          },
+          null,
+          2,
+        )}\n`,
+      )
+      execFileSync('git', ['init', '--quiet', fixtureRoot])
+      execFileSync('git', [
+        '-C',
+        fixtureRoot,
+        'remote',
+        'add',
+        'origin',
+        'git@github.com:boat1994/bemoat-web-starter.git',
+      ])
+
+      const result = spawnSync('pnpm', ['run', 'boilerplate:check', '--', '--harness-only'], {
+        cwd: fixtureRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          BEMOAT_BOILERPLATE_REPO: 'boat1994/bemoat-web-starter',
+          BEMOAT_BOILERPLATE_REF: 'main',
+        },
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toContain('Skipping boilerplate drift check in bemoat-web-starter')
+      expect(existsSync(tempRoot)).toBe(false)
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
+  // Oracle: Issue #640 AC03/AC04 require a child project to retain real drift
+  // comparison and cleanup when source classification does not short-circuit.
+  it('runs child drift comparison and cleans up its temporary source root', () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), 'bemoat-640-child-check-'))
+    const sourceFixture = join(fixtureRoot, 'source-fixture')
+    const childRoot = join(fixtureRoot, 'child')
+    const fakeBin = join(fixtureRoot, 'bin')
+
+    try {
+      mkdirSync(sourceFixture, { recursive: true })
+      mkdirSync(childRoot, { recursive: true })
+      mkdirSync(fakeBin, { recursive: true })
+      writeFileSync(join(sourceFixture, 'AGENTS.md'), 'starter guidance\n')
+      writeFileSync(join(childRoot, 'AGENTS.md'), 'child guidance\n')
+      writeFileSync(join(childRoot, 'package.json'), `${JSON.stringify({ name: 'child-project' })}\n`)
+
+      const fakeGit = join(fakeBin, 'git')
+      writeFileSync(
+        fakeGit,
+        `#!/usr/bin/env node
+const { cpSync } = require('node:fs')
+const { argv, env } = process
+
+if (argv[2] !== 'clone') {
+  process.stderr.write('unexpected fake git invocation\\n')
+  process.exit(1)
+}
+
+cpSync(env.BEMOAT_TEST_SOURCE_ROOT, argv[argv.length - 1], { recursive: true })
+`,
+      )
+      chmodSync(fakeGit, 0o755)
+
+      const result = spawnSync(
+        process.execPath,
+        [resolve(process.cwd(), 'scripts/check-boilerplate-drift.ts'), '--harness-only'],
+        {
+          cwd: childRoot,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+            BEMOAT_TEST_SOURCE_ROOT: sourceFixture,
+            BEMOAT_BOILERPLATE_REPO: 'fixture/repo',
+            BEMOAT_BOILERPLATE_REF: 'fixture',
+          },
+        },
+      )
+
+      expect(result.status, result.stderr).toBe(1)
+      expect(result.stdout).toContain('Managed drift:')
+      expect(result.stdout).toContain('- AGENTS.md')
+      expect(existsSync(join(childRoot, '.bemoat-check-tmp'))).toBe(false)
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    }
   })
 
   it('treats nested starter fixture inside child repo as source despite inherited parent git origin', async () => {
