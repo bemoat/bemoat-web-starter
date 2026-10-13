@@ -183,6 +183,40 @@ function responseKey(args) {
   return JSON.stringify(args)
 }
 
+function enforceNegativeExclusions({ negative, expected, negativeRoute, negativeAction, dirtyFileExistedBeforeContext, dirtyFileExistedAfterContext, dirtyFileContent, dirtyFileCleanupVerified, contextMutationPerformed, fixtureUnchanged, originalCheckoutUnchanged, poisonDelta }) {
+  const forbidden = []
+  const reject = (message) => forbidden.push(message)
+  const noMutation = contextMutationPerformed === false && fixtureUnchanged && originalCheckoutUnchanged && poisonDelta.length === 0
+
+  if (negative === 'F01' && (negativeRoute === 'PASS' || negativeAction === 'PASS' || negativeAction === 'COMMAND')) {
+    reject('F01 assumed recovery, COMMAND, or PASS from label')
+  }
+  if (negative === 'F02') {
+    if (!dirtyFileExistedBeforeContext || !dirtyFileExistedAfterContext || dirtyFileContent !== 'owned dirty fixture\n') {
+      reject('F02 WIP was lost or changed during Context')
+    }
+    if (negativeRoute === 'COMMAND' || negativeAction === 'COMMAND') reject('F02 invented a fallback COMMAND')
+    if (!dirtyFileCleanupVerified || !noMutation) reject('F02 destructive cleanup, silent sync, or mutation at STOP')
+  }
+  if (negative === 'F03') {
+    if (negativeRoute === 'COMMAND' || negativeAction === 'COMMAND') reject('F03 invented a route/action from competing evidence')
+    if (!noMutation) reject('F03 selected or mutated competing evidence')
+  }
+  if (negative === 'F04') {
+    if (negativeRoute === 'FOUNDER_GATE' || negativeAction === 'FOUNDER_GATE') reject('F04 converted STOP to FOUNDER_GATE from the label')
+    if (negativeAction === 'COMMAND' || negativeAction === 'COMPLETE') reject('F04 assumed Founder authority or worker continuation')
+    if (!noMutation) reject('F04 worker mutation or Founder-decision assumption')
+  }
+  if (negative === 'F05' && (negativeRoute === 'COMPLETE' || negativeAction === 'COMPLETE')) {
+    reject('F05 reused incomplete review proof for completion')
+  }
+  if (negative === 'F06' && negativeAction === 'COMMAND') {
+    reject('F06 invented a next-objective COMMAND')
+  }
+  if (forbidden.length > 0) throw new Error(forbidden.join('; '))
+  return expected.normalized_exclusions
+}
+
 function setResponse(profile, args, value) {
   profile.responses[responseKey(args)] = value
 }
@@ -760,9 +794,7 @@ function main() {
       const contextResult = runJsonCommand('bemoat:context', [issueNumber, '--json'], synthetic.cloneRoot, env)
       const context = requireCommandSuccess(contextResult, `Context ${negative}`)
       const dirtyFileExistedAfterContext = existsSync(dirtyFile)
-      if (negative === 'F02' && (!dirtyFileExistedAfterContext || readFileSync(dirtyFile, 'utf8') !== 'owned dirty fixture\n')) {
-        throw new Error('negative F02 lost or changed the dirty WIP fixture')
-      }
+      const dirtyFileContent = dirtyFileExistedAfterContext ? readFileSync(dirtyFile, 'utf8') : null
       if (negative === 'F02' && dirtyFileExistedAfterContext) rmSync(dirtyFile)
       const dirtyFileCleanupVerified = negative === 'F02' ? !existsSync(dirtyFile) : !existsSync(dirtyFile)
       const fixtureAfter = readJson(fixturePath)
@@ -780,15 +812,20 @@ function main() {
       if (poisonDelta.length > 0) observedForbiddenEffects.push('native gh invocation occurred during negative Context')
       const negativeRoute = context.route ?? null
       const negativeAction = context.next_action?.type ?? null
-      if (negative === 'F01' && negativeAction === 'COMMAND') {
-        observedForbiddenEffects.push('F01 fixture inferred a COMMAND from missing base evidence')
-      }
-      if (negative === 'F05' && (negativeRoute === 'COMPLETE' || negativeAction === 'COMPLETE')) {
-        observedForbiddenEffects.push('F05 fixture reused incomplete review proof for completion')
-      }
-      if (negative === 'F06' && negativeAction === 'COMMAND') {
-        observedForbiddenEffects.push('F06 fixture invented a next-objective COMMAND')
-      }
+      const enforcedExclusions = enforceNegativeExclusions({
+        negative,
+        expected,
+        negativeRoute,
+        negativeAction,
+        dirtyFileExistedBeforeContext,
+        dirtyFileExistedAfterContext,
+        dirtyFileContent,
+        dirtyFileCleanupVerified,
+        contextMutationPerformed: context.mutation_performed,
+        fixtureUnchanged,
+        originalCheckoutUnchanged: originalCheckoutUnchangedForNegative,
+        poisonDelta,
+      })
       if (observedForbiddenEffects.length > 0) throw new Error(`negative ${negative} forbidden side effect: ${observedForbiddenEffects.join('; ')}`)
       negatives.push({
         id: negative,
@@ -810,6 +847,7 @@ function main() {
           observed_forbidden_effects: observedForbiddenEffects,
         },
         allowed_harness_effects: negative === 'F02' ? ['runner-owned F02 dirty file cleanup'] : [],
+        enforced_exclusions: enforcedExclusions,
         dirty_file_cleanup: {
           required: negative === 'F02',
           existed_before_context: dirtyFileExistedBeforeContext,

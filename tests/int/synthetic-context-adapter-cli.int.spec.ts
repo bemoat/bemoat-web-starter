@@ -86,6 +86,7 @@ type CampaignTrace = {
       observed_forbidden_effects: string[]
     }
     allowed_harness_effects: string[]
+    enforced_exclusions: string[]
     dirty_file_cleanup: {
       required: boolean
       existed_before_context: boolean
@@ -249,6 +250,13 @@ describe('Issue 648 registered CLI synthetic campaign', () => {
       existed_after_context: true,
       cleanup_verified: true,
     })
+    expect(result.negatives.map(({ id, enforced_exclusions }) => [
+      id,
+      enforced_exclusions,
+    ])).toEqual(normalizedOracle.failure_labels.map((entry: { id: string; exclude: string[] }) => [
+      entry.id,
+      entry.exclude,
+    ]))
 
     expect(result.tier2).toEqual({
       id: normalizedOracle.capability_boundary.id,
