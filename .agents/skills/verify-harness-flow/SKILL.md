@@ -33,6 +33,23 @@ into a route.
    are `UNREACHABLE` with null route/action, a blocker, and an owner. The
    runner does not claim scenario `PASS`, run live `gh` mutations, or call
    `bemoat:handoff` with an issue payload.
+
+   The Issue #643 runner above intentionally preserves the legacy native-host
+   characterization: its Context adapter boundary is `UNREACHABLE`. The
+   Issue #648 campaign runner is a separate test-only path:
+
+   ```sh
+   node .agents/skills/verify-harness-flow/run-synthetic-context.mjs
+   ```
+
+   It invokes the registered public `bemoat:context` and `bemoat:handoff`
+   commands inside an owned disposable clone with the explicit synthetic
+   evidence adapter enabled. Its `SUPPORTED` capability describes only that
+   controlled adapter boundary; it does not replace native Context or change
+   production routing. The runner owns the fixture and comment state, proves
+   that the poison `gh` executable is never invoked, preserves F01–F06 as
+   `SPEC_GAP` with null oracle route/action expectations, and keeps the
+   spawned-host tier separately `UNREACHABLE`.
 3. **Capture:** Compare observations only with the canonical descriptive
    `docs/mission-control/flow-oracle.json`, its normalized fixture at
    `tests/fixtures/verify-harness-flow/oracle.json`, and canonical policy. Keep
@@ -60,11 +77,19 @@ Use only the classification supported by the evidence:
 - `UNREACHABLE`: the required host capability or native evidence is not
   available. A prose simulation is never spawned-host proof.
 
-For this runner, the supported Context adapter boundary is an explicit
-`UNREACHABLE`: the registered command reads live GitHub evidence and accepts a
-target worktree, but provides no controlled synthetic GitHub evidence adapter.
-The A/B/C/D and C02–C05 records therefore stay `UNREACHABLE`, with null
-route/action, the exact blocker, and `bemoat:context CLI adapter owner`.
+For the legacy #643 `run-verification.mjs` runner, the Context adapter boundary
+remains an explicit `UNREACHABLE`: the registered command reads live GitHub
+evidence and accepts a target worktree, but that runner has no controlled
+synthetic GitHub evidence adapter. Its A/B/C/D and C02–C05 records therefore
+stay `UNREACHABLE`, with null route/action, the exact blocker, and
+`bemoat:context CLI adapter owner`.
+
+The separate #648 `run-synthetic-context.mjs` runner is the supported Tier-1
+test-only path. Its adapter is active only when `NODE_ENV=test`,
+`BEMOAT_TEST_EVIDENCE_ENABLE=1`, `BEMOAT_TEST_EVIDENCE_ROOT` is an absolute
+owned run root, and `BEMOAT_TEST_EVIDENCE_FIXTURE` is an owned non-symlinked
+fixture beneath that root with the matching owner marker. Without that exact
+opt-in, the public commands delegate to their native runners unchanged.
 
 The oracle's F01–F06 records remain `SPEC_GAP` with null expected routes and
 actions unless actual native authority resolves them. The spawned-host record

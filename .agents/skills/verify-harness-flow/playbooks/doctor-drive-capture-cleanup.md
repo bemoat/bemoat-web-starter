@@ -5,7 +5,7 @@
 - Read canonical policy and run registered CLI Discovery before invoking a
   Bemoat command.
 - Use the discovered safe help invocation where `help_meaningful` is true.
-- Inspect the real Context help envelope. Its supported boundary is live
+- Inspect the real Context help envelope. For the legacy Issue #643 runner, its supported boundary is live
   GitHub reads plus `--target-worktree`; it has no controlled synthetic GitHub
   evidence adapter.
 - Do not infer a command contract from this playbook or an implementation
@@ -14,7 +14,7 @@
 ## Drive
 
 - Run `node .agents/skills/verify-harness-flow/run-verification.mjs` from the
-  repository root.
+  repository root for the legacy Issue #643 characterization.
 - The runner performs safe public Context/Handoff help, a local bare remote and
   clone, and an inert synthetic observation trial. It records the A/B/C/D
   trials and C02–C05 as `UNREACHABLE` at the Context adapter boundary, with
@@ -22,6 +22,12 @@
   `PASS` classification.
 - Never provide synthetic evidence to Context. Never run a production
   `gh` mutation or a valid production Handoff.
+
+For Issue #648, use the separate `run-synthetic-context.mjs` runner only with
+its explicit test-only evidence-root/fixture gate. It invokes the registered
+public commands through the controlled fixture adapter, never the production
+GitHub transport, and keeps the spawned-host continuity boundary
+`UNREACHABLE`.
 
 ## Capture
 

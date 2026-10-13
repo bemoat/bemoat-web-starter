@@ -5,6 +5,8 @@ import { createHelpEnvelopeV1, formatTextHelp } from './cli/command-help.ts'
 import { CliInvocationError, parseCommandInvocation, resolveCommandIdentity } from './cli/command-invocation.ts'
 import { classificationExitCode, createResultEnvelopeV1 } from './cli/command-result.ts'
 import { runHandoffWorkflow } from './handoff/workflow.ts'
+import { runHandoffCommand } from './handoff/runtime.ts'
+import { createSyntheticEvidenceRunner } from './test-harness/synthetic-evidence.ts'
 import type { ParsedInvocation } from './cli/command-invocation-schemas.ts'
 
 const COMMAND = 'bemoat:handoff'
@@ -84,9 +86,24 @@ function main() {
     if (invocation.mode === 'help') return renderHelp(invocation)
     if (invocation.mode !== 'run') throw new Error('run invocation required')
     const body = readBody(String(invocation.values.body_file))
+    const run = createSyntheticEvidenceRunner({
+      env: process.env,
+      runNative: (command, args, options = {}) => {
+        const result = runHandoffCommand(command, args, options)
+        return {
+          status: result.status ?? 1,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          error: result.error,
+          ...(result.mutationPerformed !== undefined ? { mutationPerformed: result.mutationPerformed } : {}),
+        }
+      },
+    })
     const result = runHandoffWorkflow({
       issueNumber: String(invocation.values.issue_number),
       body,
+      env: process.env,
+      run,
     })
     renderSuccess({ command, format: invocation.format, result })
   } catch (error) {
