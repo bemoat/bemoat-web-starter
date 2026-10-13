@@ -84,8 +84,12 @@ function ownedFixtureRoot(path: string, root: string): string {
   if (!existsSync(path)) {
     throw new SyntheticEvidenceConfigurationError(`synthetic evidence fixture does not exist: ${path}`)
   }
-  if (lstatSync(path).isSymbolicLink()) {
+  const fixtureStat = lstatSync(path)
+  if (fixtureStat.isSymbolicLink()) {
     throw new SyntheticEvidenceConfigurationError('synthetic evidence fixture must not be a symlink')
+  }
+  if (!fixtureStat.isFile() || fixtureStat.nlink !== 1) {
+    throw new SyntheticEvidenceConfigurationError('synthetic evidence fixture must be a regular file without multiple hard links')
   }
 
   const resolvedRoot = realpathSync(root)

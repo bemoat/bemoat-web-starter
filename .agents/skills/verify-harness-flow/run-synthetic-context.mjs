@@ -375,7 +375,7 @@ function createFixture({ baseSha, headSha }) {
   delete negativeF01.responses[responseKey(['api', `repos/${repository}/git/ref/heads/${baseBranch}`])]
   const negativeF02 = clone(stageA)
   const negativeF03 = configureAmbiguousActivePr(makeProfile({ baseSha, headSha, activePr: { number: 1 }, checkState: 'PENDING' }), { baseSha, headSha })
-  const negativeF04 = clone(stageA)
+  const negativeF04 = clone(stageD)
   const negativeF05 = clone(stageD)
   const negativeF06 = clone(stageA)
   negativeF06.issue.state = 'CLOSED'
@@ -402,7 +402,7 @@ function refreshNegativeProfiles({ baseSha, headSha }) {
   delete negativeF01.responses[responseKey(['api', `repos/${repository}/git/ref/heads/${baseBranch}`])]
   const negativeF02 = makeProfile({ baseSha, headSha })
   const negativeF03 = configureAmbiguousActivePr(makeProfile({ baseSha, headSha, activePr: { number: 1 }, checkState: 'PENDING' }), { baseSha, headSha })
-  const negativeF04 = makeProfile({ baseSha, headSha })
+  const negativeF04 = makeProfile({ baseSha, headSha, activePr: { number: 1 }, checkState: 'SUCCESS' })
   const negativeF05 = makeProfile({ baseSha, headSha, activePr: { number: 1 }, checkState: 'SUCCESS' })
   const negativeF06 = makeProfile({ baseSha, headSha, issueState: 'CLOSED' })
   fixture.profiles.F01 = negativeF01
@@ -620,24 +620,26 @@ function main() {
           `fresh Context before stage ${profile}`,
         )
         const preObservedRoute = preContext.route ?? null
-        if (preContext.next_action?.type !== 'COMMAND') {
-          throw new Error(`fresh Context before stage ${profile} did not grant a COMMAND action`)
+        if (preContext.next_action?.type !== 'COMMAND' || preContext.next_action.command !== null) {
+          throw new Error(`fresh Context before stage ${profile} did not return the expected native action`)
         }
         const preOracleProfile = profile === 'B' ? 'HP-02' : profile === 'C' ? 'HP-03' : null
         const preExpectedRoute = preOracleProfile ? oracle.happyPaths[preOracleProfile]?.route ?? null : null
-        if (preExpectedRoute !== null && preObservedRoute !== preExpectedRoute) {
+        if (preObservedRoute !== (profile === 'B' ? 'VERIFY' : 'FIX') ||
+            (preExpectedRoute !== null && preObservedRoute !== preExpectedRoute)) {
           throw new Error(`fresh Context before stage ${profile} returned ${preObservedRoute}, expected ${preExpectedRoute}`)
         }
+        const mayCommit = preObservedRoute === 'FIX'
         preAuthorization = {
           oracle_profile: preOracleProfile,
           expected_route: preExpectedRoute,
           observed_route: preObservedRoute,
           observed_action: preContext.next_action?.type ?? null,
           exact_head: currentHead,
-          stage_advance_authorized_before_commit: true,
+          stage_advance_authorized_before_commit: mayCommit,
           oracle_backed: preOracleProfile !== null,
         }
-        currentHead = advanceSyntheticStage(synthetic.cloneRoot, profile)
+        if (mayCommit) currentHead = advanceSyntheticStage(synthetic.cloneRoot, profile)
         stageHeads[profile] = currentHead
         const stagedFixture = readJson(fixturePath)
         const currentReview = profile === 'C'
@@ -734,7 +736,17 @@ function main() {
       const fixture = readJson(fixturePath)
       fixture.active_profile = negative
       if (negative === 'F04') {
-        fixture.comments = [{ id: '90', body: 'malformed current-head evidence', url: `https://github.com/${repository}/issues/${issueNumber}#issuecomment-90` }]
+        const stopRecord = handoffRecord({
+          route: 'STOP', exactHead: finalHead, baseSha: synthetic.baseSha,
+          pr: { number: '1', url: `https://github.com/${repository}/pull/1`, base: baseBranch, head: topicBranch, head_sha: finalHead },
+        })
+        stopRecord.schema_version = 3
+        stopRecord.verified_evidence.push({ kind: 'stop-blocker', value: 'SYNTHETIC-F04-UNRESOLVED', url: null })
+        fixture.comments = [{
+          id: '90',
+          body: `## HANDOFF\n\n\`\`\`json\n${JSON.stringify(stopRecord, null, 2)}\n\`\`\`\n`,
+          url: `https://github.com/${repository}/issues/${issueNumber}#issuecomment-90`,
+        }]
       }
       writeJson(fixturePath, fixture)
       const dirtyFile = join(synthetic.cloneRoot, `negative-${negative}.tmp`)
@@ -748,6 +760,9 @@ function main() {
       const contextResult = runJsonCommand('bemoat:context', [issueNumber, '--json'], synthetic.cloneRoot, env)
       const context = requireCommandSuccess(contextResult, `Context ${negative}`)
       const dirtyFileExistedAfterContext = existsSync(dirtyFile)
+      if (negative === 'F02' && (!dirtyFileExistedAfterContext || readFileSync(dirtyFile, 'utf8') !== 'owned dirty fixture\n')) {
+        throw new Error('negative F02 lost or changed the dirty WIP fixture')
+      }
       if (negative === 'F02' && dirtyFileExistedAfterContext) rmSync(dirtyFile)
       const dirtyFileCleanupVerified = negative === 'F02' ? !existsSync(dirtyFile) : !existsSync(dirtyFile)
       const fixtureAfter = readJson(fixturePath)
@@ -763,6 +778,17 @@ function main() {
       if (!fixtureUnchanged) observedForbiddenEffects.push('synthetic fixture changed during read-only Context')
       if (!originalCheckoutUnchangedForNegative) observedForbiddenEffects.push('original checkout changed during negative Context')
       if (poisonDelta.length > 0) observedForbiddenEffects.push('native gh invocation occurred during negative Context')
+      const negativeRoute = context.route ?? null
+      const negativeAction = context.next_action?.type ?? null
+      if (negative === 'F01' && negativeAction === 'COMMAND') {
+        observedForbiddenEffects.push('F01 fixture inferred a COMMAND from missing base evidence')
+      }
+      if (negative === 'F05' && (negativeRoute === 'COMPLETE' || negativeAction === 'COMPLETE')) {
+        observedForbiddenEffects.push('F05 fixture reused incomplete review proof for completion')
+      }
+      if (negative === 'F06' && negativeAction === 'COMMAND') {
+        observedForbiddenEffects.push('F06 fixture invented a next-objective COMMAND')
+      }
       if (observedForbiddenEffects.length > 0) throw new Error(`negative ${negative} forbidden side effect: ${observedForbiddenEffects.join('; ')}`)
       negatives.push({
         id: negative,

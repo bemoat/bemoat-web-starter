@@ -176,13 +176,17 @@ describe('Issue 648 registered CLI synthetic campaign', () => {
     expect(result.transitions.every(({ context_status, handoff_status }) => context_status === 'PASS' && handoff_status === 'PASS')).toBe(true)
     expect(result.transitions.map(({ pre_authorization }) => pre_authorization?.oracle_profile ?? null))
       .toEqual([null, 'HP-02', 'HP-03', null])
-    expect(result.transitions.slice(1).every(({ pre_authorization }) =>
+    // Router contract: VERIFY/COMMAND verifies exact-head checks; only FIX/COMMAND
+    // authorizes a bounded correction commit. HP-02 and HP-03 are independent oracle routes.
+    expect(result.transitions[1]?.pre_authorization).toMatchObject({
+      observed_route: 'VERIFY', observed_action: 'COMMAND',
+      stage_advance_authorized_before_commit: false, oracle_backed: true,
+    })
+    expect(result.transitions.slice(2).every(({ pre_authorization }) =>
       pre_authorization?.stage_advance_authorized_before_commit === true &&
+      pre_authorization.observed_route === 'FIX' &&
       pre_authorization.observed_action === 'COMMAND' &&
       pre_authorization.exact_head.length === 40)).toBe(true)
-    expect(result.transitions.slice(1, 3).every(({ pre_authorization }) =>
-      pre_authorization?.oracle_backed === true &&
-      pre_authorization.observed_route === pre_authorization.expected_route)).toBe(true)
     expect(result.transitions[3]?.pre_authorization).toMatchObject({
       oracle_backed: false,
       oracle_profile: null,
@@ -195,7 +199,8 @@ describe('Issue 648 registered CLI synthetic campaign', () => {
     expect(result.transitions.map(({ fixture_readback }) => fixture_readback.prior_comment_ids)).toEqual([[], ['1'], ['1', '2'], ['1', '2', '3']])
     expect(result.transitions.map(({ fixture_readback }) => fixture_readback.after_handoff_comment_ids)).toEqual([['1'], ['1', '2'], ['1', '2', '3'], ['1', '2', '3', '4']])
     expect(result.transitions.every(({ fixture_readback }) => fixture_readback.profile_switch_only)).toBe(true)
-    expect(new Set(result.transitions.map(({ identity }) => identity.exact_head)).size).toBe(4)
+    expect(result.transitions[1]?.identity.exact_head).toBe(result.transitions[0]?.identity.exact_head)
+    expect(new Set(result.transitions.map(({ identity }) => identity.exact_head)).size).toBe(3)
     expect(result.transitions.every(({ handoff, observed_route, identity }) =>
       handoff.record_route === observed_route &&
       handoff.record_exact_head === identity.exact_head &&
@@ -212,6 +217,12 @@ describe('Issue 648 registered CLI synthetic campaign', () => {
       status === negativeExpectations[id].status && expected_route === negativeExpectations[id].expected_route && expected_action === negativeExpectations[id].expected_action)).toBe(true)
     expect(result.negatives.every(({ observed_route, observed_action }) =>
       observed_route !== undefined && observed_action !== undefined)).toBe(true)
+    // The canonical oracle forbids only these specific advancements; the
+    // SPEC_GAP/null route/action fields remain intentionally unconstrained.
+    expect(result.negatives.find(({ id }) => id === 'F01')?.observed_action).not.toBe('COMMAND')
+    expect(result.negatives.find(({ id }) => id === 'F05')?.observed_route).not.toBe('COMPLETE')
+    expect(result.negatives.find(({ id }) => id === 'F05')?.observed_action).not.toBe('COMPLETE')
+    expect(result.negatives.find(({ id }) => id === 'F06')?.observed_action).not.toBe('COMMAND')
     expect(result.negatives.every(({ expected_route, expected_action, side_effect_proof }) =>
       expected_route === null && expected_action === null &&
       side_effect_proof.context_mutation_performed === false &&

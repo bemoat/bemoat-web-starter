@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { linkSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -223,6 +223,26 @@ describe('test-only synthetic evidence command runner', () => {
         env: fixtureEnv(root, fixturePath),
         runNative,
       })).toThrow(/owner marker/i)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+      rmSync(outsideRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects an outside-owned hard-linked fixture before any read or POST can modify it', () => {
+    const { root, fixturePath } = fixtureRoot()
+    const outsideRoot = mkdtempSync(join(tmpdir(), 'bemoat-648-adapter-outside-'))
+    const outsideFixture = join(outsideRoot, 'outside-owned.json')
+    const linkedPath = join(root, 'hard-linked-fixture.json')
+    writeFileSync(outsideFixture, readFileSync(fixturePath, 'utf8'))
+    linkSync(outsideFixture, linkedPath)
+    const original = readFileSync(outsideFixture, 'utf8')
+    try {
+      expect(() => createSyntheticEvidenceRunner({
+        env: fixtureEnv(root, linkedPath),
+        runNative: () => ({ status: 0, stdout: '', stderr: '', error: null }),
+      })).toThrow(/hard.link|multiple links/i)
+      expect(readFileSync(outsideFixture, 'utf8')).toBe(original)
     } finally {
       rmSync(root, { recursive: true, force: true })
       rmSync(outsideRoot, { recursive: true, force: true })
