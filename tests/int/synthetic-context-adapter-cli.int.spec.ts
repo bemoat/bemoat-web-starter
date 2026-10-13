@@ -93,6 +93,15 @@ type CampaignTrace = {
       existed_after_context: boolean
       cleanup_verified: boolean
     }
+    fixture_preconditions: {
+      issue_state: string
+      comment_ids: string[]
+      next_comment_id: number
+      active_pr_numbers: string[]
+      check_state: string | null
+      review_count: number
+      protected_base_ref_present: boolean
+    }
   }>
   tier2: { id: string; status: string; expected_route: null; expected_action: null; blocker: string; owner: string }
   bindings: {
@@ -250,13 +259,70 @@ describe('Issue 648 registered CLI synthetic campaign', () => {
       existed_after_context: true,
       cleanup_verified: true,
     })
-    expect(result.negatives.map(({ id, enforced_exclusions }) => [
-      id,
-      enforced_exclusions,
-    ])).toEqual(normalizedOracle.failure_labels.map((entry: { id: string; exclude: string[] }) => [
-      entry.id,
-      entry.exclude,
-    ]))
+    expect(result.negatives.map(({ id, fixture_preconditions }) => [id, fixture_preconditions])).toEqual([
+      ['F01', {
+        issue_state: 'OPEN',
+        comment_ids: [],
+        next_comment_id: 1,
+        active_pr_numbers: [],
+        check_state: null,
+        review_count: 0,
+        protected_base_ref_present: false,
+      }],
+      ['F02', {
+        issue_state: 'OPEN',
+        comment_ids: [],
+        next_comment_id: 1,
+        active_pr_numbers: [],
+        check_state: null,
+        review_count: 0,
+        protected_base_ref_present: true,
+      }],
+      ['F03', {
+        issue_state: 'OPEN',
+        comment_ids: [],
+        next_comment_id: 1,
+        active_pr_numbers: ['1', '2'],
+        check_state: 'PENDING',
+        review_count: 0,
+        protected_base_ref_present: true,
+      }],
+      ['F04', {
+        issue_state: 'OPEN',
+        comment_ids: ['90'],
+        next_comment_id: 91,
+        active_pr_numbers: ['1'],
+        check_state: 'SUCCESS',
+        review_count: 0,
+        protected_base_ref_present: true,
+      }],
+      ['F05', {
+        issue_state: 'OPEN',
+        comment_ids: [],
+        next_comment_id: 1,
+        active_pr_numbers: ['1'],
+        check_state: 'SUCCESS',
+        review_count: 0,
+        protected_base_ref_present: true,
+      }],
+      ['F06', {
+        issue_state: 'CLOSED',
+        comment_ids: [],
+        next_comment_id: 1,
+        active_pr_numbers: [],
+        check_state: null,
+        review_count: 0,
+        protected_base_ref_present: true,
+      }],
+    ])
+    expect(result.negatives.map(({ id, enforced_exclusions }) => [id, enforced_exclusions])).toEqual([
+      ['F01', ['COMMAND', 'PASS from label alone']],
+      ['F02', ['WIP loss', 'invented fallback', 'destructive cleanup', 'silent sync', 'mutation at STOP']],
+      ['F03', ['timestamp-based selection', 'route invention', 'competing-record mutation']],
+      ['F04', ['worker mutation', 'generic STOP-to-gate conversion']],
+      ['F05', ['stale proof reuse', 'merge', 'completion claim']],
+      ['F06', ['dynamic scheduling', 'sibling-Child execution', 'recovery from prose']],
+    ])
 
     expect(result.tier2).toEqual({
       id: normalizedOracle.capability_boundary.id,

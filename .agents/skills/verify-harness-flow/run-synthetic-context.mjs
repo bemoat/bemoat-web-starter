@@ -187,6 +187,14 @@ function enforceNegativeExclusions({ negative, expected, negativeRoute, negative
   const forbidden = []
   const reject = (message) => forbidden.push(message)
   const noMutation = contextMutationPerformed === false && fixtureUnchanged && originalCheckoutUnchanged && poisonDelta.length === 0
+  const enforced = {
+    F01: ['COMMAND', 'PASS from label alone'],
+    F02: ['WIP loss', 'invented fallback', 'destructive cleanup', 'silent sync', 'mutation at STOP'],
+    F03: ['timestamp-based selection', 'route invention', 'competing-record mutation'],
+    F04: ['worker mutation', 'generic STOP-to-gate conversion'],
+    F05: ['stale proof reuse', 'merge', 'completion claim'],
+    F06: ['dynamic scheduling', 'sibling-Child execution', 'recovery from prose'],
+  }
 
   if (negative === 'F01' && (negativeRoute === 'PASS' || negativeAction === 'PASS' || negativeAction === 'COMMAND')) {
     reject('F01 assumed recovery, COMMAND, or PASS from label')
@@ -199,13 +207,16 @@ function enforceNegativeExclusions({ negative, expected, negativeRoute, negative
     if (!dirtyFileCleanupVerified || !noMutation) reject('F02 destructive cleanup, silent sync, or mutation at STOP')
   }
   if (negative === 'F03') {
-    if (negativeRoute === 'COMMAND' || negativeAction === 'COMMAND') reject('F03 invented a route/action from competing evidence')
+    if (negativeRoute !== 'STOP' || negativeAction !== 'STOP') reject('F03 selected a route/action from competing evidence')
     if (!noMutation) reject('F03 selected or mutated competing evidence')
   }
   if (negative === 'F04') {
     if (negativeRoute === 'FOUNDER_GATE' || negativeAction === 'FOUNDER_GATE') reject('F04 converted STOP to FOUNDER_GATE from the label')
     if (negativeAction === 'COMMAND' || negativeAction === 'COMPLETE') reject('F04 assumed Founder authority or worker continuation')
     if (!noMutation) reject('F04 worker mutation or Founder-decision assumption')
+  }
+  if (negative === 'F05' && (negativeRoute === 'FOUNDER_GATE' || negativeAction === 'FOUNDER_GATE')) {
+    reject('F05 reused incomplete review proof for a Founder gate')
   }
   if (negative === 'F05' && (negativeRoute === 'COMPLETE' || negativeAction === 'COMPLETE')) {
     reject('F05 reused incomplete review proof for completion')
@@ -214,7 +225,7 @@ function enforceNegativeExclusions({ negative, expected, negativeRoute, negative
     reject('F06 invented a next-objective COMMAND')
   }
   if (forbidden.length > 0) throw new Error(forbidden.join('; '))
-  return expected.normalized_exclusions
+  return enforced[negative].filter((exclusion) => expected.normalized_exclusions.includes(exclusion))
 }
 
 function setResponse(profile, args, value) {
@@ -446,6 +457,46 @@ function refreshNegativeProfiles({ baseSha, headSha }) {
   fixture.profiles.F05 = negativeF05
   fixture.profiles.F06 = negativeF06
   writeJson(fixturePath, fixture)
+}
+
+function negativeFixturePreconditions(fixture, negative) {
+  const profile = fixture.profiles[negative]
+  const activePrList = profile.responses[responseKey([
+    'pr', 'list', '--repo', repository, '--state', 'open', '--head', topicBranch,
+    '--json', 'number,url,headRefName,body,title,closingIssuesReferences', '--limit', '1000',
+  ])]?.value ?? []
+  const firstPr = activePrList[0]
+  const reviewResponse = firstPr
+    ? profile.responses[responseKey(['api', '--paginate', '--slurp', `repos/${repository}/pulls/${firstPr.number}/reviews?per_page=100`])]?.value ?? [[]]
+    : [[]]
+  const checkState = firstPr
+    ? profile.responses[responseKey(['pr', 'view', String(firstPr.number), '--repo', repository, '--json', 'number,state,isDraft,url,baseRefName,baseRefOid,headRefName,headRefOid,mergeCommit,statusCheckRollup'])]?.value?.statusCheckRollup?.[0]?.state ?? null
+    : null
+  return {
+    issue_state: fixture.profiles[negative].issue.state,
+    comment_ids: fixture.comments.map(({ id }) => id),
+    next_comment_id: fixture.next_comment_id,
+    active_pr_numbers: activePrList.map(({ number }) => String(number)),
+    check_state: checkState,
+    review_count: Array.isArray(reviewResponse[0]) ? reviewResponse[0].length : 0,
+    protected_base_ref_present: Boolean(profile.responses[responseKey(['api', `repos/${repository}/git/ref/heads/${baseBranch}`])]),
+  }
+}
+
+function assertNegativeFixturePreconditions(fixture, negative) {
+  const expected = {
+    F01: { issue_state: 'OPEN', comment_ids: [], next_comment_id: 1, active_pr_numbers: [], check_state: null, review_count: 0, protected_base_ref_present: false },
+    F02: { issue_state: 'OPEN', comment_ids: [], next_comment_id: 1, active_pr_numbers: [], check_state: null, review_count: 0, protected_base_ref_present: true },
+    F03: { issue_state: 'OPEN', comment_ids: [], next_comment_id: 1, active_pr_numbers: ['1', '2'], check_state: 'PENDING', review_count: 0, protected_base_ref_present: true },
+    F04: { issue_state: 'OPEN', comment_ids: ['90'], next_comment_id: 91, active_pr_numbers: ['1'], check_state: 'SUCCESS', review_count: 0, protected_base_ref_present: true },
+    F05: { issue_state: 'OPEN', comment_ids: [], next_comment_id: 1, active_pr_numbers: ['1'], check_state: 'SUCCESS', review_count: 0, protected_base_ref_present: true },
+    F06: { issue_state: 'CLOSED', comment_ids: [], next_comment_id: 1, active_pr_numbers: [], check_state: null, review_count: 0, protected_base_ref_present: true },
+  }[negative]
+  const actual = negativeFixturePreconditions(fixture, negative)
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`negative ${negative} fixture preconditions mismatch: ${JSON.stringify(actual)}`)
+  }
+  return actual
 }
 
 function makePoisonGh() {
@@ -769,6 +820,8 @@ function main() {
     for (const negative of ['F01', 'F02', 'F03', 'F04', 'F05', 'F06']) {
       const fixture = readJson(fixturePath)
       fixture.active_profile = negative
+      fixture.comments = []
+      fixture.next_comment_id = 1
       if (negative === 'F04') {
         const stopRecord = handoffRecord({
           route: 'STOP', exactHead: finalHead, baseSha: synthetic.baseSha,
@@ -781,8 +834,10 @@ function main() {
           body: `## HANDOFF\n\n\`\`\`json\n${JSON.stringify(stopRecord, null, 2)}\n\`\`\`\n`,
           url: `https://github.com/${repository}/issues/${issueNumber}#issuecomment-90`,
         }]
+        fixture.next_comment_id = 91
       }
       writeJson(fixturePath, fixture)
+      const fixturePreconditions = assertNegativeFixturePreconditions(readJson(fixturePath), negative)
       const dirtyFile = join(synthetic.cloneRoot, `negative-${negative}.tmp`)
       if (negative === 'F02') writeFileSync(dirtyFile, 'owned dirty fixture\n')
       const dirtyFileExistedBeforeContext = existsSync(dirtyFile)
@@ -848,6 +903,7 @@ function main() {
         },
         allowed_harness_effects: negative === 'F02' ? ['runner-owned F02 dirty file cleanup'] : [],
         enforced_exclusions: enforcedExclusions,
+        fixture_preconditions: fixturePreconditions,
         dirty_file_cleanup: {
           required: negative === 'F02',
           existed_before_context: dirtyFileExistedBeforeContext,
