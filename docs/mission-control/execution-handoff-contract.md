@@ -368,7 +368,51 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
    or branches, a dirty or non-durable target, stale tracking state, conflicting
    ownership, or an unverified path remains `STOP`.
 
-2. **Provision an isolated canonical workspace when none is usable.** If no
+2. **Release a completed or durably parked source checkout for sequential
+   same-checkout setup.** When no exact queried-Issue workspace was reused,
+   the current physical checkout may establish the next Issue's absent topic
+   branch in place only after the source Issue is independently proven
+   releasable. The source must be clean, attached to its Issue branch, durable,
+   and bound to the canonical repository and exact `origin/<source-branch>`
+   upstream; its local branch, upstream tracking ref, and exact live remote
+   head must agree. Release requires either verified terminal COMPLETE
+   evidence or merged evidence, or a verified parked non-COMMAND durable
+   boundary with its required HANDOFF and readback. A live same-Issue
+   `COMMAND` must not be abandoned, and there must be no active source writer
+   or controller.
+   Terminal or parked release evidence must bind the same canonical source
+   Issue and same source branch to the exact current live source HEAD, with no
+   later source advancement. A missing, stale, or mismatched binding is `STOP`
+   before mutation.
+
+   Before mutation, independently resolve the canonical repository and the
+   fresh approved-base branch and exact live approved base SHA, plus the
+   established Issue-B target branch name. The Issue-B branch must be absent
+   from local branches,
+   `refs/remotes/origin`, and the live canonical remote. Independently prove
+   that this Execution host has effective write scope for the current checkout
+   and its required Git metadata. Any dirty or unresolved source work, detached
+   or local-only source, wrong origin/upstream, stale source HEAD or other
+   source-head mismatch, missing or ambiguous release evidence, active source
+   writer/controller, live same-Issue `COMMAND`, stale or moving base,
+   competing target or target collision, or missing independent host
+   write-scope proof is `STOP` before Git mutation.
+
+   Once eligible, create only the absent target branch directly from the exact
+   live approved base SHA in the same checkout using the ordinary durable
+   zero-delta bootstrap.
+   No Issue-A code, commits, or history are carried into the target. Do not
+   reset, stash, merge, rebase, replay, or otherwise alter the source branch.
+   Before continuing, read back the unchanged source branch and remote head,
+   exact approved-base ref, and target local `HEAD`, canonical upstream, tracking
+   ref, and live remote head; they must prove the target starts at that exact
+   base and that the source ref remains intact. Any failed or ambiguous
+   readback is `STOP`. This setup-only allowance adds no Context route,
+   state, evidence schema, scheduler, controller, or objective-edit authority.
+   Preserve existing exact-target `SWITCH_BRANCH` recovery and the normal
+   first-edit and human gates.
+
+3. **Provision an isolated canonical workspace when none is usable.** If no
    usable queried-Issue workspace exists, provision a separate isolated
    checkout from the exact live approved-base SHA only when the current
    wrong-Issue checkout is clean, attached, durable, has canonical origin, and
@@ -430,7 +474,7 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
    evidence vocabulary, implementation authority, or future objective
    authorization. It introduces no new general scheduler or worktree manager.
 
-3. **Stop only at a real boundary.** Return to the operator when there are
+4. **Stop only at a real boundary.** Return to the operator when there are
    multiple plausible Issue workspaces/branches; dirty or non-durable state;
    wrong/noncanonical repository or origin; a source or target upstream other
    than the canonical `origin/<branch>`; conflicting/stale live-base evidence;

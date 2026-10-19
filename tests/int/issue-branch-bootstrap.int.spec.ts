@@ -259,4 +259,76 @@ describe('Issue #465 durable zero-delta branch bootstrap stories', () => {
     }
     },
   )
+
+  // Oracle: Issue #605's positive production-shaped acceptance criterion
+  // requires an absent Issue-B branch in the same checkout to start at the
+  // exact live protected-main SHA, without carrying Issue-A code or history.
+  // This uses real Git refs and a bare remote; it does not infer a Context
+  // route or introduce any workflow evidence shape.
+  it('starts an absent Issue-B branch at exact live main in the same checkout without Issue-A history', () => {
+    const sandbox = mkdtempSync(join(tmpdir(), 'bemoat-605-same-checkout-'))
+    const bare = join(sandbox, 'origin.git')
+    const seed = join(sandbox, 'seed')
+    const checkout = join(sandbox, 'checkout')
+    const git = (args: string[], cwd?: string) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim()
+    const issueABranch = 'fix/605-released-source-fixture'
+    const issueBBranch = 'fix/606-sequential-target-fixture'
+
+    try {
+      git(['init', '--bare', '--initial-branch=main', bare])
+      git(['init', '--initial-branch=main', seed])
+      git(['config', 'user.name', 'Bootstrap Test'], seed)
+      git(['config', 'user.email', 'bootstrap-test@example.invalid'], seed)
+      writeFileSync(join(seed, 'base.txt'), 'protected base\n')
+      git(['add', 'base.txt'], seed)
+      git(['commit', '-m', 'seed protected main'], seed)
+      git(['remote', 'add', 'origin', bare], seed)
+      git(['push', '-u', 'origin', 'main'], seed)
+      const liveMainSha = git(['rev-parse', 'HEAD'], seed)
+
+      git(['clone', '--branch', 'main', bare, checkout])
+      git(['config', 'user.name', 'Bootstrap Test'], checkout)
+      git(['config', 'user.email', 'bootstrap-test@example.invalid'], checkout)
+      git(['switch', '-c', issueABranch], checkout)
+      writeFileSync(join(checkout, 'issue-a.txt'), 'Issue A implementation\n')
+      git(['add', 'issue-a.txt'], checkout)
+      git(['commit', '-m', 'Issue A implementation'], checkout)
+      const issueACommit = git(['rev-parse', 'HEAD'], checkout)
+      git(['push', '-u', 'origin', issueABranch], checkout)
+
+      // The source is durably parked and its exact local/live refs are captured
+      // before the same physical checkout creates the new target from base.
+      expect(git(['rev-parse', `refs/heads/${issueABranch}`], checkout)).toBe(issueACommit)
+      expect(git(['rev-parse', `refs/remotes/origin/${issueABranch}`], checkout)).toBe(issueACommit)
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueABranch}`], checkout).split('\t')[0]).toBe(issueACommit)
+      expect(() => git(['show-ref', '--verify', '--quiet', `refs/heads/${issueBBranch}`], checkout)).toThrow()
+      expect(() => git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${issueBBranch}`], checkout)).toThrow()
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueBBranch}`], checkout)).toBe('')
+
+      // Prove this is the Issue-A-to-Issue-B transition: A remains attached and
+      // unchanged until the new target is created directly from exact live main.
+      expect(git(['branch', '--show-current'], checkout)).toBe(issueABranch)
+      expect(git(['rev-parse', 'HEAD'], checkout)).toBe(issueACommit)
+      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
+      expect(git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], checkout).split('\t')[0]).toBe(liveMainSha)
+      git(['switch', '-c', issueBBranch, liveMainSha], checkout)
+      expect(git(['rev-parse', 'HEAD'], checkout)).toBe(liveMainSha)
+      expect(git(['log', '--format=%H'], checkout).split('\n')).toEqual([liveMainSha])
+      expect(() => git(['ls-files', '--error-unmatch', 'issue-a.txt'], checkout)).toThrow()
+      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
+
+      // Publish B normally, then read back every durable identity independently.
+      git(['push', '-u', 'origin', issueBBranch], checkout)
+      expect(git(['rev-parse', 'HEAD'], checkout)).toBe(liveMainSha)
+      expect(git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], checkout)).toBe(`origin/${issueBBranch}`)
+      expect(git(['rev-parse', `refs/remotes/origin/${issueBBranch}`], checkout)).toBe(liveMainSha)
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueBBranch}`], checkout).split('\t')[0]).toBe(liveMainSha)
+      expect(git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], checkout).split('\t')[0]).toBe(liveMainSha)
+      expect(git(['rev-parse', `refs/heads/${issueABranch}`], checkout)).toBe(issueACommit)
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueABranch}`], checkout).split('\t')[0]).toBe(issueACommit)
+      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true })
+    }
+  })
 })
