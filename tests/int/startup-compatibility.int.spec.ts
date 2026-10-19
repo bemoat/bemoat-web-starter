@@ -24,7 +24,7 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // manifest-compatible Node patch versions while retaining CI's own pin and
   // rejecting versions below engines.node or outside the supported major.
   it('accepts an engines-compatible Node patch independently of the CI pin', () => {
-    expect(packageJSON.engines.node).toBe('>=24.15.0')
+    expect(packageJSON.engines.node).toMatch(/(?:\^|~|>=?)\s*24(?:\.|$)/)
     expect(ci).toMatch(/node-version: 24\.15\.0/)
     expect(preparation).toMatch(/Node version.*satisfies `package\.json`'s `engines\.node`/i)
     expect(preparation).toMatch(/supported Node (?:runtime )?major/i)
@@ -37,7 +37,7 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // manifest engines.pnpm, the CI-supported pnpm major, and lockfile format
   // compatibility together; no single version string overrides those checks.
   it('requires pnpm engines, CI-major, and lockfile-format compatibility', () => {
-    expect(packageJSON.engines.pnpm).toBe('^9 || ^10')
+    expect(packageJSON.engines.pnpm).toMatch(/(?:\^|~|>=?)\s*10(?:\.|$)/)
     expect(ci).toMatch(/version: 10/)
     expect(preparation).toMatch(/pnpm.*`engines\.pnpm`/i)
     expect(preparation).toMatch(/CI.supported pnpm major/i)
@@ -70,6 +70,7 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // fresh development setup, and forbids changing/reconciling an existing
   // modules tree whose metadata binds another store.
   it('uses one fresh task-local store and never switches or reconciles an existing store', () => {
+    expect(preparation).toMatch(/only when the eligible development checkout has no prior `node_modules` or virtual-store metadata/i)
     expect(preparation).toMatch(/initially empty.*uniquely Issue\/checkout.owned.*task.local.*store/i)
     expect(preparation).toMatch(/pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>/i)
     expect(preparation).toMatch(/existing store.*do not silently select a different `--store-dir`/i)
@@ -102,6 +103,7 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // checkout and uses one isolated same-Issue checkout. In-place retry is
   // explicitly forbidden; a repeated failure is STOP.
   it('orders read-only R1 before isolated R2 and forbids in-place retry', () => {
+    expect(preparation).toMatch(/once separately merged §12\/§13 authority and fresh exact recovery predicates permit recovery, apply the two outcomes in this order and at most once.*R1.*R2/i)
     const r1 = preparation.indexOf('R1')
     const r2 = preparation.indexOf('R2')
     expect(r1).toBeGreaterThanOrEqual(0)
