@@ -231,18 +231,21 @@ describe('Global Mission Control progressive-disclosure router', () => {
   // readback, with no active writer. They do not specify a Context route or a
   // serialized evidence schema, so this asserts only those eligibility facts.
   it('limits same-checkout Issue release to terminal or durably parked non-COMMAND sources', () => {
-    const continuationContract = normalizedExecutionHandoff
-      .split('## 12. Continuation rule')[1]
-      ?.split('### Pre-Context dependency preparation')[0] ?? ''
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
 
-    expect(continuationContract).toMatch(/terminal (?:completion|COMPLETE).*evidence/i)
-    expect(continuationContract).toMatch(/parked.*non[- ]COMMAND.*durable/i)
-    expect(continuationContract).toMatch(/required HANDOFF.*readback/i)
-    expect(continuationContract).toMatch(/no active (?:source )?(?:writer|controller)/i)
-    expect(continuationContract).toMatch(/same checkout.*exact live (?:approved )?base|exact live (?:approved )?base.*same checkout/i)
-    expect(continuationContract).toMatch(/absent Issue-B.*branch|Issue-B.*branch.*absent/i)
-    expect(continuationContract).toMatch(/no Issue-A (?:code|commit|history).*(?:carried|enter|included)|(?:carried|enter|included).*no Issue-A (?:code|commit|history)/i)
-    expect(continuationContract).toMatch(/no new Context route|adds no Context route/i)
+    expect(releaseContract).not.toBe('')
+    expect(releaseContract).toMatch(/verified terminal COMPLETE evidence or merged evidence/i)
+    expect(releaseContract).toMatch(/verified parked non-COMMAND durable boundary with its required HANDOFF and readback/i)
+    expect(releaseContract).toMatch(/no active source writer or controller/i)
+    expect(releaseContract).toMatch(/(?:same checkout.*exact live approved base SHA|exact live approved base SHA.*same checkout)/i)
+    expect(releaseContract).toMatch(/absent from local branches.*refs\/remotes\/origin.*live canonical remote/i)
+    expect(releaseContract).toMatch(/effective write scope for the current checkout and its required Git metadata/i)
+    expect(releaseContract).toMatch(/No Issue-A code, commits, or history are carried into the target/i)
+    expect(releaseContract).toMatch(/unchanged source branch and remote head.*exact approved-base ref.*target local `HEAD`, canonical upstream, tracking ref, and live remote head/i)
+    expect(releaseContract).toMatch(/adds no Context route.*state, evidence schema/i)
+    expect(releaseContract).toMatch(/Preserve existing exact-target `SWITCH_BRANCH` recovery/i)
   })
 
   // Oracle: Issue #605's live-COMMAND denial and negative acceptance criteria
@@ -250,17 +253,14 @@ describe('Global Mission Control progressive-disclosure router', () => {
   // stale, conflicting, colliding, concurrent, or unproven-host state. The
   // issue does not authorize a fallback route for any exclusion.
   it('keeps live COMMAND and unresolved source, target, concurrency, and host gaps fail-closed', () => {
-    const continuationContract = normalizedExecutionHandoff
-      .split('## 12. Continuation rule')[1]
-      ?.split('### Pre-Context dependency preparation')[0] ?? ''
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
 
-    expect(continuationContract).toMatch(/live same-Issue `?COMMAND`?.*(?:cannot|must not|remain).*abandon|(?:cannot|must not).*abandon.*live same-Issue `?COMMAND`?/i)
-    expect(continuationContract).toMatch(/dirty.*unresolved.*STOP|STOP.*dirty.*unresolved/i)
-    expect(continuationContract).toMatch(/stale source HEAD|stale source head/i)
-    expect(continuationContract).toMatch(/moving (?:approved )?base|base (?:moves|movement)/i)
-    expect(continuationContract).toMatch(/competing.*target|target.*competing/i)
-    expect(continuationContract).toMatch(/active (?:source )?(?:writer|controller).*STOP|STOP.*active (?:source )?(?:writer|controller)/i)
-    expect(continuationContract).toMatch(/host (?:write|isolation).*proof.*STOP|STOP.*host (?:write|isolation).*proof/i)
+    expect(releaseContract).not.toBe('')
+    expect(releaseContract).toMatch(/live same-Issue `COMMAND` must not be abandoned/i)
+    expect(releaseContract).toMatch(/dirty or unresolved source work, detached or local-only source, wrong origin\/upstream, stale source HEAD/i)
+    expect(releaseContract).toMatch(/active source writer\/controller, live same-Issue `COMMAND`, stale or moving base, competing target or target collision, or missing independent host write-scope proof is `STOP` before Git mutation/i)
   })
 
   // Oracle: #632 Objective A's acceptance criteria and the user's request for

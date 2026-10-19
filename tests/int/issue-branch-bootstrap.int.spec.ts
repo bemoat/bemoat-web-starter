@@ -307,6 +307,7 @@ describe('Issue #465 durable zero-delta branch bootstrap stories', () => {
       expect(git(['rev-parse', 'HEAD'], checkout)).toBe(liveMainSha)
       expect(git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], checkout).split('\t')[0]).toBe(liveMainSha)
       expect(() => git(['show-ref', '--verify', '--quiet', `refs/heads/${issueBBranch}`], checkout)).toThrow()
+      expect(() => git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${issueBBranch}`], checkout)).toThrow()
       expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueBBranch}`], checkout)).toBe('')
 
       // Create the new target from the exact observed live-base SHA. Starting
