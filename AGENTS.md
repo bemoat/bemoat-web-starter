@@ -208,24 +208,22 @@ and verify the resulting issue branch is clean and durable before continuing.
 
 ### Pre-Context dependency preparation
 
-After branch preflight has verified canonical origin and the exact live
-approved-base SHA identity, require the applicable section 12 ancestry case
-(current live base for ordinary setup, or the bounded historical-base
-zero-delta case) and a clean, durable development Issue checkout whose
-uniquely established branch belongs to the queried Issue
-and satisfies the merged execution handoff contract's section 12 predicates,
-run its exact frozen-lockfile setup before CLI Discovery, safe help, or fresh
-Context:
-
-```bash
-pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>
-```
-
-Source D remains under its existing no-install/no-`node_modules` contract; do
-not install dependencies there. If the checkout, toolchain, or install options
-are unsupported or the section 12 evidence is missing or conflicting, stop
-without a fallback. Dependency preparation grants no Context route, objective
-edit, or first-edit authority.
+For a verified development Issue checkout, follow the single canonical startup
+contract in
+[`execution-handoff-contract.md` §12](docs/mission-control/execution-handoff-contract.md#pre-context-dependency-preparation).
+After verifying canonical origin and exact live approved-base SHA, it retains
+exact repository/Issue/branch/upstream/base identity and the
+ordinary or historical-base ancestry gates. Runtime compatibility is based on
+`engines.node` plus the supported Node major, not equality with CI's pinned
+patch; pnpm must satisfy `engines.pnpm`, the CI-supported major, and lockfile
+format together. Prefer existing dependencies only after the complete
+read-only P1 proof. P2 allows one exact frozen/ignore-scripts install only for
+a fresh checkout with no prior module metadata and one initially empty,
+uniquely owned task-local store. Existing store drift is not repaired in place.
+P3 requires exact incident identity; its ordered R1 read-only check precedes
+R2's separately authorized isolated same-Issue checkout. Source D remains
+no-install/no-`node_modules`. Unsupported evidence is `STOP`; setup grants no
+Context route, objective edit, or first-edit authority.
 
 Only after that setup succeeds, perform registered CLI Discovery and fresh
 Context:
@@ -238,9 +236,9 @@ pnpm run bemoat:context <issue-number>
 If the only blocker is a clean protected or integration branch, treat it as
 branch setup: follow the
 [durable zero-delta branch bootstrap](docs/agent-loop/issue-driven-branch-workflow.md#durable-zero-delta-branch-bootstrap)
-to create, publish, and read back the issue-related topic branch, then repeat
-the section 12 dependency setup and CLI Discovery/Context sequence above. A
-local-only branch is not durable and must remain fail-closed.
+to create, publish, and read back the issue-related topic branch, then apply
+the canonical section 12 setup contract before registered CLI Discovery and
+fresh Context. A local-only branch is not durable and must remain fail-closed.
 
 Branch naming:
 
