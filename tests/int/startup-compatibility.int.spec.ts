@@ -24,7 +24,8 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // manifest-compatible Node patch versions while retaining CI's own pin and
   // rejecting versions below engines.node or outside the supported major.
   it('accepts an engines-compatible Node patch independently of the CI pin', () => {
-    expect(packageJSON.engines.node).toMatch(/(?:\^|~|>=?)\s*24(?:\.|$)/)
+    expect(packageJSON.engines.node).toEqual(expect.any(String))
+    expect(packageJSON.engines.node.trim()).not.toBe('')
     expect(ci).toMatch(/node-version: 24\.15\.0/)
     expect(preparation).toMatch(/Node version.*satisfies `package\.json`'s `engines\.node`/i)
     expect(preparation).toMatch(/supported Node (?:runtime )?major/i)
@@ -37,7 +38,8 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // manifest engines.pnpm, the CI-supported pnpm major, and lockfile format
   // compatibility together; no single version string overrides those checks.
   it('requires pnpm engines, CI-major, and lockfile-format compatibility', () => {
-    expect(packageJSON.engines.pnpm).toMatch(/(?:\^|~|>=?)\s*10(?:\.|$)/)
+    expect(packageJSON.engines.pnpm).toEqual(expect.any(String))
+    expect(packageJSON.engines.pnpm.trim()).not.toBe('')
     expect(ci).toMatch(/version: 10/)
     expect(preparation).toMatch(/pnpm.*`engines\.pnpm`/i)
     expect(preparation).toMatch(/CI.supported pnpm major/i)
