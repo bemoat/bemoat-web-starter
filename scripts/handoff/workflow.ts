@@ -31,7 +31,7 @@ function validationTier(files: string[]): ValidationTier {
   let hasCode = false
   for (const file of files) {
     const lower = file.toLowerCase()
-    if (/\.(md|mdx)$/.test(lower)) continue
+    if (/\.(md|mdx|mdc)$/.test(lower)) continue
     if (/^\.github\/workflows\/.+\.(ya?ml)$/.test(lower) || lower === '.github/dependabot.yml') continue
     if (
       /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|css|scss|html|vue|svelte|py|sh|sql|json|jsonc|ya?ml|toml|lock|prisma|graphql|gql)$/.test(lower)
