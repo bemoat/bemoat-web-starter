@@ -178,6 +178,53 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(continuationContract).toMatch(/no new general scheduler or worktree manager/i)
   })
 
+  // Oracle: Issue #652 preserves the existing exact-sibling acquisition path
+  // and adds only a bounded alternate location. Keep the sibling eligibility
+  // independently visible so the alternate cannot silently replace it.
+  it('preserves eligible existing Issue workspace acquisition alongside the alternate location', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+
+    const siblingPath = continuationContract.match(/reuse exact existing Issue workspace[\s\S]*?use the existing exact bounded recovery path/i)?.[0] ?? ''
+
+    expect(siblingPath).not.toBe('')
+    expect(siblingPath).toMatch(/exactly one clean, durable, canonical workspace\/branch owned by the queried Issue/i)
+    expect(siblingPath).toMatch(/exact `origin\/\<branch\>` upstream/i)
+  })
+
+  // Oracle: Issue #652 uniquely specifies the alternate's safety boundary,
+  // but not a serialized evidence shape. Assert only the required semantic
+  // predicates: one absent checkout under one existing slot, independent
+  // narrow capability proof, and no authority over the surrounding pool.
+  it('constrains the alternate to one absent checkout in one Issue-exclusive slot with scoped capability proof', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+
+    expect(continuationContract).toMatch(/absent (?:new )?checkout path.*inside exactly one existing, initially empty, single-use, Issue-exclusive, host-provisioned slot/i)
+    expect(continuationContract).toMatch(/independent(?:ly)? proof.*(?:runtime|host).*write\/create descendants.*required Git metadata.*within that slot/i)
+    expect(continuationContract).toMatch(/pool parent.*unrelated checkouts.*other Issue slots.*outside (?:its|the slot's) write grant/i)
+    expect(continuationContract).toMatch(/unique canonical slot\/path/i)
+  })
+
+  // Oracle: Issue #652 and §13 require fail-closed STOP for unsafe or
+  // unproven slot acquisition. Do not choose a fallback route for any case
+  // the authority excludes.
+  it('keeps reused, occupied, ambiguous, ownership, path, and capability-proof gaps at STOP', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+
+    expect(continuationContract).toMatch(/\breused\b/i)
+    expect(continuationContract).toMatch(/\boccupied\b/i)
+    expect(continuationContract).toMatch(/\bambiguous\b/i)
+    expect(continuationContract).toMatch(/conflicting ownership|wrong owner\/path/i)
+    expect(continuationContract).toMatch(/missing effective permission|effective host capability.*cannot be verified/i)
+    expect(continuationContract).toMatch(/`\/Users\/boat\/projects` remain outside the slot's write grant/i)
+    expect(continuationContract).toMatch(/remain `STOP`|stays fail-closed/i)
+  })
+
   // Oracle: #632 Objective A's acceptance criteria and the user's request for
   // one minimal policy amendment specify the eligible development checkout,
   // exact frozen install, bounded effects, and negative exclusions. The test

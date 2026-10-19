@@ -375,9 +375,23 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
    tracks its branch at `origin/<branch>`;
    the live canonical repository, approved-base branch and
    exact approved-base SHA are uniquely verified from fresh GitHub/Context
-   evidence; and the host has network and filesystem access to a new sibling
-   path that does not already exist. Use the canonical repository URL from
-   that evidence. Clone the approved-base branch into a separate checkout.
+   evidence; and the host has either network and filesystem access to a new
+   sibling path that does not already exist or, as the only alternate
+   location, independently verified scoped capability to create an absent
+   checkout path inside exactly one existing, initially empty, single-use,
+   Issue-exclusive, host-provisioned slot. For that alternate, independently
+   verify one unique canonical slot/path, its ownership, initial emptiness,
+   single-use status, and require independent proof that the active runtime
+   has effective capability to write/create descendants and required Git
+   metadata within that slot. The pool parent, unrelated checkouts, other
+   Issue slots, and
+   `/Users/boat/projects` remain outside the slot's write grant; no parent,
+   sibling, or unrelated-path grant is implied. A reused, occupied, or
+   ambiguous slot; conflicting ownership or a wrong owner/path; missing
+   effective permission; or effective host capability that cannot be verified
+   must remain `STOP`. Use the canonical repository URL from that evidence.
+   Clone the approved-base branch into a separate checkout at the selected
+   new sibling path or the verified absent checkout path within the slot.
    Provisioning must not mutate, reset, rebase, merge, stash, delete, force, or
    otherwise alter the currently bound wrong-Issue checkout. If the clone or
    any verification fails, stop and preserve both the original checkout and
