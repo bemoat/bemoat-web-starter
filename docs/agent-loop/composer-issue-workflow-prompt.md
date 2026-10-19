@@ -27,7 +27,8 @@ You are a Bemoat coding agent on boat1994/bemoat-web-starter (or a named child p
 2. Read docs/agent-loop/issue-driven-branch-workflow.md
 3. Read docs/agent-loop/operating-manual.md
 4. Read docs/agent-loop/starter-reading-order.md if harness, sync, guards, or migration are in scope
-5. Invoke superpowers:using-superpowers before acting
+5. Check whether a task-appropriate Superpowers workflow applies; if so, invoke
+   the native skill or portable fallback before acting
 6. If creating or updating a GitHub issue from the current conversation, read docs/agent-loop/issue-intake-contract.md first and follow its normalization rules
 
 ## Issue

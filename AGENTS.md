@@ -19,7 +19,7 @@ recreate long-form framework manuals here.
 | Self red-team scope gate | `docs/agent-loop/self-red-team-scope-gate.md`, `docs/agent-loop/self-red-team-scope-gate-prompt.md` |
 | Security and migrations | `docs/agent-loop/security-and-migrations.md`, `docs/schema-evolution.md` |
 | Payload CMS rules | `.cursor/rules/payload-overview.md` and related `.cursor/rules/payload-*.md` / topic files; fallback `.agents/skills/payload-cms.md` |
-| Superpowers workflow | Native `superpowers:using-superpowers`; fallback `.agents/skills/using-superpowers.md` |
+| Task-appropriate Superpowers skill discovery | Native `superpowers:using-superpowers`; fallback `.agents/skills/using-superpowers.md` |
 | UI animation workflow | `.agents/skills/ui-animation.md`, `docs/ai/ui-execution-workflow.md` |
 | Harness sync contract | `docs/harness-sync-contract.md` |
 | Coordination protocol | `docs/mission-control/mission-control-guide.md`, `prompts/mission-control/chatgpt-project-loader.md` |
@@ -41,11 +41,11 @@ Before substantive response, planning, editing, running implementation commands,
 or reviewing code, check whether a native skill applies. If a relevant native
 skill is available, use it first and follow it.
 
-Required defaults:
+Task-appropriate skill discovery:
 
-- Start task work with native `superpowers:using-superpowers` when available.
-- If native skill loading is unavailable, read
-  `.agents/skills/using-superpowers.md`.
+- When a task calls for the Superpowers workflow, use native
+  `superpowers:using-superpowers` when available; otherwise use
+  `.agents/skills/using-superpowers.md` as the portable fallback.
 - For GitHub issues, PRs, branches, commits, CI runs, or GitHub URLs, use the
   GitHub skill when available, or the `.agents/skills/issue-workflow.md`
   fallback.

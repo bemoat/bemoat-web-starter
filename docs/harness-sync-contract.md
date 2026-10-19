@@ -12,7 +12,7 @@ The harness is everything child projects need to run the same safety rails, work
 | UI execution guardrails | `docs/ai/ui-skills.md`, `docs/ai/ui-execution-workflow.md`, `docs/ai/visual-qa-checklist.md`, `docs/ai/accessibility-baseline.md`, `prompts/ui/*` |
 | Agent-loop docs | `docs/agent-loop/*`, `docs/hardening.md`, `docs/schema-evolution.md`, etc. |
 | Stateless protocol | Current Context/Handoff guidance and their stateless CLI/runtime tests |
-| Superpowers skill entry | Native `superpowers:using-superpowers` or portable fallback `.agents/skills/using-superpowers.md` (not `docs/superpowers/*`) |
+| Task-appropriate Superpowers skill discovery | Native `superpowers:using-superpowers` or portable fallback `.agents/skills/using-superpowers.md` (not `docs/superpowers/*`) |
 | GitHub workflow and templates | `.github/workflows/ci.yml` (child-safe `bemoat:*` only), PR template, issue templates |
 | Safety guards | `scripts/guard-pack.ts` (orchestrator), `scripts/guards/repo-safety.ts`, `scripts/guard-harness-contract.ts`, `scripts/guards/package-manager.ts`, `scripts/guards/toolchain-contract.ts`, `scripts/guards/env-placeholder.ts`, `scripts/guard-cloudflare-env.ts`, `scripts/guards/frontend-seo.ts`, `scripts/guards/structural-protection.ts`, and `scripts/structural-protection-manifest.json` — see [guard-pack.md](./guard-pack.md) |
 | Cloudflare deploy guards | Recommended `deploy` / `preview` scripts that call `guard:cloudflare-env` |
@@ -42,7 +42,7 @@ the canonical source.
 | Validation and PR loop | `AGENTS.md`, `docs/agent-loop/checklist.md`, `docs/agent-loop/README.md` | `.agents/skills/development-agent.md`, `.agents/skills/regression.md` | Managed |
 | Payload CMS rules | `.cursor/rules/payload-overview.md` plus related Payload topic files in `.cursor/rules/`; `.agents/skills/payload-cms.md` is the portable fallback index | `AGENTS.md` summary | Managed |
 | Payload schema and migration safety | `docs/schema-evolution.md`, `docs/agent-loop/security-and-migrations.md`, `docs/agent-loop/migration-draft-pr.md` | `AGENTS.md` stop-condition summary, `.agents/skills/payload-cms.md` | Managed |
-| Superpowers workflow | Native `superpowers:using-superpowers`; portable fallback `.agents/skills/using-superpowers.md` | `.cursor/rules/superpowers-using-superpowers.mdc`, `AGENTS.md` summary | Managed for fallback files; native skill is external |
+| Superpowers workflow | Native `superpowers:using-superpowers` when selected by a task; portable fallback `.agents/skills/using-superpowers.md` | `.cursor/rules/superpowers-using-superpowers.mdc`, `AGENTS.md` summary | Managed for fallback files; native skill is external |
 | UI animation workflow | `.agents/skills/ui-animation.md`, `docs/ai/ui-execution-workflow.md`, `docs/ai/ui-skills.md` | `AGENTS.md` summary | Managed |
 | Stateless coordination | `docs/mission-control/mission-control-guide.md` | `prompts/mission-control/chatgpt-project-loader.md`, `AGENTS.md` pointer, handoff template | Managed guide/loader/template; child-owned overrides are never managed |
 | Tool-specific Cursor rules | Matching `.cursor/rules/*` file | Frontmatter metadata in `.mdc` files | Managed; keep trigger metadata and globs intact |
@@ -109,7 +109,7 @@ These live in `bemoat-web-starter` for learning, reference, and starter developm
 | `docs/superpowers/plans/_templates` | Reusable implementation and verification plan formats |
 | `docs/superpowers/specs/_templates` | Reusable product, UX, and handoff spec formats |
 
-Child projects still get agent execution rails (`AGENTS.md`, `.agents`, `.cursor/rules`, `docs/agent-loop`, `docs/ai`, GitHub workflow rails, guards, sync scripts, harness tests). Agents invoke the native `superpowers:using-superpowers` skill or the portable fallback at `.agents/skills/using-superpowers.md` — not starter feature specs or plans under `docs/superpowers/{project}/…`.
+Child projects still get agent execution rails (`AGENTS.md`, `.agents`, `.cursor/rules`, `docs/agent-loop`, `docs/ai`, GitHub workflow rails, guards, sync scripts, harness tests). For tasks that select the Superpowers workflow, agents can use the native `superpowers:using-superpowers` skill or the portable fallback at `.agents/skills/using-superpowers.md` — not starter feature specs or plans under `docs/superpowers/{project}/…`.
 
 ### Child project planning workflow
 

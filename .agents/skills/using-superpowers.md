@@ -5,7 +5,8 @@ natively.
 
 Native skills remain preferred. This file is only the project-level fallback
 that explains how to find and follow the same operating rules without a native
-skill runtime.
+skill runtime. It is optional and does not make Superpowers mandatory; use it
+when a task selects the Superpowers workflow and native loading is unavailable.
 
 ## Before Development Work
 

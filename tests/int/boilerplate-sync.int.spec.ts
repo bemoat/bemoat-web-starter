@@ -179,6 +179,71 @@ describe('synced harness CI and hooks', () => {
 })
 
 describe('boilerplate sync managed paths', () => {
+  it('retires unconditional Superpowers routing across synced guidance entrypoints', async () => {
+    // Issue #651 forbids the old unconditional entrypoint semantics while
+    // preserving the existing task-specific fallback registry.
+    const mod = await import('../../scripts/sync-boilerplate.ts')
+    const sourceRoot = process.cwd()
+    const childRoot = mkdtempSync(join(tmpdir(), 'bemoat-651-superpowers-routing-'))
+    const syncConfig = mod.getSourceSyncConfig(sourceRoot)
+    const activeGuidancePaths = [
+      'AGENTS.md',
+      '.agents/README.md',
+      '.agents/skills/using-superpowers.md',
+      '.cursor/rules/superpowers-using-superpowers.mdc',
+      'docs/agent-loop/README.md',
+      'docs/agent-loop/checklist.md',
+      'docs/agent-loop/composer-issue-workflow-prompt.md',
+      'docs/agent-loop/source-of-truth.md',
+      'docs/harness-sync-contract.md',
+    ]
+    const unconditionalSuperpowersMarkers = [
+      /start task work with native `superpowers:using-superpowers`/i,
+      /if native skill loading is unavailable, read `.agents\/skills\/using-superpowers\.md`/i,
+      /all agents working in this repository must begin task work/i,
+      /required starting skill/i,
+      /then run: superpowers:using-superpowers/i,
+      /started with `superpowers:using-superpowers`/i,
+      /invoke superpowers:using-superpowers before acting/i,
+      /child agents still start with native `superpowers:using-superpowers`/i,
+      /agents invoke the native `superpowers:using-superpowers` skill/i,
+    ]
+
+    try {
+      for (const path of activeGuidancePaths) {
+        expect(
+          isManagedFilePath(path, syncConfig.managedPaths),
+          `${path} must remain in the effective child sync config`,
+        ).toBe(true)
+      }
+
+      mod.syncPathsFromSource({
+        mode: mod.SYNC_MODES.HARNESS_ONLY,
+        syncConfig,
+        sourceRootPath: sourceRoot,
+        targetRootPath: childRoot,
+      })
+
+      const syncedGuidance = activeGuidancePaths.map((path) => [
+        path,
+        readFileSync(join(childRoot, path), 'utf8').replace(/\s+/g, ' '),
+      ] as const)
+
+      for (const [path, content] of syncedGuidance) {
+        for (const marker of unconditionalSuperpowersMarkers) {
+          expect(content, `${path} must not retain unconditional Superpowers routing`).not.toMatch(marker)
+        }
+      }
+
+      const agentsEntrypoint = new Map(syncedGuidance).get('.agents/README.md')
+      expect(agentsEntrypoint).toContain(
+        '| [`using-superpowers.md`](./skills/using-superpowers.md) | The IDE cannot invoke `superpowers:using-superpowers` natively. |',
+      )
+    } finally {
+      rmSync(childRoot, { recursive: true, force: true })
+    }
+  })
+
   it('delivers the Issue #546 intermediate test-author boundaries to child guidance', async () => {
     // Issue #546 defines the intermediate author contract. This protects its
     // managed delivery and fallback pointer, not runtime enforcement or worker
