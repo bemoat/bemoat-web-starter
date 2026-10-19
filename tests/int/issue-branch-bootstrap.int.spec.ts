@@ -296,22 +296,21 @@ describe('Issue #465 durable zero-delta branch bootstrap stories', () => {
       const issueACommit = git(['rev-parse', 'HEAD'], checkout)
       git(['push', '-u', 'origin', issueABranch], checkout)
 
-      // The source is durably parked before the same physical checkout returns
-      // to the independently observed protected-base tip. Capture and retain
-      // both local and live source refs across the target bootstrap.
+      // The source is durably parked and its exact local/live refs are captured
+      // before the same physical checkout creates the new target from base.
       expect(git(['rev-parse', `refs/heads/${issueABranch}`], checkout)).toBe(issueACommit)
       expect(git(['rev-parse', `refs/remotes/origin/${issueABranch}`], checkout)).toBe(issueACommit)
       expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueABranch}`], checkout).split('\t')[0]).toBe(issueACommit)
-      git(['switch', 'main'], checkout)
-      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
-      expect(git(['rev-parse', 'HEAD'], checkout)).toBe(liveMainSha)
-      expect(git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], checkout).split('\t')[0]).toBe(liveMainSha)
       expect(() => git(['show-ref', '--verify', '--quiet', `refs/heads/${issueBBranch}`], checkout)).toThrow()
       expect(() => git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${issueBBranch}`], checkout)).toThrow()
       expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueBBranch}`], checkout)).toBe('')
 
-      // Create the new target from the exact observed live-base SHA. Starting
-      // from Issue A instead would make the ancestry/file assertions fail.
+      // Prove this is the Issue-A-to-Issue-B transition: A remains attached and
+      // unchanged until the new target is created directly from exact live main.
+      expect(git(['branch', '--show-current'], checkout)).toBe(issueABranch)
+      expect(git(['rev-parse', 'HEAD'], checkout)).toBe(issueACommit)
+      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
+      expect(git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], checkout).split('\t')[0]).toBe(liveMainSha)
       git(['switch', '-c', issueBBranch, liveMainSha], checkout)
       expect(git(['rev-parse', 'HEAD'], checkout)).toBe(liveMainSha)
       expect(git(['log', '--format=%H'], checkout).split('\n')).toEqual([liveMainSha])

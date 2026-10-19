@@ -380,6 +380,10 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
    boundary with its required HANDOFF and readback. A live same-Issue
    `COMMAND` must not be abandoned, and there must be no active source writer
    or controller.
+   Terminal or parked release evidence must bind the same canonical source
+   Issue and same source branch to the exact current live source HEAD, with no
+   later source advancement. A missing, stale, or mismatched binding is `STOP`
+   before mutation.
 
    Before mutation, independently resolve the canonical repository and the
    fresh approved-base branch and exact live approved base SHA, plus the

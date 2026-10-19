@@ -238,6 +238,7 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(releaseContract).not.toBe('')
     expect(releaseContract).toMatch(/verified terminal COMPLETE evidence or merged evidence/i)
     expect(releaseContract).toMatch(/verified parked non-COMMAND durable boundary with its required HANDOFF and readback/i)
+    expect(releaseContract).toMatch(/release evidence.*same canonical source Issue.*same source branch.*exact current live source HEAD.*(?:no later source advancement|source has not advanced)/i)
     expect(releaseContract).toMatch(/no active source writer or controller/i)
     expect(releaseContract).toMatch(/(?:same checkout.*exact live approved base SHA|exact live approved base SHA.*same checkout)/i)
     expect(releaseContract).toMatch(/absent from local branches.*refs\/remotes\/origin.*live canonical remote/i)
