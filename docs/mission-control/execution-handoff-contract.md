@@ -494,45 +494,122 @@ unchanged stale target.
 
 ### Pre-Context dependency preparation
 
-For a development Issue checkout only, dependency preparation before registered
-CLI Discovery is permitted only after verifying the canonical repository root
-and `origin` against live GitHub identity, the approved-base branch identity and
-exact live approved-base SHA against both live GitHub and `git ls-remote` of
-canonical origin. The queried Issue and its handoff must uniquely establish
-one Issue-owned topic branch; competing or ambiguous branch candidates are
-`STOP`. Require a clean, attached, durable Issue branch whose canonical
-`origin/<branch>` upstream and exact live remote topic ref must both equal
-`HEAD`.
-In the ordinary case, require the exact live approved-base SHA to be an
-ancestor of `HEAD`. The only post-merge zero-delta case is an existing
-controller continuing on its existing Issue branch: use the historical
-approved-base SHA recorded in durable pre-merge evidence. Require this branch
-to be clean, attached, and durable; `HEAD` exactly equals the recorded
-historical approved-base SHA, and its canonical upstream and exact live remote
-topic ref equal `HEAD`. The recorded historical approved-base SHA is an
-ancestor of the current live approved-base SHA. This case does not authorize
-branch synchronization and does not select or grant a Context route. It permits only
-`pnpm install --frozen-lockfile --ignore-scripts --store-dir
+For a verified development Issue checkout only, dependency setup before registered CLI
+Discovery follows the verified startup sequence below. It is setup authority,
+not a Context route or permission to edit. First require canonical repo and
+canonical origin, queried Issue, topic branch, canonical upstream, live HEAD,
+and approved-base
+identity to agree. Verify the canonical repository root and `origin` against
+live GitHub identity; the approved-base branch and exact live SHA against
+GitHub and `git ls-remote`; the queried Issue and its handoff must uniquely
+establish one Issue-owned topic branch. Require a clean, attached, durable
+Issue branch whose canonical `origin/<branch>` upstream and exact live remote
+topic ref must both equal `HEAD`. In the ordinary case, the exact live
+approved-base SHA must be an ancestor of `HEAD`. The existing-controller
+post-merge zero-delta case remains limited to its recorded historical
+approved-base SHA: Require this branch to be clean, attached, and durable;
+`HEAD` exactly equals the recorded historical
+approved-base SHA; its canonical upstream and exact live remote topic ref equal
+`HEAD`; and the recorded historical approved-base SHA is an ancestor of the
+current live approved-base SHA. If fresh dependency preparation is needed in
+this case, permit only `pnpm install --frozen-lockfile --ignore-scripts --store-dir
 <task-local-store>`, followed by registered CLI Discovery and fresh Context.
-Use a Node version that
-satisfies `package.json`'s `engines.node` and matches the checked-in CI Node
-version. Use the pnpm version configured by checked-in CI and verify it against
-`package.json`'s `engines.pnpm` and the `pnpm-lock.yaml` lockfile version;
+This case does not authorize branch synchronization and does not select or
+grant a Context route. All other stale
+or conflicting states remain `STOP`. Dirty, wrong-origin, or ambiguous
+identity is also `STOP`.
+
+Validate the runtime without requiring the local Node patch to equal CI. The
+Node version satisfies `package.json`'s `engines.node` when it uses the supported
+Node runtime major, and does not need to match the checked-in CI Node version.
+For this repository Node 24 is supported: `24.18.0` is compatible with
+`>=24.15.0`; reject a version below minimum or outside the supported major. CI
+may retain its independent `24.15.0` pin. Use a pnpm version configured by
+checked-in CI and verify it against `package.json`'s `engines.pnpm` and the
+`pnpm-lock.yaml` lockfile version. pnpm must satisfy the manifest engine, the
+CI-supported pnpm major, and lockfile format together. For the current repository, pnpm
+`10.34.5` is compatible with the declared `^9 || ^10` engine, CI major 10, and
+lockfile format 9. An unsupported pnpm version, unsupported lockfile format,
+or unsupported required command option fails closed as `STOP`;
 `package.json` has no `packageManager` field, so do not infer a pnpm version
-from that field. Verify the active pnpm supports the frozen-lockfile,
-ignore-scripts, and store-dir options. Capture the `package.json` and
-`pnpm-lock.yaml` identities before installation. Run only
-`pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>`;
-lifecycle scripts must not run, and writes must be bounded to this checkout's
-`node_modules` and that task-local package store, the only permitted write
-locations. Afterwards, verify
-unchanged `HEAD`, branch, upstream, manifest and lockfile identities, and
-tracked cleanliness. Dirty, wrong-origin, conflicting, unsupported, failed, or
-changed state is `STOP`. All other stale or conflicting states remain `STOP`;
-do not invent a fallback route. Source D is
-explicitly excluded under its existing no-install/no-`node_modules` contract.
+from one.
+
+**P1 — read-only reuse.** Skip installation only when a read-only preflight
+positively proves every item below. Record locked manifest and
+`pnpm-lock.yaml` identities. Prove the root `pnpm-lock.yaml` and virtual-store
+lockfile are semantically equivalent. Prove `node_modules/.modules.yaml` names the
+expected virtual-store location and compatible linker/configuration and pnpm
+metadata, and record the resolved actual `storeDir`; there is no switch to a
+conflicting store. Resolve required symlinks and realpaths only within
+explicitly approved read-only dependency locations. Prove registered CLI entrypoint dependencies
+with non-mutating Node module resolution. Compare the required artifact
+fingerprints and check for hash/fingerprint/store drift. node_modules
+existence, a clean `git status`, a lockfile match alone, or pnpm metadata alone
+is insufficient. Missing, stale, partially populated, divergent, unsupported,
+or broken artifacts deny reuse; broken links deny reuse as well. Reuse denied means setup is not
+complete.
+
+**P2 — fresh preparation.** Only when the eligible development checkout has
+no prior `node_modules` or virtual-store metadata, select one stable,
+initially empty, uniquely Issue/checkout-owned task-local pnpm store inside
+independently proven Host write scope. Verify the active pnpm supports the
+required options, capture `package.json` and `pnpm-lock.yaml` identities, and
+run at most this exact install: `pnpm install --frozen-lockfile --ignore-scripts --store-dir <task-local-store>`.
+
+Lifecycle scripts must not run; writes must be bounded to this checkout's
+`node_modules` and that task-local package store. Read back unchanged `HEAD`,
+branch, upstream, manifest and lockfile identities, plus tracked and relevant
+ignored artifacts; verify tracked files remain clean. If an existing store is bound by module metadata, do not silently
+select a different `--store-dir`, re-home, reconcile, remove, or rebuild the
+installed tree.
+Reuse it only after P1; otherwise require the exact P3 incident evidence below
+or stop. Store selection must be deterministic, stable, uniquely owned, and
+individually proven within Host write scope, never inferred from a global
+default.
+
+**P3 — exact failed-setup identity.** Recovery consideration requires one
+incident record uniquely binding repository ID, Issue number, canonical remote
+topic branch and exact failed head, protected-base identity, physical checkout
+absolute path, Node/pnpm identities, `package.json` and root lockfile
+fingerprints, literal attempted install command/flags and store path, failure
+class/exit/stderr, before/after `node_modules`, virtual-store, pnpm-store and
+side-effect fingerprints, and ownership/no-concurrent-writer. Only the exact
+`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` failure or a fully characterized
+store mismatch before meaningful installation is eligible for this recovery.
+Arbitrary pnpm failures are excluded. Missing/stale/conflicting identity means
+recovery is denied; incomplete identity, terminal, dirty, unsupported, or
+changed state remains `STOP`. A non-TTY invocation without this exact eligible
+incident identity is fail-closed as `STOP`.
+
+Once separately merged §12/§13 authority and fresh exact recovery predicates
+permit recovery, apply the two outcomes in this order and at most once:
+
+1. **R1 — read-only reuse first.** Re-run P1 against the unchanged failed
+   checkout. If it now proves the existing dependencies valid, permit only
+   read-only reuse, with no installation or write, followed by registered CLI
+   Discovery and fresh Context under the newly merged recovery clause.
+2. **R2 — isolated checkout only when R1 cannot prove reuse.** Preserve the
+   failed physical checkout byte-for-byte, including ignored setup artifacts.
+   Acquire one new isolated same-Issue checkout bound to the one existing
+   canonical remote topic branch and its exact live head. Prove unique
+   ownership and Host capability; require clean/empty target `node_modules`
+   and one task-local store. The one exact frozen/ignore-scripts install is
+   permitted in that new checkout only, followed by registered Discovery and
+   fresh Context. A second failed setup is `STOP`; there is no loop.
+
+No in-place retry of `pnpm install` in the failed checkout is permitted; do
+not change its store. No
+unconditional `CI=true`, `--force`, `--yes`, `rm -rf`, non-interactive
+overrides, destructive cleanup, or module reconciliation/deletion. Do not
+bypass runtime or lockfile checks, broaden Host permission, create another
+Issue/branch; an old `STOP` is not resolved retroactively. Source D
+remains explicitly excluded by its no-install/no-`node_modules` contract.
 Successful setup permits only registered CLI Discovery followed by fresh
-Context; it grants no `COMMAND`, objective edit, or first-edit authority.
+Context. Successful setup grants no `COMMAND` or first-edit authority; fresh
+Context must independently authorize `COMMAND` through
+`next_action.type: COMMAND` before objective mutation, and the separately
+required first-edit trigger remains a separate one-time gate. HANDOFF, exact-head
+CI, review, and Founder-only merge gates are unchanged.
 
 ### Bridge B: stale target predates recovery emission
 
@@ -579,7 +656,7 @@ before its next route can be selected. Every other `STOP`, including a stale Con
 any additional conflict, remains `STOP`.
 
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. The single pre-Context dependency preparation under section 12 is allowed only as verified setup before initial CLI Discovery on an eligible development Issue checkout; after Discovery or a fresh `STOP`, it is unavailable and never grants objective-work authority. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Ordinary pre-Context dependency preparation under section 12 is available only as verified setup before initial CLI Discovery on an eligible development Issue checkout; it is unavailable after Discovery or a fresh `STOP`. The sole post-`STOP` exception for this dependency setup is a complete, fresh, non-conflicting P3 incident record from §12. That record may enter §12's R1 read-only recheck first; only if R1 cannot prove reuse may it proceed to §12's R2 isolated-checkout recovery, exactly once. This exception authorizes setup recovery only and never grants objective-work authority. Incomplete, stale, or conflicting P3 evidence, every other `STOP` for this setup path, and any second failure remain `STOP`. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.
