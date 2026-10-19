@@ -225,6 +225,44 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(continuationContract).toMatch(/remain `STOP`|stays fail-closed/i)
   })
 
+  // Oracle: Issue #605's preliminary objective and parked-source acceptance
+  // criterion uniquely permit source release only after terminal completion
+  // evidence or a durable non-COMMAND boundary with its required HANDOFF and
+  // readback, with no active writer. They do not specify a Context route or a
+  // serialized evidence schema, so this asserts only those eligibility facts.
+  it('limits same-checkout Issue release to terminal or durably parked non-COMMAND sources', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('### Pre-Context dependency preparation')[0] ?? ''
+
+    expect(continuationContract).toMatch(/terminal (?:completion|COMPLETE).*evidence/i)
+    expect(continuationContract).toMatch(/parked.*non[- ]COMMAND.*durable/i)
+    expect(continuationContract).toMatch(/required HANDOFF.*readback/i)
+    expect(continuationContract).toMatch(/no active (?:source )?(?:writer|controller)/i)
+    expect(continuationContract).toMatch(/same checkout.*exact live (?:approved )?base|exact live (?:approved )?base.*same checkout/i)
+    expect(continuationContract).toMatch(/absent Issue-B.*branch|Issue-B.*branch.*absent/i)
+    expect(continuationContract).toMatch(/no Issue-A (?:code|commit|history).*(?:carried|enter|included)|(?:carried|enter|included).*no Issue-A (?:code|commit|history)/i)
+    expect(continuationContract).toMatch(/no new Context route|adds no Context route/i)
+  })
+
+  // Oracle: Issue #605's live-COMMAND denial and negative acceptance criteria
+  // exclude abandoning an active source or proceeding with dirty/unresolved,
+  // stale, conflicting, colliding, concurrent, or unproven-host state. The
+  // issue does not authorize a fallback route for any exclusion.
+  it('keeps live COMMAND and unresolved source, target, concurrency, and host gaps fail-closed', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('### Pre-Context dependency preparation')[0] ?? ''
+
+    expect(continuationContract).toMatch(/live same-Issue `?COMMAND`?.*(?:cannot|must not|remain).*abandon|(?:cannot|must not).*abandon.*live same-Issue `?COMMAND`?/i)
+    expect(continuationContract).toMatch(/dirty.*unresolved.*STOP|STOP.*dirty.*unresolved/i)
+    expect(continuationContract).toMatch(/stale source HEAD|stale source head/i)
+    expect(continuationContract).toMatch(/moving (?:approved )?base|base (?:moves|movement)/i)
+    expect(continuationContract).toMatch(/competing.*target|target.*competing/i)
+    expect(continuationContract).toMatch(/active (?:source )?(?:writer|controller).*STOP|STOP.*active (?:source )?(?:writer|controller)/i)
+    expect(continuationContract).toMatch(/host (?:write|isolation).*proof.*STOP|STOP.*host (?:write|isolation).*proof/i)
+  })
+
   // Oracle: #632 Objective A's acceptance criteria and the user's request for
   // one minimal policy amendment specify the eligible development checkout,
   // exact frozen install, bounded effects, and negative exclusions. The test

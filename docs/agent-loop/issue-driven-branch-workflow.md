@@ -151,18 +151,31 @@ This is the only branch-setup exception permitted before a passing Context
 preflight. It publishes branch identity; it does not publish implementation
 work. Context remains strictly read-only. No registered `bemoat:*` command
 owns first-time branch creation or publication, so this procedure is the
-explicitly bounded native Git mutation boundary.
+explicitly bounded native Git mutation boundary. Its ordinary eligibility
+requires a checkout at the exact live base. The sole additional case is the
+same-checkout release authorized by §12: an independently verified terminal
+or durably parked non-`COMMAND` source Issue may establish its absent next
+Issue branch directly from that exact base in the same physical checkout.
+That case relaxes only the current-branch and `HEAD`-equals-base predicates
+below; every other bootstrap identity, absence, durability, cleanliness,
+readback, and first-edit condition remains required.
 
 The bootstrap is eligible only when all of the following are proven before
 mutation:
 
 - the checkout is attached, clean, and contains no staged, unstaged, or
-  untracked work;
+  untracked work; for the §12 same-checkout release case, the attached source
+  branch, canonical origin, exact upstream, source `HEAD`, tracking ref, live
+  remote head, release boundary, inactive writer/controller, unique absent
+  target, exact live base, and effective host write scope must all be proven
+  before using that exception;
 - `origin` is the canonical repository;
 - local `HEAD` equals the exact live protected or integration base SHA chosen
   by repository policy (`dev` normally, or `main` for this starter while its
-  documented exception applies);
-- the local topic branch must be absent;
+  documented exception applies), except that the §12 same-checkout release
+  case creates the target directly from that exact SHA while preserving the
+  source branch and its refs;
+- the target local topic branch must be absent;
 - `refs/remotes/origin/<topic-branch>` must also be absent; a stale or
   conflicting tracking ref is a `STOP` and must be reconstructed separately;
 - the topic name follows `<type>/<issue-number>-<short-slug>`; and
@@ -182,8 +195,11 @@ git ls-remote --heads origin refs/heads/<base-branch> refs/heads/<topic-branch>
 ```
 
 The live base line must contain exactly one base ref whose 40-hex SHA matches
-local `HEAD`; the topic line must be absent. A missing, malformed, or
-ambiguous result is a `STOP` before branch creation.
+local `HEAD` for ordinary bootstrap. For the §12 same-checkout release case,
+bind the exact live base SHA and source `HEAD` separately; create the target
+from the bound base SHA and require both source and target readbacks defined
+above. The target line must be absent. A missing, malformed, or ambiguous
+result is a `STOP` before branch creation. The live topic line must be absent.
 
 Only after every eligibility check passes, the bounded bootstrap write sequence
 is:
