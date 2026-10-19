@@ -13,6 +13,9 @@ const normalizedHandoff = handoff.replace(/\s+/g, ' ')
 const preparation = normalizedHandoff
   .split('### Pre-Context dependency preparation')[1]
   ?.split('### Bridge B: stale target predates recovery emission')[0] ?? ''
+const stopConditions = normalizedHandoff
+  .split('## 13. Stop conditions')[1]
+  ?.split('## 14. Founder decision status')[0] ?? ''
 const issueWorkflow = readFileSync(resolve(root, 'docs/agent-loop/issue-driven-branch-workflow.md'), 'utf8').replace(/\s+/g, ' ')
 const storyMatrix = readFileSync(resolve(root, 'docs/agent-loop/context-story-matrix.md'), 'utf8').replace(/\s+/g, ' ')
 
@@ -127,5 +130,17 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
     expect(issueWorkflow).toMatch(/Source D remains under its existing no.install\/no.`node_modules` contract/i)
     expect(storyMatrix).toMatch(/Source D.*no.install/i)
     expect(storyMatrix).toMatch(/STOP/i)
+  })
+
+  // Authority: §12's Founder-approved P3 defines the sole bounded recovery
+  // after a setup STOP. §13 must keep ordinary preparation unavailable after
+  // Discovery/STOP, admit only a complete fresh incident into ordered R1/R2
+  // once, and preserve every fail-closed and no-objective-authority boundary.
+  it('limits the post-STOP exception to one complete fresh P3 R1/R2 recovery', () => {
+    expect(stopConditions).toMatch(/ordinary pre.Context dependency preparation.*unavailable after Discovery or a fresh `STOP`/i)
+    expect(stopConditions).toMatch(/sole post-`STOP` exception for this dependency setup is a complete, fresh, non-conflicting P3 incident record from §12/i)
+    expect(stopConditions).toMatch(/That record may enter §12's R1 read-only recheck first; only if R1 cannot prove reuse may it proceed to §12's R2 isolated-checkout recovery, exactly once/i)
+    expect(stopConditions).toMatch(/never grants? objective.work authority/i)
+    expect(stopConditions).toMatch(/incomplete, stale, or conflicting P3.*every other `STOP`.*second failure.*remain `STOP`/i)
   })
 })
