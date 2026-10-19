@@ -85,7 +85,8 @@ already-published checkpoints just to reduce commit count.
 
 ## Before coding
 
-- [ ] Started with `superpowers:using-superpowers`
+- [ ] Checked whether a task-appropriate Superpowers workflow applies; if so,
+      loaded the native skill or portable fallback
 - [ ] Read `AGENTS.md` and this folder
 - [ ] Understood the task; confirmed no user override (e.g. "do not commit")
 - [ ] **Task-size tier classified** (small / medium / core) — see [Task-size tiers](#task-size-tiers)

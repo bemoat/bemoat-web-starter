@@ -407,6 +407,20 @@ describe('bemoat:handoff exact-head validation proof', () => {
     })
   })
 
+  it('classifies a Cursor rule file as docs-only safety validation', async () => {
+    const state = world({ files: ['.cursor/rules/superpowers-using-superpowers.mdc'] })
+    await publish(state)
+
+    expect(state.calls).toContain('pnpm run bemoat:guard:safety')
+    expect(state.calls).not.toContain('pnpm run bemoat:check')
+    expect(generatedProof(state)).toEqual({
+      status: 'PASS',
+      tier: 'docs-only',
+      command: 'pnpm run bemoat:guard:safety',
+      exact_head: HEAD_SHA,
+    })
+  })
+
   it('uses code validation when a docs path contains a code file', async () => {
     const state = world({ files: ['docs/validation-helper.ts'] })
     await publish(state)

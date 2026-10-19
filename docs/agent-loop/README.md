@@ -119,10 +119,14 @@ All coding agents should start by reading:
 - [`AGENTS.md`](../../AGENTS.md)
 - [`docs/agent-loop/operating-manual.md`](./operating-manual.md)
 
-Then run:
+When a task selects the Superpowers workflow, load the native skill when it is
+available:
 
 ```text
 superpowers:using-superpowers
 ```
+
+If native skill loading is unavailable, use the portable fallback at
+`.agents/skills/using-superpowers.md`.
 
 When GitHub issues, PRs, branches, or CI runs are in scope, use the GitHub skill (or `gh`) to inspect real state before acting.

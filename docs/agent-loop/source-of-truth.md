@@ -11,7 +11,7 @@ This document separates what **`bemoat-web-starter`** owns from what **child pro
 | UI execution guardrails | `docs/ai/ui-skills.md`, `docs/ai/ui-execution-workflow.md`, `docs/ai/visual-qa-checklist.md`, `docs/ai/accessibility-baseline.md`, `prompts/ui/*` |
 | GitHub templates | `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/*`, shared workflows |
 | Agent-loop docs | `docs/agent-loop/*`, `docs/workflow/*`, `docs/hardening.md`, `docs/releases.md`, `docs/deploy-smoke-test.md`, `docs/cloudflare-environments.md`, `docs/schema-evolution.md` |
-| Superpowers skill entry | Native `superpowers:using-superpowers` or portable fallback `.agents/skills/using-superpowers.md` — not `docs/superpowers/*` |
+| Task-appropriate Superpowers skill discovery | Native `superpowers:using-superpowers` or portable fallback `.agents/skills/using-superpowers.md` — not `docs/superpowers/*` |
 | Harness workflow | `scripts/guards/repo-safety.ts`, `scripts/guard-cloudflare-env.ts`, `scripts/check-branch-safety.sh`, `scripts/install-git-hooks.ts`, `.githooks`, `vitest.config.mts`, `vitest.setup.ts`, shared harness tests under `tests/int/` |
 | Payload schema (shared) | Shared collections and globals (seeded once) |
 | Starter UI | Shared starter pages (home, projects, blog, custom order, etc.; seeded once) |
@@ -92,7 +92,11 @@ These paths remain in `bemoat-web-starter` for learning and reference. The paren
 
 **Synced subpaths:** `docs/superpowers/README.md`, `docs/superpowers/specs/README.md`, `docs/superpowers/plans/README.md`, `docs/superpowers/plans/_templates`, and `docs/superpowers/specs/_templates` are in `managedPaths` and sync to child projects.
 
-Child agents still start with native `superpowers:using-superpowers` or the portable fallback at `.agents/skills/using-superpowers.md`. For canonical artifact names, reading order, and folder conventions, read the **local synced** `docs/superpowers/README.md`. Sync boundary details: [harness-sync-contract.md](../harness-sync-contract.md#child-project-planning-workflow).
+Child agents retain native `superpowers:using-superpowers` discovery and the
+portable fallback at `.agents/skills/using-superpowers.md` for tasks that select
+that workflow. For canonical artifact names, reading order, and folder
+conventions, read the **local synced** `docs/superpowers/README.md`. Sync
+boundary details: [harness-sync-contract.md](../harness-sync-contract.md#child-project-planning-workflow).
 
 ### Merged keep-child-content by `bemoat:boilerplate:sync`
 
