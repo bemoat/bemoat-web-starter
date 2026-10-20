@@ -365,6 +365,13 @@ describe('bemoat:handoff exact-head validation proof', () => {
     expect(generatedProof(state).tier).toBe('code')
   })
 
+  it('uses code validation for repository ignore configuration', async () => {
+    const state = world({ files: ['.gitignore'] })
+    await publish(state)
+    expect(state.calls).toContain('pnpm run bemoat:check')
+    expect(generatedProof(state).tier).toBe('code')
+  })
+
   it('uses code validation when a PR renames code to a Markdown path', async () => {
     const state = world({ renamedFile: true })
     await publish(state)
