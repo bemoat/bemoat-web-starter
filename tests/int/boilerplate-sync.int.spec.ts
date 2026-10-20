@@ -506,6 +506,25 @@ describe('boilerplate sync managed paths', () => {
     }
   })
 
+  it('syncs the pinned PStack consumption rails and command', async () => {
+    const mod = await import('../../scripts/sync-boilerplate.ts')
+    const pstackPaths = [
+      '.bemoat/pstack-pin.json',
+      'scripts/pstack.ts',
+      'docs/pstack.md',
+      'tests/int/pstack-pin.int.spec.ts',
+    ]
+
+    for (const path of pstackPaths) {
+      expect(
+        mod.managedPaths,
+        `${path} must be listed in managedPaths for child-compatible PStack sync`,
+      ).toContain(path)
+    }
+
+    expect(mod.managedPackageScripts).toContain('bemoat:pstack')
+  })
+
   it('documents starter-only docs paths outside managedPaths', async () => {
     const mod = await import('../../scripts/sync-boilerplate.ts')
 
