@@ -67,8 +67,11 @@ An update is an explicit reviewed change, not a floating fetch:
 1. Select a new exact upstream `cursor/plugins` commit.
 2. Recalculate the PStack subtree and both manifest blob hashes, and update the
    version in `.bemoat/pstack-pin.json`.
-3. Update the focused tests and this document if the contract changes.
-4. Run the PStack tests and the starter sync/check validation, then review the
+3. Update the matching fail-closed `EXPECTED_PIN` in `scripts/pstack.ts` and
+   the focused test fixture in `tests/int/pstack-pin.int.spec.ts`; these
+   mirrors must stay identical to the checked-in pin.
+4. Update this document if the contract changes.
+5. Run the PStack tests and the starter sync/check validation, then review the
    exact diff in a normal PR.
 
 To roll back, restore the previous pin, utility, documentation, and focused
