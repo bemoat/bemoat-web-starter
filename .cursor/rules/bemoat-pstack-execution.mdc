@@ -1,0 +1,98 @@
+---
+description: Bemoat authority boundary for the pinned Cursor PStack HOW layer
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Bemoat PStack execution seam
+
+This project-local rule documents the intended Cursor integration/configuration
+seam for the pinned PStack tree. Its presence does not install, activate, or
+prove that the PStack plugin/runtime is loaded or executable. It does not create
+a Node runtime, copy the plugin into `.agents`, or replace the registered
+`bemoat:pstack` command.
+
+## Activation and authority
+
+Fresh Bemoat Context authorizes each `IMPLEMENT`, `VERIFY`, `FIX`, and `REVIEW`
+objective. Use PStack HOW only for the current Context-authorized objective.
+Before the first source-file mutation, the one-time post-preflight first-edit
+trigger is mandatory. The first-edit trigger gates only the first source-file mutation; read-only `VERIFY` and `REVIEW` do not require it. The receiving
+chat's `poteto-mode` owns generic playbook orchestration as HOW only. Bemoat
+decides whether and what is authorized.
+
+The Bemoat controller is orchestration-only and owns all Bemoat authority and
+gates. It performs no source, test, or verification mutation. It does not choose a route, consume
+Founder authority, satisfy CI or review, merge, or select a future objective.
+It assigns bounded roles, collects worker evidence, verifies durable state,
+and synthesizes the result through the existing Bemoat contracts.
+The controller does not characterize the repository or perform deterministic
+verification.
+
+## Worker and reviewer topology
+
+The `poteto-agent` is a distinct worker for substantive characterization,
+test/oracle authoring, implementation, and deterministic verification. Assign
+one bounded role and one explicit write scope to each worker. The implementation
+worker is the sole mutation owner for its assigned source scope.
+
+Characterization and deterministic verification workers are distinct
+`poteto-agent` workers with read-only scopes. They may inspect the repository,
+run the assigned read-only checks, and return cited evidence only; neither may
+mutate source, tests, or verification state. `poteto-mode` remains generic HOW
+orchestration in the receiving chat, not a substitute for either worker.
+
+The PStack `interrogate` capability is a distinct independent semantic/Delta
+reviewer identity. It must not be the controller or implementation worker.
+The parent receiving chat only synthesizes evidence and never absorbs a failed
+worker's source, test, or verification work. A worker failure requires a safe
+retry or reassignment of that role, or Bemoat `STOP`; controller fallback is
+forbidden.
+
+Keep the exact Bemoat Issue, branch, head, upstream, protected base, and PR
+lineage bound throughout the work. Preserve the existing `bemoat:handoff`
+readback and fresh Context loop after a durable result.
+
+## Terminal workspace release
+
+Terminal workspace release is a Bemoat workflow operation, not PStack cleanup.
+A direct/single checkout may return to a clean verified protected base only
+after durable exact-head readback proves sole ownership, no active writer, and
+no unpushed work. A task worktree may be released or removed only after exact
+branch/head durability, unique ownership, clean state, and primary checkout
+preservation are proven. Missing proof is `STOP`. Bemoat's existing workflow
+handles later commit, push, and PR gates outside the PStack HOW layer. Merge
+remains subject to the existing no-autonomous-merge policy. PStack must not
+perform destructive cleanup.
+
+`STOP` and `FOUNDER_GATE` are no-mutation boundaries and prohibit all PStack execution; `COMPLETE` is a Bemoat terminal result. PStack cannot
+turn any of them into permission or invent a route, state, evidence vocabulary,
+or gate.
+
+## Explicit PStack allowlist
+
+For an authorized objective, the supported PStack HOW surface is limited to:
+
+- `poteto-mode` in the receiving Cursor chat for generic HOW/playbook
+  orchestration.
+- `poteto-agent` for distinct bounded workers.
+- The relevant worker skills, including `tdd`, `principle-prove-it-works`, and
+  `interrogate`, only within the roles and gates above.
+- The existing Bemoat `bemoat:context`, `bemoat:handoff`, and explicit
+  `bemoat:pstack check`/`discover` seams when their registered contracts call
+  for them.
+
+## Explicit PStack denylist
+
+Never select or invoke these PStack playbooks or actions for a Bemoat
+objective: `shipping`, `autonomous-run`, `autopilot-full`, `autopilot-stack`,
+`/autopilot`, `worktree-cleanup`, `orchestrate`, `opening-a-pr`, direct merge,
+PR/push/merge mutation, deployment, migration, or destructive cleanup. Do not create another
+controller, route, state, evidence vocabulary, or gate. Do not create or clean
+worktrees on PStack's behalf.
+
+If Cursor cannot provide the required distinct `poteto-agent` worker or
+reviewer capability, report the exact host limitation and stop. Do not
+simulate PStack, run the objective in the controller, or claim native Cursor
+execution from a read-only pin/discovery result.

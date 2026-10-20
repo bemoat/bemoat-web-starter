@@ -21,6 +21,8 @@ Canonical files:
 | mission-control-guide.md | Current policy, review boundaries, fail-closed safety, and sync rules |
 | command-reference.md | Public command and CLI Discovery contract |
 | execution-handoff-contract.md | On-demand ordered contract for Ready-to-paste Execution/IDE handoffs |
+| pstack-execution-contract.md | Authorized-objective PStack HOW-layer adapter; Bemoat remains the authority |
+| pstack-codex-adapter.md | Codex tool mapping for the pinned PStack HOW layer |
 | model-routing-profile.md | Advisory, on-demand model recommendations for bounded objectives |
 | handoff-template.md | Strict HANDOFF fields and publication example |
 | review-verdict-template.md | Parser-compatible native semantic review publication |

@@ -4,6 +4,37 @@ Issue #561 makes the official Cursor PStack tree available as a deterministic,
 task-local cache. It does not activate PStack, change Bemoat routing, or add a
 second workflow authority.
 
+Issue #562 adds the project-local HOW-layer contract at
+[`docs/mission-control/pstack-execution-contract.md`](mission-control/pstack-execution-contract.md).
+That contract consumes the verified cache only after fresh Bemoat Context has
+authorized a bounded objective. The `bemoat:pstack` utility remains an explicit
+pin/install/check/discover surface; it does not execute skills, enable
+automatic routing, or replace the Bemoat controller.
+
+The managed rule `.cursor/rules/bemoat-pstack-execution.mdc` documents the
+intended Cursor integration/configuration seam only. Its presence does not
+install or activate the PStack plugin and does not attest that a native PStack
+runtime is loaded or executable. Native runtime acceptance remains unverified.
+Fresh native Context authorizes each `IMPLEMENT`, `VERIFY`, `FIX`, and `REVIEW`
+objective. Context-authorized read-only `VERIFY` and `REVIEW` may use PStack
+HOW without the one-time post-preflight first-edit trigger; that trigger remains
+mandatory before the first source-file mutation. Substantive work is delegated
+to distinct `poteto-agent` workers; the Bemoat controller retains authority and
+gate ownership and only synthesizes worker evidence. Missing Cursor worker
+capability is a host boundary and must stop execution rather than invoke a
+local substitute. External PStack surgery is not native activation.
+
+On Codex, use [`docs/mission-control/pstack-codex-adapter.md`](mission-control/pstack-codex-adapter.md)
+to map the pinned PStack actions to the tools available to the Bemoat
+Controller. The Controller dispatches workers through its actual Host API;
+workers do not dispatch nested workers. The mapping does not activate the
+PStack plugin or change routing.
+
+The PStack HOW layer must not select `opening-a-pr`, invoke bare Cursor
+`/autopilot`, or perform PR/push/merge mutation. Bemoat's existing workflow
+handles later commit, push, PR, CI, review, and merge gates outside the PStack
+HOW layer; there is no autonomous merge or PStack shipping path.
+
 ## Approved pin
 
 The checked-in `.bemoat/pstack-pin.json` is the source of truth for the

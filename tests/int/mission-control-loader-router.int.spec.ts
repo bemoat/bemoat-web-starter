@@ -46,18 +46,18 @@ describe('Global Mission Control progressive-disclosure router', () => {
   })
 
   it('keeps a fresh COMMAND result inside the active controller session', () => {
-    expect(normalizedLoader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue automatically in the same Execution controller session/i)
-    expect(normalizedLoader).toMatch(/do not end the turn.*status.only response/i)
-    expect(normalizedLoader).toMatch(/return to Founder\/Global MC to relay the route.*ask for confirmation/i)
+    expect(loader).toContain('- Execution handoff: load `docs/mission-control/execution-handoff-contract.md`')
+    expect(normalizedExecutionHandoff).toMatch(/after that trigger has been satisfied, when fresh Context returns `next_action.type` as `COMMAND`, continue automatically with the authorized next separately bounded objective in the same controller session/i)
+    expect(normalizedExecutionHandoff).toMatch(/do not end the active controller turn with a status-only response, return to Founder to relay the route, or ask for confirmation again after `COMMAND`/i)
   })
 
   it('preserves the first-edit trigger without asking again after later COMMAND results', () => {
-    expect(normalizedLoader).toMatch(/one-time post-preflight implementation trigger.*before the first source-file edit/i)
-    expect(normalizedLoader).toMatch(/fresh `COMMAND` does not satisfy or waive that trigger/i)
-    expect(normalizedLoader).toMatch(/after that trigger has been satisfied, `COMMAND` means continue.*automatically/i)
-    expect(normalizedLoader).toMatch(/do not.*ask for confirmation again/i)
-    expect(normalizedLoader).toMatch(/`FOUNDER_GATE`.*return to Founder once.*required decision/i)
-    expect(normalizedLoader).toMatch(/`STOP`.*stop fail-closed/i)
+    expect(normalizedLoader).toMatch(/Fresh Context selects each `IMPLEMENT`, `VERIFY`, `FIX`, and `REVIEW` objective.*one-time post-preflight implementation trigger remains required before the first source-file edit/i)
+    expect(normalizedExecutionHandoff).toMatch(/the one-time post-preflight implementation trigger remains required before the first source-file edit after issue preflight.*a fresh `COMMAND` does not satisfy or waive that trigger/i)
+    expect(normalizedExecutionHandoff).toMatch(/if it has not yet been given, return the bounded intent summary and wait for that trigger before editing/i)
+    expect(normalizedExecutionHandoff).toMatch(/or ask for confirmation again after `COMMAND`/i)
+    expect(normalizedExecutionHandoff).toMatch(/for `FOUNDER_GATE`, do not mutate and return to Founder once for the required decision/i)
+    expect(normalizedExecutionHandoff).toMatch(/for `STOP`, unsupported state, or evidence conflict, do not mutate the authorized objective; stop fail-closed and report the exact blocker/i)
   })
 
   it('requires the fixed operator block before long artifacts', () => {
@@ -96,22 +96,22 @@ describe('Global Mission Control progressive-disclosure router', () => {
   // Oracle: Founder direction 5971335066 and the bounded checkout-recovery
   // clarification require operational guidance, not new Context routing.
   it('makes cross-session continuation executable after the human trigger', () => {
-    expect(normalizedLoader).toMatch(/after a human gate or implementation trigger.*Next action.*operator-executable/i)
-    expect(normalizedLoader).toMatch(/existing Execution\/IDE session.*send `continue`.*already-authorized/i)
-    expect(normalizedLoader).toMatch(/only when cross-session operator action is actually needed/i)
-    expect(normalizedLoader).toMatch(/do not use authorization-only wording.*proceed.*begin implementation.*continue.*without saying where and how/i)
+    expect(normalizedExecutionHandoff).toMatch(/existing active Execution\/IDE session for the same Issue.*when the session, workspace, and authority are still valid.*cross-session operator action is actually required/i)
+    expect(normalizedExecutionHandoff).toMatch(/smallest canonical compact operator action, such as `continue`, in a self-contained copy-ready artifact in the same response/i)
+    expect(normalizedExecutionHandoff).toMatch(/artifact itself MUST identify the repository, Issue, and exact next action, including that the authorized objective continues in this existing session/i)
+    expect(normalizedExecutionHandoff).toMatch(/`continue` by itself or in surrounding prose is incomplete/i)
+    expect(normalizedExecutionHandoff).toMatch(/if the current agent\/runtime can execute the authorized next action directly, perform it directly instead; do not manufacture a handoff merely to relay deterministic work/i)
   })
 
   it('requires no Founder action when the active controller must continue automatically', () => {
-    expect(normalizedLoader).toMatch(/active Execution controller.*`COMMAND`.*Next action.*no additional Founder\/operator action is required.*continue automatically/i)
+    expect(normalizedExecutionHandoff).toMatch(/NO ACTION REQUIRED — EXECUTION CONTINUES IN THIS SESSION.*Execution continues automatically in this same Execution session.*The Founder should not paste anything elsewhere or grant another approval/i)
   })
 
   it('keeps STOP recovery narrower than task or workflow mutation', () => {
     expect(normalizedLoader).toMatch(/`STOP`.*stop fail-closed for task\/source\/workflow mutation/i)
-    expect(normalizedLoader).toMatch(/exact-recovery and session rules in `docs\/mission.control\/execution.handoff.contract\.md`/i)
     expect(normalizedExecutionHandoff).toMatch(/switch grants no synchronization.*implementation.*future.objective authority/i)
-    expect(normalizedLoader).toMatch(/absent.*conflicting.*unsupported recovery.*stop/i)
-    expect(normalizedLoader).toMatch(/`FOUNDER_GATE` means no mutation and return to Founder once for the required decision/i)
+    expect(normalizedExecutionHandoff).toMatch(/missing, ambiguous, conflicting, or unsupported recovery remains STOP/i)
+    expect(normalizedExecutionHandoff).toMatch(/at `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation/i)
   })
 
   // Oracle: Founder comment 5972597691 says an explicit bounded recovery
@@ -131,12 +131,29 @@ describe('Global Mission Control progressive-disclosure router', () => {
   // contract.md requires return at terminal completion and fresh reconstruction
   // plus a newly appropriate handoff before starting a different Issue.
   it('ends the Execution session at terminal completion before another Issue', () => {
-    expect(normalizedLoader).toMatch(/after that trigger has been satisfied.*`COMMAND` means continue automatically in the same Execution controller session only while this Issue is nonterminal and fresh Context authorizes it/i)
     expect(normalizedLoader).toMatch(/do not pre.authorize future objectives/i)
-    expect(normalizedExecutionHandoff).toMatch(/On terminal completion, return/i)
+    expect(loader).toContain('- Execution handoff: load `docs/mission-control/execution-handoff-contract.md`')
+    expect(normalizedExecutionHandoff).toMatch(/Under `COMMAND`, continue automatically with the next separately bounded objective in this Issue's same controller session/i)
+    expect(normalizedExecutionHandoff).toMatch(/objective completion alone is not a Founder gate/i)
     expect(normalizedExecutionHandoff).toMatch(/terminal `COMPLETE` ends this Issue's active Execution session/i)
     expect(normalizedExecutionHandoff).toMatch(/a different Issue requires fresh Global MC reconstruction and a newly appropriate Execution handoff/i)
-    expect(normalizedLoader).toMatch(/one.time post.preflight implementation trigger.*before the first source.file edit/i)
+    expect(normalizedExecutionHandoff).toMatch(/after each durable objective and applicable HANDOFF\/readback: fresh GitHub.*merged policy.*applicable CLI Discovery.*fresh Context.*recompute route/i)
+  })
+
+  // Oracle: merged Mission Control guide v1.7, "Bounded objective execution",
+  // keeps one Global MC across sequential campaign Issues while requiring
+  // fresh Context after each durable result. #562 decision 6295209442 clarifies
+  // that each Issue gets its own Execution lineage, but an Issue change alone
+  // is not a Global MC control-plane boundary.
+  it('reconstructs fresh per-Issue authority inside a still-valid Global MC session', () => {
+    expect(normalizedExecutionHandoff).toMatch(/fresh live authority reconstruction within the same active Global MC session when it remains valid/i)
+    expect(normalizedExecutionHandoff).toMatch(/a different Issue requires a newly appropriate Execution handoff/i)
+    expect(normalizedExecutionHandoff).toMatch(/a new Global MC session is not required solely because the Issue changed/i)
+
+    expect(normalizedLoader).toMatch(/fresh live authority reconstruction within the same active Global MC session when it remains valid/i)
+    expect(normalizedLoader).toMatch(/a different Issue requires a new Execution handoff/i)
+    expect(normalizedLoader).toMatch(/a new Global MC session is not required solely because the Issue changed/i)
+    expect(normalizedLoader).not.toMatch(/Another Issue: fresh Global MC reconstruction/i)
   })
 
   // Oracle: Founder comment 5976454479 says generic handoff caution cannot
@@ -412,14 +429,18 @@ describe('Global Mission Control progressive-disclosure router', () => {
   // under the exact canonical acquisition conditions in section 12.
   it('keeps missing or ambiguous Issue-owned branch candidates at STOP', () => {
     expect(normalizedExecutionHandoff).toMatch(/missing, multiple, ambiguous, or conflicting candidates remain `STOP`; do not guess/i)
-    expect(normalizedLoader).toMatch(/absent, conflicting, or unsupported recovery.*stop/i)
+    expect(normalizedLoader).toMatch(/`STOP`.*stop fail-closed for task\/source\/workflow mutation/i)
     expect(normalizedExecutionHandoff).toMatch(/at `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12/i)
     expect(normalizedExecutionHandoff).toMatch(/at `FOUNDER_GATE`, include no mutation.capable instructions or delegated mutation/i)
   })
 
+  // Oracle: the protected-base AGENTS.md loader and canonical router semantics
+  // require the full execution contract for every authorized objective or
+  // recovery, including non-PStack work, so its §12/§13 gates remain available.
   it('routes each phase trigger to a real canonical contract and loads it only when triggered', () => {
     const routes = [
       ['Execution handoff', 'docs/mission-control/execution-handoff-contract.md'],
+      ['Authorized objective/recovery', 'docs/mission-control/execution-handoff-contract.md'],
       ['model recommendations', 'docs/mission-control/model-routing-profile.md'],
       ['REVIEW_VERDICT', 'docs/mission-control/review-verdict-template.md'],
       ['BLOCKER_RESOLUTION', 'docs/mission-control/blocker-resolution-template.md'],

@@ -2,18 +2,20 @@ import { execFileSync } from 'node:child_process'
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname, resolve, extname } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import type { SyncMode } from '../../scripts/boilerplate/types.ts'
 
 type BuildSyncMetadataInput = {
@@ -1687,7 +1689,73 @@ describe('boilerplate sync modes', () => {
 })
 
 describe('boilerplate drift check', () => {
-  const fixtureRoot = resolve(process.cwd(), '.tmp-boilerplate-drift-test')
+  const fixturePrefix = 'bemoat-boilerplate-drift-test-'
+  const checkoutRoot = realpathSync(
+    execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }).trim(),
+  )
+  const fixtureParent = realpathSync(tmpdir())
+  const fixtureParentFromCheckout = relative(checkoutRoot, fixtureParent)
+  const fixtureParentIsInsideCheckout =
+    fixtureParentFromCheckout === '' ||
+    (fixtureParentFromCheckout !== '..' &&
+      !fixtureParentFromCheckout.startsWith(`..${sep}`) &&
+      !isAbsolute(fixtureParentFromCheckout))
+
+  if (fixtureParentIsInsideCheckout) {
+    throw new Error(`Boilerplate drift fixtures must be outside the Git checkout: ${fixtureParent}`)
+  }
+
+  let fixtureRoot = ''
+  let fixtureIdentity: { dev: number; ino: number } | undefined
+
+  function createFixtureRoot() {
+    const createdRoot = mkdtempSync(join(fixtureParent, fixturePrefix))
+    const createdStat = lstatSync(createdRoot)
+    if (!createdStat.isDirectory() || createdStat.isSymbolicLink()) {
+      throw new Error(`Refusing to use non-directory boilerplate drift fixture path: ${createdRoot}`)
+    }
+
+    fixtureRoot = createdRoot
+    fixtureIdentity = { dev: createdStat.dev, ino: createdStat.ino }
+  }
+
+  function removeFixtureRoot() {
+    if (!fixtureIdentity) return
+
+    if (dirname(fixtureRoot) !== fixtureParent || !basename(fixtureRoot).startsWith(fixturePrefix)) {
+      throw new Error(`Refusing to remove unexpected boilerplate drift fixture path: ${fixtureRoot}`)
+    }
+
+    let fixtureStat
+    try {
+      fixtureStat = lstatSync(fixtureRoot)
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        throw new Error(`Refusing to remove missing boilerplate drift fixture path: ${fixtureRoot}`)
+      }
+      throw error
+    }
+
+    if (!fixtureStat.isDirectory() || fixtureStat.isSymbolicLink()) {
+      throw new Error(`Refusing to remove non-directory boilerplate drift fixture path: ${fixtureRoot}`)
+    }
+    if (fixtureStat.dev !== fixtureIdentity.dev || fixtureStat.ino !== fixtureIdentity.ino) {
+      throw new Error(`Refusing to remove unowned boilerplate drift fixture path: ${fixtureRoot}`)
+    }
+
+    rmSync(fixtureRoot, { recursive: true })
+    fixtureIdentity = undefined
+  }
+
+  function resetFixtureRoot() {
+    removeFixtureRoot()
+    createFixtureRoot()
+  }
+
+  afterAll(() => removeFixtureRoot())
 
   it('exposes deterministic drift comparison helpers from the owned workflow module', async () => {
     const mod = await import('../../scripts/boilerplate/workflows/check-boilerplate-drift.ts')
@@ -1701,7 +1769,7 @@ describe('boilerplate drift check', () => {
   it('detects boilerplate source repository at git root from package name and origin', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'starter'), { recursive: true })
     mkdirSync(join(fixtureRoot, 'child'), { recursive: true })
 
@@ -1722,13 +1790,13 @@ describe('boilerplate drift check', () => {
       mod.isBoilerplateSourceRepository(join(fixtureRoot, 'child'), 'boat1994/bemoat-web-starter'),
     ).toBe(false)
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('treats nested starter fixture inside child repo as source despite inherited parent git origin', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'child-repo', 'starter-fixture'), { recursive: true })
 
     writeFileSync(
@@ -1741,13 +1809,13 @@ describe('boilerplate drift check', () => {
     // override package-name detection for harness test fixtures.
     expect(mod.isBoilerplateSourceRepository(nestedFixture, 'boat1994/bemoat-web-starter')).toBe(true)
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('reports missing, changed, and identical managed paths', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'source'), { recursive: true })
     mkdirSync(join(fixtureRoot, 'target'), { recursive: true })
 
@@ -1765,13 +1833,13 @@ describe('boilerplate drift check', () => {
     expect(report.missing).toEqual(['README-child-only.md'])
     expect(report.identical).toEqual([])
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('does not treat child-owned package.json script or dependency drift as managed drift', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'source'), { recursive: true })
     mkdirSync(join(fixtureRoot, 'target'), { recursive: true })
 
@@ -1820,13 +1888,13 @@ describe('boilerplate drift check', () => {
     expect(fullReport.packageProposal).not.toBeNull()
     expect(mod.getDriftExitCode(fullReport)).toBe(0)
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('reports merge-keep drift when starter .gitignore rules are missing in child', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'source'), { recursive: true })
     mkdirSync(join(fixtureRoot, 'target'), { recursive: true })
 
@@ -1849,13 +1917,13 @@ describe('boilerplate drift check', () => {
       }),
     ).toBe(1)
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('does not fail when only customized seed files differ', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'source/src/app/(frontend)/blog/[slug]'), { recursive: true })
     mkdirSync(join(fixtureRoot, 'target/src/app/(frontend)/blog/[slug]'), { recursive: true })
 
@@ -1872,13 +1940,13 @@ describe('boilerplate drift check', () => {
     expect(report.managed.missing).toEqual([])
     expect(report.managed.changed).toEqual([])
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('reports missing seed files clearly', async () => {
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'source/src/app/(frontend)/custom-order'), { recursive: true })
 
     writeFileSync(join(fixtureRoot, 'source/src/app/(frontend)/custom-order/page.tsx'), 'starter page\n')
@@ -1892,14 +1960,14 @@ describe('boilerplate drift check', () => {
     expect(mod.getDriftExitCode(report)).toBe(1)
     expect(report.seed.missingSeed).toContain('src/app/(frontend)/custom-order/page.tsx')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 
   it('does not fail on missing starter app files in harness-only drift check', async () => {
     const syncMod = await import('../../scripts/sync-boilerplate.ts')
     const mod = await import('../../scripts/check-boilerplate-drift.ts')
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    resetFixtureRoot()
     mkdirSync(join(fixtureRoot, 'source/src/app/(frontend)/custom-order'), { recursive: true })
 
     writeFileSync(join(fixtureRoot, 'source/src/app/(frontend)/custom-order/page.tsx'), 'starter page\n')
@@ -1914,7 +1982,7 @@ describe('boilerplate drift check', () => {
     expect(report.seed.missingSeed).toEqual([])
     expect(mod.getDriftExitCode(report)).toBe(0)
 
-    rmSync(fixtureRoot, { recursive: true, force: true })
+    removeFixtureRoot()
   })
 })
 

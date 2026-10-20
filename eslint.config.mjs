@@ -29,6 +29,7 @@ const eslintConfig = [
       '.open-next/',
       '.worktrees/**',
       '.bemoat-check-tmp/**',
+      '.bemoat/pstack-cache/**',
       'src/payload-types.ts',
       'src/payload-generated-schema.ts',
     ],
