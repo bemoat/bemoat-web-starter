@@ -65,9 +65,9 @@ describe('structural protection guard', () => {
     expect((await guard()).map((entry: { rule: string }) => entry.rule)).toEqual([])
     expect(grandfathered).toHaveLength(4)
     expect(JSON.parse(readFileSync(join(root, 'scripts/structural-protection-manifest.json'), 'utf8'))).toEqual(manifest())
-    // The trusted-source bootstrap adds two production helper modules for its
-    // constrained source runtime and extracted command orchestration.
-    expect(scriptInventory(root)).toBe(121)
+    // The trusted-source bootstrap and pinned PStack utility add three
+    // production helper modules for constrained source/runtime tooling.
+    expect(scriptInventory(root)).toBe(122)
   })
 
   it('keeps the planning runtime within the default ceiling without a grandfathered exception', async () => {
