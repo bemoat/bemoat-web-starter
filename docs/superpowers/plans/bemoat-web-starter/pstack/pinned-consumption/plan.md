@@ -89,9 +89,9 @@ paired_plan: "docs/superpowers/plans/bemoat-web-starter/pstack/pinned-consumptio
 
 ### Task 3: Required validation and independent review
 
-- [ ] Run `pnpm run guard:safety`.
-- [ ] Run `pnpm run check`.
-- [ ] Run `pnpm run boilerplate:check` where useful for starter sync drift.
-- [ ] Verify exact branch/head/upstream readback and push each checkpoint.
-- [ ] Perform an independent semantic review confirming dependency introduction only, routing OFF, and unchanged Context/Handoff authority.
-- [ ] Audit every Issue #561 acceptance criterion before PR creation.
+- [x] Run `pnpm run guard:safety`.
+- [x] Run `pnpm run check` with the repository-approved local validation secret and elevated local-server permission; 82 suites and 1,705 tests passed.
+- [x] Run `pnpm run boilerplate:check` where useful for starter sync drift; expected managed drift against the pre-merge `main` baseline was reported.
+- [x] Verify exact branch/head/upstream readback and push each checkpoint.
+- [x] Perform an independent semantic review confirming dependency introduction only, routing OFF, and unchanged Context/Handoff authority.
+- [x] Audit every Issue #561 acceptance criterion before PR creation.
