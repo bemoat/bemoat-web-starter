@@ -13,6 +13,8 @@ import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { assertResultEnvelopeV1 } from '../../scripts/cli/command-result.ts'
+
 const ROOT = process.cwd()
 const ENTRYPOINT = resolve(ROOT, 'scripts/pstack.ts')
 const PIN_PATH = resolve(ROOT, '.bemoat/pstack-pin.json')
@@ -72,6 +74,20 @@ afterAll(() => {
 })
 
 describe('pinned Cursor pstack consumption', () => {
+  it('uses the registered Tier A help and result envelopes', () => {
+    const result = runPstack(['--help', '--json'])
+    const output = parseJson(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(output).toMatchObject({
+      schema_version: 1,
+      command: 'bemoat:pstack',
+      mode: 'help',
+      classification: 'HELP',
+      tier: 'A',
+    })
+  })
+
   it('records the exact canonical pin identity and keeps the floating homepage out of the pin', () => {
     const pin = JSON.parse(readFileSync(PIN_PATH, 'utf8')) as JsonRecord
 
@@ -100,12 +116,13 @@ describe('pinned Cursor pstack consumption', () => {
     const output = parseJson(result.stdout)
 
     expect(result.status).not.toBe(0)
+    assertResultEnvelopeV1(output)
     expect(output).toMatchObject({
       command: 'bemoat:pstack',
-      operation: 'install',
+      mode: 'result',
       classification: 'STATE_CONFLICT',
-      automatic_routing: false,
     })
+    expect(output.details).toMatchObject({ operation: 'install', automatic_routing: false })
     expect(git(cache, ['rev-parse', 'HEAD'])).toBe(before)
     expect(readFileSync(join(cache, 'sentinel.txt'), 'utf8')).toBe('preserve me\n')
     expect(existsSync(join(cache, 'pstack'))).toBe(false)
@@ -120,12 +137,13 @@ describe('pinned Cursor pstack consumption', () => {
     const output = parseJson(result.stdout)
 
     expect(result.status).not.toBe(0)
+    assertResultEnvelopeV1(output)
     expect(output).toMatchObject({
       command: 'bemoat:pstack',
-      operation: 'check',
+      mode: 'result',
       classification: 'STATE_CONFLICT',
-      automatic_routing: false,
     })
+    expect(output.details).toMatchObject({ operation: 'check', automatic_routing: false })
     expect(readFileSync(join(cache, 'pstack', 'unexpected.txt'), 'utf8')).toBe('drift\n')
   })
 
@@ -141,19 +159,27 @@ describe('pinned Cursor pstack consumption', () => {
 
     expect(check.status).toBe(0)
     expect(discover.status).toBe(0)
+    assertResultEnvelopeV1(checkOutput)
+    assertResultEnvelopeV1(discoverOutput)
     expect(checkOutput).toMatchObject({
       command: 'bemoat:pstack',
-      operation: 'check',
+      mode: 'result',
       classification: 'SUCCESS',
       mutation_performed: false,
+    })
+    expect(checkOutput.details).toMatchObject({
+      operation: 'check',
       pin: EXPECTED_PIN,
       automatic_routing: false,
     })
     expect(discoverOutput).toMatchObject({
       command: 'bemoat:pstack',
-      operation: 'discover',
+      mode: 'result',
       classification: 'SUCCESS',
       mutation_performed: false,
+    })
+    expect(discoverOutput.details).toMatchObject({
+      operation: 'discover',
       pin: EXPECTED_PIN,
       automatic_routing: false,
       skills: expect.arrayContaining(['architect', 'tdd']),

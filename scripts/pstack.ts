@@ -11,6 +11,10 @@ import {
 import { fileURLToPath } from 'node:url'
 import { join, resolve } from 'node:path'
 
+import { createHelpEnvelopeV1, formatTextHelp } from './cli/command-help.ts'
+import { CliInvocationError, parseCommandInvocation, resolveCommandIdentity, type ParsedInvocation } from './cli/command-invocation.ts'
+import { classificationExitCode, createResultEnvelopeV1 } from './cli/command-result.ts'
+
 const COMMAND = 'bemoat:pstack'
 const PIN_RELATIVE_PATH = '.bemoat/pstack-pin.json'
 const DEFAULT_CACHE_DIR = '.bemoat/pstack-cache'
@@ -242,7 +246,7 @@ function identity(pin: Pin) {
   }
 }
 
-function successOutput(
+function successDetails(
   operation: string,
   pin: Pin,
   cacheDir: string,
@@ -250,10 +254,7 @@ function successOutput(
   details: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
-    schema_version: 1,
-    command: COMMAND,
     operation,
-    classification: 'SUCCESS',
     mutation_performed: mutationPerformed,
     cache_dir: cacheDir,
     pin: clonePin(pin),
@@ -263,124 +264,108 @@ function successOutput(
   }
 }
 
-function helpOutput(): Record<string, unknown> {
-  return {
-    schema_version: 1,
+function renderHelp(invocation: Extract<ParsedInvocation, { mode: 'help' }>): void {
+  if (invocation.format === 'json') {
+    process.stdout.write(`${JSON.stringify(createHelpEnvelopeV1(invocation.contract))}\n`)
+    return
+  }
+  process.stdout.write(formatTextHelp(invocation.contract))
+}
+
+function renderResult({
+  operation,
+  format,
+  classification,
+  mutationPerformed,
+  pin,
+  cacheDir,
+  details,
+}: {
+  operation: string
+  format: 'json' | 'text'
+  classification: 'SUCCESS' | Classification
+  mutationPerformed: boolean
+  pin: Pin
+  cacheDir: string
+  details?: Record<string, unknown>
+}): void {
+  const successful = classification === 'SUCCESS'
+  const envelope = createResultEnvelopeV1({
     command: COMMAND,
-    mode: 'help',
-    classification: 'HELP',
-    tier: 'A',
-    purpose: 'Manage and inspect the exact Cursor pstack cache without activating routing.',
-    usage: [
-      'pnpm run bemoat:pstack -- install [--cache-dir <path>]',
-      'pnpm run bemoat:pstack -- check [--cache-dir <path>]',
-      'pnpm run bemoat:pstack -- discover [--cache-dir <path>]',
-    ],
-    automatic_routing: false,
-    writes: ['task-local cache only during explicit install'],
-    reads: [PIN_RELATIVE_PATH, 'the task-local Git cache'],
-  }
+    outcome: successful ? 'SUCCESS' : 'STOP',
+    classification,
+    mutation_performed: mutationPerformed,
+    repository: 'bemoat/bemoat-web-starter',
+    next_action: {
+      type: successful ? 'COMPLETE' : 'STOP',
+      command: null,
+      reason: successful
+        ? 'The exact pinned PStack cache operation completed.'
+        : 'The exact pinned PStack cache operation did not complete.',
+    },
+    details: successDetails(operation, pin, cacheDir, mutationPerformed, details),
+  })
+  if (format === 'json') process.stdout.write(`${JSON.stringify(envelope)}\n`)
+  else process.stdout.write(`${successful ? 'SUCCESS' : 'STOP'}: ${operation} ${cacheDir}\n`)
+  process.exitCode = classificationExitCode(classification)
 }
 
-function parseInvocation(argv: string[]): { operation?: string; cacheDir?: string; json: boolean; help: boolean } {
-  const tokens = argv.filter((token) => token !== '--')
-  const json = tokens.includes('--json')
-  const help = tokens.includes('--help') || tokens.includes('-h')
-  let operation: string | undefined
-  let cacheDir: string | undefined
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token === '--json' || token === '--help' || token === '-h') continue
-    if (token === '--cache-dir') {
-      const value = tokens[index + 1]
-      if (!value || value.startsWith('-')) {
-        throw new PstackError('INVALID_INVOCATION', '--cache-dir requires a path')
-      }
-      if (cacheDir !== undefined) {
-        throw new PstackError('INVALID_INVOCATION', '--cache-dir may be provided only once')
-      }
-      cacheDir = value
-      index += 1
-      continue
-    }
-    if (token.startsWith('-')) {
-      throw new PstackError('INVALID_INVOCATION', `Unknown argument: ${token}`)
-    }
-    if (operation !== undefined) {
-      throw new PstackError('INVALID_INVOCATION', `Unexpected positional argument: ${token}`)
-    }
-    operation = token
-  }
-
-  if (!help && (!operation || !['install', 'check', 'discover'].includes(operation))) {
-    throw new PstackError('INVALID_INVOCATION', 'operation must be install, check, or discover')
-  }
-  return { operation, cacheDir, json, help }
-}
-
-function render(value: Record<string, unknown>, json: boolean): void {
-  if (json) {
-    process.stdout.write(`${JSON.stringify(value)}\n`)
-    return
-  }
-  if (value.classification === 'HELP') {
-    const usage = Array.isArray(value.usage) ? value.usage.join('\n') : String(value.usage)
-    process.stdout.write(`${usage}\n`)
-    return
-  }
-  process.stdout.write(`${String(value.classification)}: ${String(value.operation)} ${String(value.cache_dir)}\n`)
-}
-
-function renderError(error: unknown, operation: string | undefined, json: boolean, pin?: Pin): void {
-  const classification = error instanceof PstackError ? error.classification : 'INTERNAL_ERROR'
+function renderError(error: unknown, operation: string | undefined, format: 'json' | 'text', pin?: Pin): void {
+  const classification = error instanceof CliInvocationError
+    ? error.classification
+    : error instanceof PstackError
+      ? error.classification
+      : 'INTERNAL_ERROR'
   const reason = errorMessage(error)
-  const output: Record<string, unknown> = {
-    schema_version: 1,
+  const result = createResultEnvelopeV1({
     command: COMMAND,
-    operation: operation ?? null,
+    outcome: classification === 'INVALID_INVOCATION' ? 'ERROR' : 'STOP',
     classification,
     mutation_performed: false,
-    automatic_routing: false,
-    error: reason,
-  }
-  if (pin) {
-    output.pin = clonePin(pin)
-    output.pin_identity = identity(pin)
-  }
-  if (json) {
-    process.stdout.write(`${JSON.stringify(output)}\n`)
-  } else {
-    process.stderr.write(`${classification}: ${reason}\n`)
-  }
-  process.exitCode = classification === 'INVALID_INVOCATION' ? 2 : 1
+    repository: 'bemoat/bemoat-web-starter',
+    next_action: { type: 'STOP', command: null, reason },
+    details: {
+      operation: operation ?? null,
+      reason,
+      automatic_routing: false,
+      ...(pin ? { pin: clonePin(pin), pin_identity: identity(pin) } : {}),
+    },
+  })
+  if (format === 'json') process.stdout.write(`${JSON.stringify(result)}\n`)
+  else process.stderr.write(`ERROR: ${classification}: ${reason}\n`)
+  process.exitCode = classificationExitCode(classification)
 }
 
 function main(): void {
-  let invocation: ReturnType<typeof parseInvocation> | undefined
+  let invocation: ParsedInvocation | undefined
   let pin: Pin | undefined
   try {
-    invocation = parseInvocation(process.argv.slice(2))
-    if (invocation.help) {
-      render(helpOutput(), invocation.json)
-      return
-    }
+    const command = resolveCommandIdentity({ fallback: COMMAND, env: process.env, entrypoint: 'scripts/pstack.ts' })
+    invocation = parseCommandInvocation(command, process.argv.slice(2))
+    if (invocation.mode === 'help') return renderHelp(invocation)
+    if (invocation.mode !== 'run') throw new Error('run invocation required')
 
     const root = process.cwd()
     pin = readPin(root)
-    const cacheDir = resolve(root, invocation.cacheDir ?? pin.cache_dir)
+    const operation = String(invocation.values.operation)
+    const cacheDir = resolve(root, String(invocation.values.cache_dir ?? pin.cache_dir))
 
-    if (invocation.operation === 'install') {
+    if (operation === 'install') {
       const mutationPerformed = installCache(pin, cacheDir)
-      render(successOutput('install', pin, cacheDir, mutationPerformed), invocation.json)
+      renderResult({ operation, format: invocation.format, classification: 'SUCCESS', mutationPerformed, pin, cacheDir })
       return
     }
 
     validateCache(pin, cacheDir)
-    const details = invocation.operation === 'discover' ? discover(cacheDir, pin) : {}
-    render(successOutput(invocation.operation ?? 'check', pin, cacheDir, false, details), invocation.json)
+    const details = operation === 'discover' ? discover(cacheDir, pin) : {}
+    renderResult({ operation, format: invocation.format, classification: 'SUCCESS', mutationPerformed: false, pin, cacheDir, details })
   } catch (error) {
-    renderError(error, invocation?.operation, invocation?.json ?? process.argv.includes('--json'), pin)
+    renderError(
+      error,
+      invocation?.mode === 'run' ? String(invocation.values.operation) : undefined,
+      invocation?.format ?? (process.argv.includes('--json') ? 'json' : 'text'),
+      pin,
+    )
   }
 }
 
