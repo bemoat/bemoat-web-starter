@@ -60,5 +60,12 @@ export function utilityRoutes(): UtilityRoute[] {
       'bemoat:checkpoint:red-wip',
       'WIP RED; exact remote SHA readback complete; objective remains incomplete and Context authority is unchanged.',
     ),
+    utilityRoute(
+      'NOT_STATEFUL/explicit-authorized-pstack-pin',
+      'explicit-authorized-pstack-pin',
+      'Install, verify, or discover the exact pinned Cursor pstack cache without activating skills, agents, or automatic routing.',
+      'bemoat:pstack',
+      'PINNED_CACHE_VERIFIED; automatic routing remains disabled and Bemoat workflow authority is unchanged.',
+    ),
   ]
 }

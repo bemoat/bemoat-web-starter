@@ -58,3 +58,4 @@ node_modules/
 .bemoat-check-tmp/
 .bemoat-sync-tmp/
 /.bemoat/sdd/
+/.bemoat/pstack-cache/

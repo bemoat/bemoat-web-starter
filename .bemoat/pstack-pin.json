@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "repository": "cursor/plugins",
+  "repository_url": "https://github.com/cursor/plugins.git",
+  "subtree": "pstack",
+  "commit": "88d47514b82e7c44f00f2b2a72ff6dd12158038c",
+  "version": "0.15.29",
+  "tree": "34a0b817e5ea92375bb10f20b15cf750d4e8095a",
+  "manifest_blobs": {
+    "pstack/plugin.json": "2b28f689ca144500269499dd0d4ca5ab01891bf4",
+    "pstack/.cursor-plugin/plugin.json": "fe3321bdc728fe8dbd74c925e9913c4954450ecc"
+  },
+  "cache_dir": ".bemoat/pstack-cache",
+  "automatic_routing": false
+}
