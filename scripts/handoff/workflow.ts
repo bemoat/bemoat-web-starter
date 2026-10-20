@@ -36,7 +36,7 @@ function validationTier(files: string[]): ValidationTier {
     if (
       /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|css|scss|html|vue|svelte|py|sh|sql|json|jsonc|ya?ml|toml|lock|prisma|graphql|gql)$/.test(lower)
       || /^(src|scripts|tests|components|\.agents|\.codex)\//.test(file)
-      || /^(package\.json|pnpm-lock\.yaml|tsconfig[^/]*\.json|vitest\.config\.[^/]+|next\.config\.[^/]+|wrangler\.jsonc)$/.test(file)
+      || /^(\.gitignore|package\.json|pnpm-lock\.yaml|tsconfig[^/]*\.json|vitest\.config\.[^/]+|next\.config\.[^/]+|wrangler\.jsonc)$/.test(file)
     ) {
       hasCode = true
       continue

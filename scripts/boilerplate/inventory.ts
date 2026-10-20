@@ -5,11 +5,11 @@ export const syncManifestPath = '.bemoat/boilerplate-sync-manifest.json'
 
 export const managedPaths = [
   // Agent and workflow rails
-  'AGENTS.md', 'ANTIGRAVITY.md', '.agents', syncManifestPath, '.cursor/rules', 'docs/agent-loop',
+  'AGENTS.md', 'ANTIGRAVITY.md', '.agents', syncManifestPath, '.bemoat/pstack-pin.json', '.cursor/rules', 'docs/agent-loop',
   'docs/ai/ui-skills.md', 'docs/ai/ui-execution-workflow.md', 'docs/ai/visual-qa-checklist.md',
   'docs/ai/accessibility-baseline.md', 'prompts/ui', 'docs/workflow', 'docs/hardening.md',
   'docs/releases.md', 'docs/deploy-smoke-test.md', 'docs/cloudflare-environments.md',
-  'docs/schema-evolution.md', 'docs/dev-boilerplate.md', 'docs/boilerplate-sync-command.md',
+  'docs/schema-evolution.md', 'docs/dev-boilerplate.md', 'docs/boilerplate-sync-command.md', 'docs/pstack.md',
   'docs/harness-sync-contract.md', 'docs/guard-pack.md', 'docs/starter-acceptance-tests.md',
   'docs/mission-control/README.md', 'docs/mission-control/command-reference.md', 'docs/mission-control/mission-control-guide.md',
   'docs/mission-control/execution-handoff-contract.md', 'docs/mission-control/model-routing-profile.md',
@@ -38,7 +38,7 @@ export const managedPaths = [
   'scripts/guards/toolchain-contract.ts', 'scripts/bemoat-typecheck.ts',
   'tsconfig.harness-strict.json', '.bemoat/toolchain-contract.json',
   'scripts/guards/env-placeholder.ts', 'scripts/guards/frontend-seo.ts',
-  'scripts/check-branch-safety.sh', 'scripts/install-git-hooks.ts',
+  'scripts/check-branch-safety.sh', 'scripts/install-git-hooks.ts', 'scripts/pstack.ts',
   // Local harness hooks and integration tests
   '.githooks', 'vitest.config.mts', 'vitest.setup.ts', 'tests/helpers/vitestProcessLock.ts', 'tests/helpers/cli-boundary-harness.ts',
   'tests/setup/vitestGlobalSetup.ts', 'tests/int/api.int.spec.ts',
@@ -79,6 +79,7 @@ export const managedPaths = [
   'tests/int/cli-tier-b-boundaries.int.spec.ts',
   'tests/int/cli-tier-a-boundaries.int.spec.ts',
   'tests/int/install-git-hooks.int.spec.ts',
+  'tests/int/pstack-pin.int.spec.ts',
   'tests/int/command-runner.int.spec.ts',
   'tests/int/scripts-architecture.int.spec.ts',
   'tests/int/scripts-entrypoints-contract.int.spec.ts',
@@ -108,7 +109,7 @@ export const managedPackageScripts = [
   'bemoat:branch:check', 'bemoat:guard:safety', 'bemoat:guard:pack',
   'bemoat:guard:harness-contract',
   'bemoat:guard:cloudflare-env', 'bemoat:test:int', 'bemoat:typecheck', 'bemoat:check',
-  'bemoat:boilerplate:sync', 'bemoat:boilerplate:check', 'bemoat:hooks:install', 'bemoat:checkpoint:red-wip',
+  'bemoat:boilerplate:sync', 'bemoat:boilerplate:check', 'bemoat:hooks:install', 'bemoat:pstack', 'bemoat:checkpoint:red-wip',
 ]
 
 export const exactManagedPackageScripts = ['bemoat:typecheck']

@@ -56,6 +56,7 @@
     "bemoat:guard:pack": "node scripts/guard-pack.ts",
     "bemoat:guard:safety": "node scripts/guard-pack.ts",
     "bemoat:hooks:install": "node scripts/install-git-hooks.ts",
+    "bemoat:pstack": "node scripts/pstack.ts",
     "bemoat:test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts",
     "bemoat:typecheck": "node scripts/bemoat-typecheck.ts",
     "smoke:deploy": "node scripts/deploy-smoke-test.ts"

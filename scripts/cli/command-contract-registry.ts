@@ -276,6 +276,50 @@ const commands: Record<string, CommandContract> = {
     safe_help_invocation: 'pnpm run bemoat:context -- --help --json',
   }),
 
+  'bemoat:pstack': contract({
+    command: 'bemoat:pstack',
+    tier: 'A',
+    entrypoint: 'scripts/pstack.ts',
+    purpose: 'Manage and inspect the exact Cursor pstack cache without activating routing.',
+    operation: 'Install, verify, or inventory the approved exact-commit pstack cache as a non-stateful utility.',
+    accepted_pre_states: ['NOT_STATEFUL'],
+    required_inputs: [{
+      name: 'operation',
+      syntax: '<install|check|discover>',
+      kind: 'positional',
+      value_type: 'enum',
+      required: true,
+      source: 'caller',
+      multiple: false,
+      values: ['install', 'check', 'discover'],
+      description: 'Explicit pstack cache operation.',
+    }],
+    optional_flags: [
+      flag('cache_dir', '--cache-dir <path>', 'path', 'Task-local cache directory override.'),
+      flag('json', '--json', 'boolean', 'Emit machine-readable JSON output.'),
+    ],
+    required_evidence: [
+      'The checked-in pstack pin file matches the approved Cursor repository, commit, subtree, version, and manifest blobs.',
+      'The cache commit, clean state, subtree tree, manifest blobs, and declared plugin versions match the pin before check or discover succeeds.',
+    ],
+    reads: ['.bemoat/pstack-pin.json', 'task-local PStack Git cache', 'pstack skill and agent directory entries'],
+    writes: ['task-local PStack Git cache during explicit install only'],
+    stop_conditions: [
+      'Stop before mutation when the pin, cache identity, Git tree/blob evidence, version, or clean-state evidence is missing or conflicting.',
+      'Never overwrite an existing cache that does not match the approved pin.',
+      'Never copy PStack skills or agents into .agents, change Cursor settings, execute PStack, or change Bemoat routing authority.',
+    ],
+    examples: [
+      { description: 'Install the exact pinned cache.', argv: ['install', '--json'] },
+      { description: 'Verify the existing cache without mutation.', argv: ['check', '--json'] },
+      { description: 'List pinned skills and agents without activation.', argv: ['discover', '--json'] },
+    ],
+    parser_owner: 'scripts/pstack.ts',
+    safe_help_invocation: 'pnpm run bemoat:pstack -- --help --json',
+    last_validation_before_mutation: 'Validate the pin and reject every existing non-empty mismatched cache before any install write.',
+    post_write_readback: 'Re-read Git commit, clean state, subtree tree, manifest blobs, and manifest versions after install.',
+  }),
+
   'bemoat:boilerplate:check': contract({
     command: 'bemoat:boilerplate:check',
     tier: 'B',

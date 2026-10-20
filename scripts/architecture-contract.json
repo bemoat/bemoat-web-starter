@@ -137,6 +137,13 @@
       "migration_status": "retained"
     },
     {
+      "path": "scripts/pstack.ts",
+      "facade_disposition": "tooling_entrypoint",
+      "internal_destination": "scripts/tooling/pstack.ts",
+      "owning_slice": 7,
+      "migration_status": "retained"
+    },
+    {
       "path": "scripts/sync-boilerplate.ts",
       "facade_disposition": "composition_root",
       "internal_destination": "scripts/boilerplate/workflow.ts",
