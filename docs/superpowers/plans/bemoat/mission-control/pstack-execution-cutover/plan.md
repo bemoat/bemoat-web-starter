@@ -178,29 +178,37 @@ correction, has the following local validation evidence:
 - A separate earlier malformed verifier invocation accidentally ended in a
   trailing `.` and broadened to the full suite; it failed on loopback `EPERM`.
   This was a separate failed invocation, not a valid focused pass.
-- Local full check remains passed with exit 0 on command-scoped Host escalation:
-  `PAYLOAD_SECRET=ci-placeholder pnpm run check`. The safety guard passed 11
+- Latest local validation passed with exit 0: `env
+  PAYLOAD_SECRET=ci-placeholder pnpm run check`. The safety guard passed 11
   checks; lint and typecheck passed; integrations passed 83 files and
-  1,721/1,721 tests. API integration passed within the suite and no `EPERM` was
-  reported. The captured verifier output had no separate listener-status line.
-  The only warning was the nonfatal missing-email-adapter notice.
+  1,724/1,724 tests. The API listener passed without `EPERM`; the missing-email-
+  adapter warning was nonfatal.
 - Standalone `pnpm run guard:safety` and `git diff --check` passed.
 - An intermediate worker in the external workflow performed read-only
   registered CLI help and Context; Context returned
   `STOP / LOCAL_STATE_NOT_DURABLE`. This did **not** authorize native
   `COMMAND`; no source mutation was attributed to native Context. No HANDOFF or
   native PStack activation occurred, and native STOP remains unchanged.
-- Exact-head PR CI run `39474749870`: **FAILED**. Guard and TypeScript passed;
-  integration passed 82 files and failed 1, with 1,723/1,724 tests. The failure
-  was the stale R2 phrase in `tests/int/pstack-execution-cutover.int.spec.ts`.
-- Starter-strict run `39474749802`: **SKIPPED**.
-- PR-head review of `f511052efb28af5e34617959b0c04039caca1233`: **I-1 plus two
-  Minor findings; no Critical finding**. This is not a zero-Critical/Important
-  result. Fresh validation and review are **PENDING**.
-- Native PStack runtime acceptance: **PENDING**; external workflow and local
-  checks do not establish native activation or runtime execution.
-- Delivery (commit, push, and PR) remains **PENDING** in the external Surgery
-  Mode workflow.
+- Historical exact-head PR CI run `39474749870` for old head
+  `f511052efb28af5e34617959b0c04039caca1233`: **FAILED**. Guard and TypeScript
+  passed; integration passed 82 files and failed 1, with 1,723/1,724 tests.
+  The failure was the stale R2 phrase in
+  `tests/int/pstack-execution-cutover.int.spec.ts`. This is historical evidence
+  for `f511`, not the current head.
+- Exact-head PR CI run `39554823008` for
+  `3dbef9798356a6e25c4c098a6dbddb58dffd1a98`: **SUCCEEDED**.
+- Starter-strict run `39554823212` for that head: **SKIPPED**, not passed.
+- The independent exact-head PR review at
+  `3dbef9798356a6e25c4c098a6dbddb58dffd1a98` found zero Critical/Important and
+  two Minor findings: this stale plan delivery sentence and a separate
+  Cursor-rule wording note. This local plan correction addresses the delivery
+  sentence only; the Cursor-rule note remains separate and unmodified.
+- Correction commit `3dbef9798356a6e25c4c098a6dbddb58dffd1a98` is pushed; PR
+  `#662` is open as Draft and unmerged. This does not establish Issue completion
+  or merge.
+- Native Context remains `STOP / LOCAL_STATE_NOT_DURABLE`; native PStack runtime
+  acceptance remains **PENDING**. No native activation or authorization,
+  HANDOFF, Issue completion, or merge is claimed.
 
 ### Task 3: Run bounded semantic and repository validation
 
