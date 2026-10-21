@@ -11,11 +11,14 @@ it. A Codex mapping does not replace or modify that source.
 
 The upstream Codex mapping uses logical action names `spawn_agent`,
 `wait_agent`, and `close_agent` (only when the Host exposes close). These are
-not guaranteed registered tool identifiers. The verified current Host exposes
+not guaranteed registered tool identifiers. The specific implementation
+Host/session inspected for this candidate exposed
 `multi_agent_v1__spawn_agent`, `multi_agent_v1__wait_agent`, and
-`multi_agent_v1__close_agent`. Future Codex Hosts must inspect their actual
-tool schemas and map by capability; do not assume the `multi_agent_v1__`
-prefix or these exact identifiers.
+`multi_agent_v1__close_agent`. This is an observation from that implementation
+Host/session only, not a universal Codex guarantee or a guarantee about a
+reviewer Host. Every session must inspect its actual tool schemas and map by
+capability; do not assume the `multi_agent_v1__` prefix or these exact
+identifiers.
 
 ## Tool mapping
 
@@ -25,9 +28,9 @@ prefix or these exact identifiers.
 | Edit files | Use `apply_patch`. | Only the authorized implementation worker writes its assigned paths. |
 | Run a command | Use `functions.exec_command`. | Run only the command assigned to that worker and objective. |
 | Invoke a skill or slash command | Read and follow the complete official pinned `SKILL.md` or playbook file. | Do not claim native plugin activation or copy the skill into another tree. |
-| Dispatch an Agent or Task (`spawn_agent` logical action) | Current Host: `multi_agent_v1__spawn_agent`. | Required: retain each returned worker identity. Workers do not dispatch nested workers. |
-| Wait for a worker (`wait_agent` logical action) | Current Host: `multi_agent_v1__wait_agent`. | Required: the Controller records the result as evidence, not authority. |
-| Close a worker (`close_agent`, when available) | Current Host: `multi_agent_v1__close_agent`. | Optional across Hosts; use only when the actual Host schema exposes it. |
+| Dispatch an Agent or Task (`spawn_agent` logical action) | Observed implementation Host/session: `multi_agent_v1__spawn_agent`. | Required: retain each returned worker identity. Workers do not dispatch nested workers. |
+| Wait for a worker (`wait_agent` logical action) | Observed implementation Host/session: `multi_agent_v1__wait_agent`. | Required: the Controller records the result as evidence, not authority. |
+| Close a worker (`close_agent`, when available) | Observed implementation Host/session: `multi_agent_v1__close_agent`. | Optional across Hosts; use only when the actual Host schema exposes it. |
 
 `poteto-agent` is the pinned PStack worker guidance, not a native Codex worker
 type. Only the accountable Bemoat Controller dispatches workers. For each

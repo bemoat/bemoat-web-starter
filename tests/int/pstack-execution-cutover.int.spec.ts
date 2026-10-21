@@ -355,6 +355,21 @@ describe('Bemoat PStack execution cutover contract', () => {
   it('preserves the canonical section 12 dependency recovery ordering and Context gate', () => {
     const handoff = readText('docs/mission-control/execution-handoff-contract.md')
     const continuation = section(handoff, '## 12. Continuation rule', '## 13. Stop conditions')
+    const p2Clause = section(
+      continuation,
+      '**P2 — fresh preparation.**',
+      '**P3 — exact failed-setup identity.**',
+    )
+    const p3Clause = section(
+      continuation,
+      '**P3 — exact failed-setup identity.**',
+      'Arbitrary pnpm failures are excluded.',
+    )
+    const r2Clause = section(
+      continuation,
+      '**R2 — isolated checkout only when R1 cannot prove reuse.**',
+      'No in-place retry of `pnpm install` in the failed checkout is permitted;',
+    )
     const p1 = continuation.indexOf('**P1 — read-only reuse.**')
     const p2 = continuation.indexOf('**P2 — fresh preparation.**')
     const p3 = continuation.indexOf('**P3 — exact failed-setup identity.**')
@@ -381,12 +396,38 @@ describe('Bemoat PStack execution cutover contract', () => {
     expect(continuation).toMatch(
       /\*\*R1 — read-only reuse first\.\*\*.*Re-run P1 against the unchanged failed checkout.*no installation or write/i,
     )
-    expect(continuation).toMatch(
-      /\*\*R2 — isolated checkout only when R1 cannot prove reuse\.\*\*.*Acquire one new isolated same-Issue checkout.*one task-local store/i,
+    expect(r2Clause).toMatch(
+      /Acquire at most one new isolated same-Issue checkout \(one replacement physical checkout\) bound to the one existing canonical remote topic branch and its exact live head/i,
     )
-    expect(continuation).toMatch(/A second failed setup is `STOP`; there is no loop/i)
+    expect(r2Clause).toMatch(
+      /unique ownership, absence of any competing writer\/workspace, and Host capability/i,
+    )
+    expect(r2Clause).toMatch(
+      /The replacement must be clean and empty, with no prior `node_modules` or virtual-store metadata; require clean\/empty target `node_modules` and use its own initially empty, uniquely Issue\/checkout-owned task-local store within verified write scope/i,
+    )
+    expect(r2Clause).toMatch(
+      /Verify exact repository\/Issue\/upstream\/head\/base, Node\/pnpm, manifest\/lock, attempted command\/flags\/store, original artifact fingerprints and failure identity again immediately before setup, including proof that no prior replacement\/recovery attempt occurred/i,
+    )
+    expect(r2Clause).toMatch(
+      /Preserve the failed physical checkout byte-for-byte, including ignored setup artifacts/i,
+    )
+    expect(p3Clause).toMatch(
+      /Preserve the original failed physical checkout and task-local store byte-for-byte; neither may be in the replacement's write scope/i,
+    )
+    expect(r2Clause).toMatch(
+      /Any drift or identity, runtime, command, or store mismatch; dirty, nonempty replacement; missing or uncertain Host write scope; or destructive cleanup requirement is `STOP`/i,
+    )
+    expect(p2Clause).toMatch(
+      /initially empty,\s*uniquely Issue\/checkout-owned task-local pnpm store inside independently proven Host write scope/i,
+    )
+    expect(r2Clause).toMatch(
+      /The one exact frozen\/ignore-scripts install is permitted in that new checkout only, followed by registered Discovery and fresh Context/i,
+    )
+    expect(r2Clause).toMatch(
+      /A second failed setup or any second replacement attempt is `STOP`; there is no loop/i,
+    )
     expect(continuation).toMatch(
-      /No in-place retry of `pnpm install` in the failed checkout is permitted/i,
+      /No in-place retry of `pnpm install` in the failed checkout is permitted; do not change its store/i,
     )
     expect(continuation).toMatch(
       /The only pre-COMMAND exceptions are an exact existing-branch recovery prescribed by fresh Context, canonical wrong-Issue workspace acquisition below, and the single pre-Context dependency preparation in section 12/i,

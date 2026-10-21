@@ -583,12 +583,38 @@ absolute path, Node/pnpm identities, `package.json` and root lockfile
 fingerprints, literal attempted install command/flags and store path, failure
 class/exit/stderr, before/after `node_modules`, virtual-store, pnpm-store and
 side-effect fingerprints, and ownership/no-concurrent-writer. Only the exact
-`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` failure or a fully characterized
-store mismatch before meaningful installation is eligible for this recovery.
+`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` failure, a fully characterized
+store mismatch before meaningful installation, or the single already-recorded
+Issue #562 incident is eligible for this recovery. The #562 exception is
+limited to its preserved evidence in comment 6285952179: the literal
+command `pnpm install --frozen-lockfile --ignore-scripts --store-dir
+/private/tmp/bemoat-web-starter-562-pnpm-store`; Node `24.18.0`; pnpm
+`10.34.5`; manifest SHA-256
+`ddb7a26567c403fd79d412251c57ff86f027e574d56477af53bb994a21f8f227`; and root
+lock SHA-256
+`12c28ec205e322baf2ab838ca69f169685141916abe4fa11e375d70a3070c630`.
+Recorded pnpm progress was 1,005 resolved; 1,004 packages downloaded and
+1,004 packages added before Ctrl-C/SIGINT exit 130. The partial state had
+about 1,005 virtual-store directories and 2,397 symlinks, with a roughly
+1.1 GB store containing
+68,159 content files and 1,004 indices; `.modules.yaml` and virtual-store
+`lock.yaml` were absent. Exit 130 alone, a new or unbound SIGINT, or
+inferred/healthy status from those fingerprints is not eligible. This
+exception applies only to SIGINT after meaningful installation for the
+already-recorded #562 incident. It becomes usable only after this
+§12/§13 policy is separately merged and a fresh read-only check proves every
+P3 identity field, no prior replacement/recovery attempt, no drift in the
+original checkout/store or incident evidence, one canonical Issue
+branch/upstream at the exact live head and approved base, the exact
+runtime/manifest/lock/command/store identities, no competing writer, and
+verified Host capability. Preserve the original failed physical checkout and
+task-local store byte-for-byte; neither may be in the replacement's write
+scope.
 Arbitrary pnpm failures are excluded. Missing/stale/conflicting identity means
-recovery is denied; incomplete identity, terminal, dirty, unsupported, or
-changed state remains `STOP`. A non-TTY invocation without this exact eligible
-incident identity is fail-closed as `STOP`.
+recovery is denied; incomplete incident identity remains `STOP`; stale, conflicting,
+terminal, dirty, unsupported, or changed state remains `STOP`. A non-TTY
+invocation without one of these exact eligible incident identities is
+fail-closed as `STOP`.
 
 Once separately merged §12/§13 authority and fresh exact recovery predicates
 permit recovery, apply the two outcomes in this order and at most once:
@@ -599,15 +625,27 @@ permit recovery, apply the two outcomes in this order and at most once:
    Discovery and fresh Context under the newly merged recovery clause.
 2. **R2 — isolated checkout only when R1 cannot prove reuse.** Preserve the
    failed physical checkout byte-for-byte, including ignored setup artifacts.
-   Acquire one new isolated same-Issue checkout bound to the one existing
-   canonical remote topic branch and its exact live head. Prove unique
-   ownership and Host capability; require clean/empty target `node_modules`
-   and one task-local store. The one exact frozen/ignore-scripts install is
-   permitted in that new checkout only, followed by registered Discovery and
-   fresh Context. A second failed setup is `STOP`; there is no loop.
+   Acquire at most one new isolated same-Issue checkout (one replacement
+   physical checkout) bound to the one existing canonical remote topic branch
+   and its exact live head. Prove
+   unique ownership, absence of any competing writer/workspace, and Host
+   capability. The replacement must be clean and empty, with no prior
+   `node_modules` or virtual-store metadata; require clean/empty target
+   `node_modules` and use its own initially empty,
+   uniquely Issue/checkout-owned task-local store within verified write scope.
+   Verify exact repository/Issue/upstream/head/base, Node/pnpm, manifest/lock,
+   attempted command/flags/store, original artifact fingerprints and failure
+   identity again immediately before setup, including proof that no prior
+   replacement/recovery attempt occurred. Any drift or identity, runtime,
+   command, or store mismatch; dirty, nonempty replacement; missing or
+   uncertain Host write scope; or destructive cleanup requirement is `STOP`.
+   The one exact frozen/ignore-scripts install is permitted in that new checkout only,
+   followed by registered Discovery and fresh Context. A second failed setup
+   or any second replacement attempt is `STOP`; there is no loop.
 
 No in-place retry of `pnpm install` in the failed checkout is permitted; do
-not change its store. No
+not change its store. Do not clean, delete, move, reconcile, or otherwise
+mutate the failed checkout or store to prepare the replacement. No
 unconditional `CI=true`, `--force`, `--yes`, `rm -rf`, non-interactive
 overrides, destructive cleanup, or module reconciliation/deletion. Do not
 bypass runtime or lockfile checks, broaden Host permission, create another
@@ -665,7 +703,7 @@ before its next route can be selected. Every other `STOP`, including a stale Con
 any additional conflict, remains `STOP`.
 
 ## 13. Stop conditions
-Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Ordinary pre-Context dependency preparation under section 12 is available only as verified setup before initial CLI Discovery on an eligible development Issue checkout; it is unavailable after Discovery or a fresh `STOP`. The sole post-`STOP` exception for this dependency setup is a complete, fresh, non-conflicting P3 incident record from §12. That record may enter §12's R1 read-only recheck first; only if R1 cannot prove reuse may it proceed to §12's R2 isolated-checkout recovery, exactly once. This exception authorizes setup recovery only and never grants objective-work authority. Incomplete, stale, or conflicting P3 evidence, every other `STOP` for this setup path, and any second failure remain `STOP`. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
+Stop on missing, stale, conflicting, ambiguous, or unsupported evidence; failed required checks that cannot be corrected in scope; or any repository-defined stop condition. At `FOUNDER_GATE`, include no mutation-capable instructions or delegated mutation. At `STOP`, no objective mutation or delegation is allowed except the exact bounded recovery fresh Context prescribes under section 12, canonical wrong-Issue workspace acquisition under section 12, or the fully qualified Bridge B recovery in section 12; otherwise report the blocker and stop. Ordinary pre-Context dependency preparation under section 12 is available only as verified setup before initial CLI Discovery on an eligible development Issue checkout; it is unavailable after Discovery or a fresh `STOP`. The sole post-`STOP` exception for this dependency setup is a complete, fresh, non-conflicting P3 incident record from §12, including only the exact previously recorded #562 SIGINT-after-meaningful-install incident after the §12/§13 amendment is merged. That record may enter §12's R1 read-only recheck first; only if R1 cannot prove reuse may it proceed to §12's R2 isolated-checkout recovery, exactly once. The #562 path preserves its original failed checkout and store byte-for-byte and requires one clean, uniquely owned replacement at the same canonical branch and exact head with its own initially empty task-local store; exit 130 alone, evidence drift, competing writers, dirty/nonempty target, identity mismatch, cleanup, or replay remains `STOP`. This exception authorizes setup recovery only and never grants objective-work authority. Incomplete, stale, or conflicting P3 evidence, every other `STOP` for this setup path, and any second failure remain `STOP`. Workspace acquisition permits only the exact isolated setup in section 12 and never objective work. Missing, stale, conflicting, ambiguous, or unsupported recovery stays fail-closed. Mark implementation `NOT_APPLICABLE` with the route-based reason. A `STOP` reports its blocker and does not itself assert that Founder approval is required.
 
 ## 14. Founder decision status
 State `required`, `pending`, or `not_required` only when supported by fresh Context and evidence. While the route is unresolved because Global MC cannot run repository-local CLI, state `pending`; Execution/IDE MC must resolve it before mutation. `FOUNDER_GATE` requires a human decision from the Founder; no worker may cross or satisfy that gate. `STOP` may report a blocker without implying Founder approval. A handoff records a gate and never grants its approval.

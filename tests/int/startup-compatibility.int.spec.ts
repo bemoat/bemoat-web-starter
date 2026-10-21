@@ -18,6 +18,55 @@ const stopConditions = normalizedHandoff
   ?.split('## 14. Founder decision status')[0] ?? ''
 const issueWorkflow = readFileSync(resolve(root, 'docs/agent-loop/issue-driven-branch-workflow.md'), 'utf8').replace(/\s+/g, ' ')
 const storyMatrix = readFileSync(resolve(root, 'docs/agent-loop/context-story-matrix.md'), 'utf8').replace(/\s+/g, ' ')
+const p3MatrixStory = storyMatrix
+  .split('| Failed setup has exact incident identity')[1]
+  ?.split('| Exact P3 incident first receives')[0] ?? ''
+const recordedIncidentClause = preparation
+  .split('The #562 exception is limited to its preserved evidence in comment 6285952179:')[1]
+  ?.split('Arbitrary pnpm failures are excluded.')[0] ?? ''
+const p3IncidentClause = preparation
+  .split('Only the exact `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` failure,')[1]
+  ?.split('Once separately merged §12/§13 authority and fresh exact recovery predicates permit recovery,')[0] ?? ''
+const r2Clause = preparation
+  .split('2. **R2 — isolated checkout only when R1 cannot prove reuse.**')[1]
+  ?.split('No in-place retry of `pnpm install` in the failed checkout is permitted;')[0] ?? ''
+const r2SafetyClause = preparation
+  .split('The replacement must be clean and empty, with no prior `node_modules` or virtual-store metadata;')[1]
+  ?.split('The one exact frozen/ignore-scripts install is permitted in that new checkout only,')[0] ?? ''
+
+const assertRecordedIncidentEvidence = (source: string) => {
+  expect(source).toContain(
+    'the literal command `pnpm install --frozen-lockfile --ignore-scripts --store-dir /private/tmp/bemoat-web-starter-562-pnpm-store`; Node `24.18.0`; pnpm `10.34.5`; manifest SHA-256 `ddb7a26567c403fd79d412251c57ff86f027e574d56477af53bb994a21f8f227`; and root lock SHA-256 `12c28ec205e322baf2ab838ca69f169685141916abe4fa11e375d70a3070c630`.',
+  )
+  expect(source).toContain(
+    'Recorded pnpm progress was 1,005 resolved; 1,004 packages downloaded and 1,004 packages added before Ctrl-C/SIGINT exit 130.',
+  )
+  expect(source).toContain(
+    'The partial state had about 1,005 virtual-store directories and 2,397 symlinks, with a roughly 1.1 GB store containing 68,159 content files and 1,004 indices; `.modules.yaml` and virtual-store `lock.yaml` were absent.',
+  )
+}
+
+const assertExit130Denied = (source: string) => {
+  expect(source).toContain(
+    'Exit 130 alone, a new or unbound SIGINT, or inferred/healthy status from those fingerprints is not eligible.',
+  )
+}
+
+const assertR2SafetyDenied = (source: string) => {
+  expect(source).toContain(
+    'Any drift or identity, runtime, command, or store mismatch; dirty, nonempty replacement; missing or uncertain Host write scope; or destructive cleanup requirement is `STOP`.',
+  )
+}
+
+const expectClauseMutationToFail = (
+  source: string,
+  assertion: (value: string) => void,
+  mutate: (value: string) => string,
+) => {
+  const mutated = mutate(source)
+  expect(mutated).not.toBe(source)
+  expect(() => assertion(mutated)).toThrow()
+}
 
 describe('Issue #655 pre-Context startup compatibility oracle', () => {
   // Authority: #655 acceptance criterion 1 and Founder-approved P1 require
@@ -146,5 +195,111 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
     expect(stopConditions).toMatch(/That record may enter §12's R1 read-only recheck first; only if R1 cannot prove reuse may it proceed to §12's R2 isolated-checkout recovery, exactly once/i)
     expect(stopConditions).toMatch(/never grants? objective.work authority/i)
     expect(stopConditions).toMatch(/incomplete, stale, or conflicting P3.*every other `STOP`.*second failure.*remain `STOP`/i)
+  })
+
+  // Authority: Issue #655 P3 preserves the two original eligible failure
+  // classes; Issue #659 adds only its exact recorded #562 incident after the
+  // §12/§13 amendment is merged and fresh evidence is proven.
+  it('keeps the story matrix P3 failure classes aligned with the canonical exception', () => {
+    expect(p3MatrixStory).toMatch(/Only `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` or fully characterized store mismatch before meaningful installation is eligible/i)
+    expect(p3MatrixStory).toMatch(/Issue #562 comment 6285952179 is the sole additional failure class, eligible only after merged §12\/§13 policy and fresh exact evidence/i)
+  })
+
+  // Authority: Issue #659 criteria 1–4 plus the exact #562 readback
+  // (comment 6285952179) permit only one post-merge clean replacement for
+  // this recorded exit-130-after-meaningful-install incident. They exclude
+  // incomplete identity, drift, competing writers, unsafe targets/cleanup,
+  // and replay. This authority does not permit recovery before merge.
+  it('permits one exact #562 SIGINT recovery only through a clean replacement checkout', () => {
+    expect(p3IncidentClause).toContain('or the single already-recorded Issue #562 incident is eligible for this recovery.')
+    // Authority: #562 comment 6285952179 is the sole recorded incident
+    // identity. These facts distinguish that event from a generic exit 130
+    // or another SIGINT after a meaningful install.
+    expect(p3IncidentClause).toContain(
+      'The #562 exception is limited to its preserved evidence in comment 6285952179:',
+    )
+    assertRecordedIncidentEvidence(recordedIncidentClause)
+    assertExit130Denied(recordedIncidentClause)
+    expect(recordedIncidentClause).toContain(
+      'This exception applies only to SIGINT after meaningful installation for the already-recorded #562 incident.',
+    )
+    expect(p3IncidentClause).toContain(
+      'It becomes usable only after this §12/§13 policy is separately merged and a fresh read-only check proves every P3 identity field, no prior replacement/recovery attempt, no drift in the original checkout/store or incident evidence, one canonical Issue branch/upstream at the exact live head and approved base, the exact runtime/manifest/lock/command/store identities, no competing writer, and verified Host capability.',
+    )
+    expect(p3IncidentClause).toContain(
+      'incomplete incident identity remains `STOP`; stale, conflicting, terminal, dirty, unsupported, or changed state remains `STOP`.',
+    )
+
+    expect(r2Clause).toContain(
+      'Preserve the failed physical checkout byte-for-byte, including ignored setup artifacts.',
+    )
+    expect(r2Clause).toContain(
+      'Acquire at most one new isolated same-Issue checkout (one replacement physical checkout) bound to the one existing canonical remote topic branch and its exact live head.',
+    )
+    expect(r2Clause).toContain(
+      'Prove unique ownership, absence of any competing writer/workspace, and Host capability.',
+    )
+    expect(r2Clause).toContain(
+      'The replacement must be clean and empty, with no prior `node_modules` or virtual-store metadata;',
+    )
+    assertR2SafetyDenied(r2SafetyClause)
+    expect(r2Clause).toContain(
+      'A second failed setup or any second replacement attempt is `STOP`; there is no loop.',
+    )
+    expect(r2Clause).toContain(
+      'The one exact frozen/ignore-scripts install is permitted in that new checkout only,',
+    )
+  })
+
+  // These are in-memory document mutations, not recovery operations. Each
+  // mutation must be rejected by the clause-local authority assertion rather
+  // than succeeding because an unrelated later STOP remains in preparation.
+  it('fails closed when exact #562 evidence or R2 safety predicates are reversed', () => {
+    expectClauseMutationToFail(
+      recordedIncidentClause,
+      assertRecordedIncidentEvidence,
+      (source) => source.replace(
+        '`.modules.yaml` and virtual-store `lock.yaml` were absent.',
+        '`.modules.yaml` and virtual-store `lock.yaml` were present.',
+      ),
+    )
+
+    for (const [recorded, changed] of [
+      ['1,005 virtual-store directories', '1,004 virtual-store directories'],
+      ['2,397 symlinks', '2,396 symlinks'],
+      ['68,159 content files', '68,158 content files'],
+      ['1,004 indices', '1,003 indices'],
+    ]) {
+      expectClauseMutationToFail(
+        recordedIncidentClause,
+        assertRecordedIncidentEvidence,
+        (source) => source.replace(recorded, changed),
+      )
+    }
+
+    expectClauseMutationToFail(
+      recordedIncidentClause,
+      assertExit130Denied,
+      (source) => source.replace(
+        'Exit 130 alone, a new or unbound SIGINT, or inferred/healthy status from those fingerprints is not eligible.',
+        'Exit 130 alone, a new or unbound SIGINT, or inferred/healthy status from those fingerprints is eligible.',
+      ),
+    )
+    expectClauseMutationToFail(
+      r2SafetyClause,
+      assertR2SafetyDenied,
+      (source) => source.replace(
+        'missing or uncertain Host write scope; or destructive cleanup requirement is `STOP`.',
+        'verified Host write scope; or destructive cleanup requirement is `STOP`.',
+      ),
+    )
+    expectClauseMutationToFail(
+      r2SafetyClause,
+      assertR2SafetyDenied,
+      (source) => source.replace(
+        'destructive cleanup requirement is `STOP`.',
+        'destructive cleanup requirement is permitted.',
+      ),
+    )
   })
 })

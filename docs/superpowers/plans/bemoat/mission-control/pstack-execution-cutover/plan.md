@@ -60,7 +60,7 @@ Resolve current execution lineage from the authorized live evidence instead.
 
 ## Review Focus
 
-- An authorized objective must use PStack only after fresh `COMMAND` and the first-edit gate; STOP and FOUNDER_GATE must remain mutation-free. Test in the adapter contract and loader/handoff integration assertions.
+- Fresh Context authorizes each objective. Read-only `VERIFY`/`REVIEW` needs no first-edit trigger; the one-time trigger remains mandatory immediately before the first source mutation. `STOP`/`FOUNDER_GATE` remain absolute native boundaries, and external Surgery is not activation. Test these distinctions in the adapter contract and loader/handoff integration assertions.
 - The Bemoat controller must not self-execute or become a mutation fallback; the implementation worker must be distinct and sole writer. Test the role topology and worker-failure boundary.
 - The semantic reviewer must remain independent from both controller and implementer, including when PStack selects the review skill. Test explicit identity separation.
 - PStack discovery/check must remain read-only and routing-disabled, and a missing/unsupported host capability must not be replaced by a simulated runtime. Test the pinned utility output and host limitation text.
@@ -178,7 +178,7 @@ correction, has the following local validation evidence:
 - A separate earlier malformed verifier invocation accidentally ended in a
   trailing `.` and broadened to the full suite; it failed on loopback `EPERM`.
   This was a separate failed invocation, not a valid focused pass.
-- Full check passed with exit 0 on command-scoped Host escalation:
+- Local full check remains passed with exit 0 on command-scoped Host escalation:
   `PAYLOAD_SECRET=ci-placeholder pnpm run check`. The safety guard passed 11
   checks; lint and typecheck passed; integrations passed 83 files and
   1,721/1,721 tests. API integration passed within the suite and no `EPERM` was
@@ -190,12 +190,13 @@ correction, has the following local validation evidence:
   `STOP / LOCAL_STATE_NOT_DURABLE`. This did **not** authorize native
   `COMMAND`; no source mutation was attributed to native Context. No HANDOFF or
   native PStack activation occurred, and native STOP remains unchanged.
-- Exact-head PR CI: **PENDING**.
-- Post-correction independent semantic review: **PASS** — zero
-  Critical/Important findings. The reviewer was independent of the Controller,
-  implementation, test author, and verification workers. Follow-up confirmed
-  the Host-specific Codex mapping Minor is resolved. Independent PR-head
-  review: **PENDING**.
+- Exact-head PR CI run `39474749870`: **FAILED**. Guard and TypeScript passed;
+  integration passed 82 files and failed 1, with 1,723/1,724 tests. The failure
+  was the stale R2 phrase in `tests/int/pstack-execution-cutover.int.spec.ts`.
+- Starter-strict run `39474749802`: **SKIPPED**.
+- PR-head review of `f511052efb28af5e34617959b0c04039caca1233`: **I-1 plus two
+  Minor findings; no Critical finding**. This is not a zero-Critical/Important
+  result. Fresh validation and review are **PENDING**.
 - Native PStack runtime acceptance: **PENDING**; external workflow and local
   checks do not establish native activation or runtime execution.
 - Delivery (commit, push, and PR) remains **PENDING** in the external Surgery
