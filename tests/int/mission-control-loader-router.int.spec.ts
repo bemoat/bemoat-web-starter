@@ -271,6 +271,84 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(continuationContract).toMatch(/after (?:the )?(?:switch|transfer|checkout).{0,100}(?:registered CLI Discovery|fresh Context)/i)
   })
 
+  // Oracle: live #666 acceptance criteria and Founder decision 6340800913
+  // require the ordinary released Issue-A to Issue-B transfer in one physical
+  // checkout. Section 12 explicitly provides that setup path. Section 8 must
+  // not categorically restrict all pre-COMMAND workspace acquisition to clean,
+  // isolated preparation, which would exclude the authorized same-checkout
+  // branch transfer. This checks the policy contradiction, not a Context route.
+  it('does not exclude the section 12 same-checkout transfer from pre-COMMAND acquisition', () => {
+    const preCommandRule = normalizedExecutionHandoff
+      .split('No controller or worker may mutate the authorized objective before fresh Context')[1]
+      ?.split('## 9. Validation requirements')[0] ?? ''
+
+    expect(preCommandRule).not.toBe('')
+    expect(preCommandRule).not.toMatch(/workspace acquisition is limited to the clean, isolated preparation described there/i)
+  })
+
+  // Oracle: live #666 negative acceptance criteria and Founder decision
+  // 6340800913 require each unsafe source to STOP before Git mutation. This
+  // is contract-level coverage of §12's release predicate and STOP boundary,
+  // not proof that a runtime transfer gate evaluates these cases.
+  it.each([
+    ['#588 OPEN and clean without verified release', /missing or ambiguous release evidence/i],
+    ['uncommitted or unverified tracked work', /dirty or unresolved source work/i],
+    ['unpushed source ref or missing live remote readback', /detached or local-only source/i],
+    ['competing source writer or controller', /active source writer\/controller/i],
+    ['live same-Issue COMMAND', /live same-Issue `COMMAND`/i],
+    ['stale or moving approved base', /stale or moving base/i],
+    ['duplicate or colliding target', /competing target or target collision/i],
+    ['wrong canonical origin or source upstream', /wrong origin\/upstream/i],
+    ['missing effective Host write scope', /missing independent host write-scope proof/i],
+  ] as const)('requires STOP before Git mutation for %s', (_case, deniedCondition) => {
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
+    const sourceStop = releaseContract
+      .match(/Any dirty or unresolved source work[\s\S]*?`STOP` before Git mutation\./i)?.[0] ?? ''
+
+    expect(releaseContract).toMatch(/source Issue is independently proven releasable/i)
+    expect(releaseContract).toMatch(/inventory every staged, unstaged, untracked, and ignored path/i)
+    expect(releaseContract).toMatch(/authorized semantic or RED\/WIP checkpoint commit, nonforce push, and exact live remote SHA readback/i)
+    expect(releaseContract).toMatch(/verified terminal COMPLETE evidence or merged evidence, or a verified parked non-COMMAND durable boundary with its required HANDOFF and readback/i)
+    expect(sourceStop).toMatch(deniedCondition)
+    expect(sourceStop).toMatch(/is `STOP` before Git mutation/i)
+  })
+
+  it('stops unresolved untracked, ignored, secret-bearing, or dependency-contaminated source state before Git mutation', () => {
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
+
+    expect(releaseContract).toMatch(/inventory every staged, unstaged, untracked, and ignored path.*prove no unresolved task-owned, unknown, conflicting, secret-bearing, or dependency-contaminated state remains/i)
+    expect(releaseContract).toMatch(/unproven or drifting ignored artifacts are `STOP`/i)
+    expect(releaseContract).toMatch(/any dirty or unresolved source work.*is `STOP` before Git mutation/i)
+  })
+
+  // Oracle: live #666 negative acceptance criteria require exact source and
+  // target identity, current-head parked evidence, and collision-free target
+  // refs before transfer. §12 uniquely says mismatch is STOP before mutation
+  // or before fetch/checkout; this is contract-level coverage only.
+  it('stops stale or mismatched parked HANDOFF binding and target refs before transfer', () => {
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
+    const sourceBinding = releaseContract
+      .split('Terminal or parked release evidence must bind')[1]
+      ?.split('Before mutation')[0] ?? ''
+    const prefetch = releaseContract
+      .split('Before any fetch')[1]
+      ?.split('For a terminal source Issue transferring')[0] ?? ''
+
+    expect(sourceBinding).toMatch(/same canonical source Issue and same source branch to the exact current live source HEAD, with no later source advancement/i)
+    expect(sourceBinding).toMatch(/missing, stale, or mismatched binding is `STOP` before mutation/i)
+    expect(prefetch).toMatch(/exact live canonical remote target head or prove its absence/i)
+    expect(prefetch).toMatch(/every pre-existing local target ref and every pre-existing tracking ref must already equal that exact live head/i)
+    expect(prefetch).toMatch(/stale or mismatched tracking ref.*`STOP` before fetch or checkout/i)
+    expect(releaseContract).toMatch(/exactly one existing target Issue branch on the canonical remote, its Issue ownership/i)
+    expect(releaseContract).toMatch(/ambiguous, or competing target refs are `STOP`/i)
+  })
+
   // Oracle: live #666 acceptance requires exact head/upstream/readback for an
   // existing remote target and names stale/divergent refs, wrong ownership,
   // and permissions as mutation blockers. Founder direction permits reuse only
