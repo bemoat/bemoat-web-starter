@@ -205,6 +205,12 @@ work, report the blocker and do not edit files. Never modify `main` directly or
 implement routine work on `dev`. If on a clean `main` or `dev`, complete the linked
 [durable zero-delta branch bootstrap](docs/agent-loop/issue-driven-branch-workflow.md#durable-zero-delta-branch-bootstrap)
 and verify the resulting issue branch is clean and durable before continuing.
+For sequential Issues, use one canonical physical checkout with separate
+durable Issue branches only after the exact source-release and target checks in
+[`execution-handoff-contract.md` §12](docs/mission-control/execution-handoff-contract.md#wrong-issue-workspace-acquisition).
+The narrowly bound same-Issue dirty-WIP exception permits only read-only CLI
+Discovery and fresh Context; it never authorizes edits, staging, commit, or
+push before a valid `COMMAND` and the separate first-edit trigger.
 
 ### Pre-Context dependency preparation
 
@@ -225,8 +231,10 @@ R2's separately authorized isolated same-Issue checkout. Source D remains
 no-install/no-`node_modules`. Unsupported evidence is `STOP`; setup grants no
 Context route, objective edit, or first-edit authority.
 
-Only after that setup succeeds, perform registered CLI Discovery and fresh
-Context:
+Only after that setup succeeds, or after exact same-Issue dirty-WIP read-only
+admission under §12 with every P1 predicate independently proven for that same
+checkout and its actual dependency roots, perform registered CLI Discovery and
+fresh Context. Do not transfer P1 evidence from another checkout:
 
 ```bash
 pnpm run bemoat:context -- --help --json

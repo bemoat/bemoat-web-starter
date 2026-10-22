@@ -331,4 +331,70 @@ describe('Issue #465 durable zero-delta branch bootstrap stories', () => {
       rmSync(sandbox, { recursive: true, force: true })
     }
   })
+
+  // Oracle: live #666 Acceptance Criteria require terminal Issue A to release
+  // the same physical checkout to a valid existing Issue-B branch while A's
+  // source refs and remote remain unchanged. Founder decision 6340800913 sets
+  // the one-checkout/per-Issue-branch default. This real-Git fixture verifies
+  // only the ref-preserving transfer mechanics; the companion policy story
+  // requires release evidence and fresh Context without inventing a route.
+  it('switches to an existing durable Issue-B branch while preserving Issue-A refs', () => {
+    const sandbox = mkdtempSync(join(tmpdir(), 'bemoat-666-existing-target-'))
+    const bare = join(sandbox, 'origin.git')
+    const seed = join(sandbox, 'seed')
+    const checkout = join(sandbox, 'checkout')
+    const git = (args: string[], cwd?: string) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim()
+    const issueABranch = 'fix/666-released-source-fixture'
+    const issueBBranch = 'fix/667-existing-target-fixture'
+
+    try {
+      git(['init', '--bare', '--initial-branch=main', bare])
+      git(['init', '--initial-branch=main', seed])
+      git(['config', 'user.name', 'Bootstrap Test'], seed)
+      git(['config', 'user.email', 'bootstrap-test@example.invalid'], seed)
+      writeFileSync(join(seed, 'base.txt'), 'protected base\n')
+      git(['add', 'base.txt'], seed)
+      git(['commit', '-m', 'seed protected main'], seed)
+      git(['remote', 'add', 'origin', bare], seed)
+      git(['push', '-u', 'origin', 'main'], seed)
+
+      git(['checkout', '-b', issueBBranch], seed)
+      writeFileSync(join(seed, 'issue-b.txt'), 'durable Issue B target\n')
+      git(['add', 'issue-b.txt'], seed)
+      git(['commit', '-m', 'Issue B target'], seed)
+      const issueBHead = git(['rev-parse', 'HEAD'], seed)
+      git(['push', '-u', 'origin', issueBBranch], seed)
+
+      git(['clone', '--branch', 'main', bare, checkout])
+      git(['config', 'user.name', 'Bootstrap Test'], checkout)
+      git(['config', 'user.email', 'bootstrap-test@example.invalid'], checkout)
+      const liveMainSha = git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], checkout).split('\t')[0]
+      git(['fetch', 'origin', issueBBranch], checkout)
+      git(['checkout', '-b', issueBBranch, '--track', `origin/${issueBBranch}`], checkout)
+      expect(() => git(['merge-base', '--is-ancestor', liveMainSha, `refs/heads/${issueBBranch}`], checkout)).not.toThrow()
+      git(['checkout', '-b', issueABranch], checkout)
+      writeFileSync(join(checkout, 'issue-a.txt'), 'terminal Issue A source\n')
+      git(['add', 'issue-a.txt'], checkout)
+      git(['commit', '-m', 'Issue A work'], checkout)
+      const issueAHead = git(['rev-parse', 'HEAD'], checkout)
+      git(['push', '-u', 'origin', issueABranch], checkout)
+
+      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
+      expect(git(['rev-parse', `refs/remotes/origin/${issueBBranch}`], checkout)).toBe(issueBHead)
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueBBranch}`], checkout).split('\t')[0]).toBe(issueBHead)
+
+      git(['checkout', issueBBranch], checkout)
+
+      expect(git(['branch', '--show-current'], checkout)).toBe(issueBBranch)
+      expect(git(['rev-parse', 'HEAD'], checkout)).toBe(issueBHead)
+      expect(git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], checkout)).toBe(`origin/${issueBBranch}`)
+      expect(git(['rev-parse', `refs/heads/${issueABranch}`], checkout)).toBe(issueAHead)
+      expect(git(['rev-parse', `refs/remotes/origin/${issueABranch}`], checkout)).toBe(issueAHead)
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueABranch}`], checkout).split('\t')[0]).toBe(issueAHead)
+      expect(git(['ls-remote', '--heads', 'origin', `refs/heads/${issueBBranch}`], checkout).split('\t')[0]).toBe(issueBHead)
+      expect(git(['status', '--porcelain=v1'], checkout)).toBe('')
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true })
+    }
+  })
 })

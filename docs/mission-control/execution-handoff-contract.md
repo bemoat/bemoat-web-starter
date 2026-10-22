@@ -41,10 +41,10 @@ State repository, Issue, applicable PR, branch and exact head, approved protecte
 State the one objective authorized by fresh Context, its acceptance criteria, and its in-scope boundary. If Global MC cannot run repository-local CLI, identify the objective candidate from the verified Issue as pending fresh Execution/IDE Context authorization; only a fresh Context result with `next_action.type: COMMAND` authorizes mutation for that objective.
 
 ## 3. Verified live authority / route
-State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Before CLI Discovery, Execution/IDE MC may perform only the verified development-checkout dependency preparation in section 12; this setup step adds no route or objective-work authority. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context or canonical wrong-Issue workspace acquisition under section 12 may precede a later `COMMAND`, and then only within that recovery's scope. The other exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. None authorizes objective mutation. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or an explicitly authorized pre-COMMAND recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
+State the fresh Context route and its evidence. If Global MC cannot execute repository-local CLI, state that the route remains unresolved until Execution/IDE MC runs fresh Context; this reason alone is not a `CONTRACT VIOLATION` when required live repository, loader, policy, Issue, and GitHub evidence is verified. Do not guess the route. Before CLI Discovery, Execution/IDE MC may perform only the verified development-checkout dependency preparation or the exact same-Issue dirty-WIP read-only re-entry in section 12; neither grants a route or objective-work authority. Execution/IDE MC must run fresh Context and inspect `next_action.type` before mutation. Only an exact deterministic recovery prescribed by that Context or canonical wrong-Issue workspace acquisition under section 12 may precede a later `COMMAND`, and then only within that recovery's scope. The other exception is the exact Bridge B recovery prescribed in section 12 for a stale target whose local Context predates recovery emission. None authorizes objective mutation. An artifact that guesses or omits this pre-mutation Context step, lacks required live authority, or permits objective mutation before Context returns `COMMAND` or an explicitly authorized pre-COMMAND recovery is fully satisfied, is a `CONTRACT VIOLATION`. Context and policy determine authority; this artifact and model identity create none.
 
 ## 4. Startup / reconstruction instructions
-Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, and classify the checkout. Only on a clean, durable development Issue checkout satisfying every section 12 predicate, perform the exact section 12 frozen-lockfile dependency preparation before CLI Discovery. Source D remains under its no-install/no-`node_modules` contract; if setup is unsupported or required evidence is missing, stop without a fallback. After successful setup, perform registered CLI Discovery with its declared safe help, then run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. The setup step is not a Context route and grants no objective-work or first-edit authority. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
+Global MC verifies live GitHub repository/base/Issue/PR/head evidence and the merged loader/policy. In Execution/IDE MC, verify live GitHub state again, load the merged policy, and classify the checkout. Only on a clean, durable development Issue checkout satisfying every section 12 predicate, perform the exact section 12 frozen-lockfile dependency preparation before CLI Discovery. The exact same-Issue dirty-WIP clause admits only read-only Discovery and fresh Context after its full WIP evidence and every P1 read-only reuse predicate are independently proven against that same physical checkout and its actual dependency roots; it permits no dependency installation. Source D remains under its no-install/no-`node_modules` contract; if setup is unsupported or required evidence is missing, stop without a fallback. After successful setup or exact read-only WIP admission, perform registered CLI Discovery with its declared safe help, then run fresh `pnpm run bemoat:context <issue-number> --json`. Inspect its route and `next_action.type` before mutation. Neither setup nor WIP admission is a Context route or grants objective-work or first-edit authority. If evidence changes before execution, reconstruct again. The preflight handoff grants no mutation authority.
 
 ## 5. Permitted scope
 List only the current objective's bounded work. The list does not authorize a new objective, future Issue, or action beyond the live Context route.
@@ -80,7 +80,7 @@ identity or controller ownership.
 
 If a worker cannot be created or fails, retry or reassign that bounded role when safe, or STOP and report the execution limitation. The controller must not silently take over objective execution. Model routing remains advisory; model/provider substitution does not change these roles. If the host genuinely lacks worker capability, state that compatibility limitation and do not claim the worker-capable topology is satisfied; this contract defines no alternative execution route.
 
-No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery in section 12 is satisfied. The single pre-Context dependency preparation in section 12 is an additional setup-only exception, permitted only on the verified development checkout and before CLI Discovery; it grants no objective-work authority. Canonical pre-COMMAND workspace acquisition and zero-delta branch bootstrap are setup authority only, not substantive objective execution; workspace acquisition is limited to the clean, isolated preparation described there and grants no objective-work authority. After routing, authorized objective or recovery mutation remains worker-owned, and the controller verifies the durable result. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
+No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery in section 12 is satisfied. The single pre-Context dependency preparation in section 12 is an additional setup-only exception, permitted only on the verified development checkout and before CLI Discovery; it grants no objective-work authority. Exact same-Issue dirty-WIP admission is read-only and grants no mutation authority. Canonical pre-COMMAND workspace acquisition and zero-delta branch bootstrap are setup authority only, not substantive objective execution; workspace acquisition is limited to the clean, isolated preparation described there and grants no objective-work authority. After routing, authorized objective or recovery mutation remains worker-owned, and the controller verifies the durable result. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
 
 ## 9. Validation requirements
 Discover public commands before use. Run focused regressions and the repository-required validation tier for the changed files; report exact commands and results. Require exact-head CI and independent review when current policy requires them. Do not invent a validation tier or claim checks that were not run.
@@ -204,7 +204,9 @@ conflict, do not mutate the authorized objective; stop fail-closed and report
 the exact blocker. The only pre-COMMAND exceptions are an exact existing-branch
 recovery prescribed by fresh Context, canonical wrong-Issue workspace
 acquisition below, and the single pre-Context dependency preparation in section
-12. On an eligible verified development Issue checkout, this preparation is
+12. The exact same-Issue dirty-WIP clause below is a separate read-only entry
+to CLI Discovery and fresh Context, never a mutation exception. On an eligible
+verified development Issue checkout, dependency preparation is
 setup-only and occurs before CLI Discovery, followed only by registered CLI
 Discovery and fresh Context; it grants no objective-work authority. Neither
 recovery exception authorizes objective work. Missing,
@@ -356,6 +358,13 @@ existing canonical path, it must not emit this recovery candidate.
 When a new or resumed Execution session starts in a wrong-Issue workspace, apply
 this order before returning to Founder for Git setup. Context remains read-only;
 this rule authorizes only safe workspace acquisition followed by fresh Context.
+For ordinary sequential work, use one canonical physical checkout with a
+durable branch per Issue. Step 2 governs source release for that transfer; an
+existing target branch does not bypass it. Step 1 retains separately bound
+exact-workspace and Context-prescribed branch recovery. Keep a separate
+physical checkout only when the existing bounded isolation predicates are
+independently satisfied. Do not treat an Issue handoff or a clean status alone
+as release evidence.
 
 1. **Reuse exact existing Issue workspace.** If exactly one clean, durable,
    canonical workspace/branch owned by the queried Issue, with its exact
@@ -370,16 +379,25 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
 
 2. **Release a completed or durably parked source checkout for sequential
    same-checkout setup.** When no exact queried-Issue workspace was reused,
-   the current physical checkout may establish the next Issue's absent topic
-   branch in place only after the source Issue is independently proven
-   releasable. The source must be clean, attached to its Issue branch, durable,
-   and bound to the canonical repository and exact `origin/<source-branch>`
-   upstream; its local branch, upstream tracking ref, and exact live remote
-   head must agree. Release requires either verified terminal COMPLETE
-   evidence or merged evidence, or a verified parked non-COMMAND durable
-   boundary with its required HANDOFF and readback. A live same-Issue
-   `COMMAND` must not be abandoned, and there must be no active source writer
-   or controller.
+   the current physical checkout may select exactly one verified existing
+   Issue-B target branch or establish the next Issue's absent topic branch in
+   place only after the source Issue is independently proven releasable. The
+   source index and tracked worktree must be clean. Inventory every staged,
+   unstaged, untracked, and ignored path and prove no unresolved task-owned,
+   unknown, conflicting, secret-bearing, or dependency-contaminated state
+   remains. P1-approved ignored dependency trees and stores are retained as
+   verified dependency inputs, not classified as task WIP or swept/removed to
+   make the checkout appear clean; unproven or drifting ignored artifacts are
+   `STOP`. All task-owned changes must have an authorized semantic or RED/WIP
+   checkpoint commit, nonforce push, and exact live remote SHA readback on Issue A. A RED
+   checkpoint alone does not release the source or make it merge-ready. The
+   source must be attached to its Issue branch, durable, and bound to the
+   canonical repository and exact `origin/<source-branch>` upstream; its local
+   branch, upstream tracking ref, and exact live remote head must agree.
+   Release requires either verified terminal COMPLETE evidence or merged
+   evidence, or a verified parked non-COMMAND durable boundary with its
+   required HANDOFF and readback. A live same-Issue `COMMAND` must not be
+   abandoned, and there must be no active source writer or controller.
    Terminal or parked release evidence must bind the same canonical source
    Issue and same source branch to the exact current live source HEAD, with no
    later source advancement. A missing, stale, or mismatched binding is `STOP`
@@ -387,30 +405,76 @@ this rule authorizes only safe workspace acquisition followed by fresh Context.
 
    Before mutation, independently resolve the canonical repository and the
    fresh approved-base branch and exact live approved base SHA, plus the
-   established Issue-B target branch name. The Issue-B branch must be absent
-   from local branches,
-   `refs/remotes/origin`, and the live canonical remote. Independently prove
-   that this Execution host has effective write scope for the current checkout
-   and its required Git metadata. Any dirty or unresolved source work, detached
-   or local-only source, wrong origin/upstream, stale source HEAD or other
+   established Issue-B target branch name. Independently prove that this
+   Execution host has effective write scope for the current checkout and its
+   required Git metadata. Any dirty or unresolved source work, detached or
+   local-only source, wrong origin/upstream, stale source HEAD or other
    source-head mismatch, missing or ambiguous release evidence, active source
    writer/controller, live same-Issue `COMMAND`, stale or moving base,
    competing target or target collision, or missing independent host
    write-scope proof is `STOP` before Git mutation.
 
-   Once eligible, create only the absent target branch directly from the exact
-   live approved base SHA in the same checkout using the ordinary durable
-   zero-delta bootstrap.
-   No Issue-A code, commits, or history are carried into the target. Do not
-   reset, stash, merge, rebase, replay, or otherwise alter the source branch.
-   Before continuing, read back the unchanged source branch and remote head,
-   exact approved-base ref, and target local `HEAD`, canonical upstream, tracking
-   ref, and live remote head; they must prove the target starts at that exact
-   base and that the source ref remains intact. Any failed or ambiguous
-   readback is `STOP`. This setup-only allowance adds no Context route,
+   Before any fetch, independently read the exact live canonical remote
+   target head or prove its absence, and inspect both the local target branch
+   ref and `refs/remotes/origin/<target-branch>` even when the local branch is
+   absent. Every pre-existing local target ref and every pre-existing tracking
+   ref must already equal that exact live head. Any pre-existing local or
+   tracking ref with no live target, or any stale or mismatched tracking ref,
+   is `STOP` before fetch or
+   checkout. Do not fetch to repair it, prune or delete refs, or treat a stale
+   tracking-only target as an absent target.
+
+   For a terminal source Issue transferring to an existing Issue-B branch, or
+   a durably parked source Issue transferring to that branch,
+   independently verify exactly one existing target Issue branch on the
+   canonical remote, its Issue ownership, exact live head, local branch if
+   present, `origin/<target-branch>` tracking ref if present, and canonical
+   upstream. Before checkout, independently prove the unchanged ordinary §12
+   startup ancestry gate: the exact live approved-base SHA is an ancestor of
+   the existing target's exact live head. A target genuinely behind the live
+   approved base, or one whose ancestry cannot be proven, is `STOP` before
+   checkout or Context; do not synchronize it as part of this transfer.
+   Only after those pre-fetch checks, fetch the validated target ref with an
+   exact ref mapping;
+   read back its tracking ref at the exact live remote head before checkout.
+   Then use `git checkout` for the
+   verified existing target branch; create its local tracking branch only when
+   absent and its remote identity is exact. A local target must equal its
+   tracking and live remote head; a remote-only target may be reused when no
+   stale local or tracking ref conflicts. Stale-base ancestry, divergent, unpushed,
+   ambiguous, or competing target refs are `STOP`. Do not pull, merge, or
+   rebase another Issue into the source branch or target, and do not use an
+   automatic fast-forward fallback. Recheck source
+   release, writer exclusion, target identity, and Host scope immediately
+   before fetch and checkout.
+
+   If Issue B is absent from local branches, `refs/remotes/origin`, and the
+   live canonical remote, create only that absent target branch directly from
+   the exact live approved base SHA in the same checkout using the ordinary
+   durable zero-delta bootstrap. No Issue-A code, commits, or history are
+   carried into the target. Do not reset, stash, clean, merge, rebase, replay,
+   or otherwise alter the source branch. Before continuing, read back the
+   unchanged source branch and remote head, plus its local and tracking refs;
+   read back the exact approved-base ref and target local `HEAD`, canonical
+   upstream, tracking ref, and live remote head. For an absent target, they must prove
+   the new target starts at the exact base; for an existing target, they must
+   prove the selected branch equals its exact live remote head. After the
+   switch or bootstrap, apply the unchanged pre-Context dependency gate for
+   Issue B before registered CLI Discovery and fresh Context. Preserve ignored
+   dependency artifacts; P1 proof for Issue A does not transfer to B. Any
+   failed or ambiguous readback or dependency proof is `STOP`. This setup-only
+   allowance adds no Context route,
    state, evidence schema, scheduler, controller, or objective-edit authority.
    Preserve existing exact-target `SWITCH_BRANCH` recovery and the normal
    first-edit and human gates.
+
+   Before this rule, an already-present Issue-B branch could send ordinary
+   sequential work to separate workspace provisioning. The normal path now
+   reuses the released source's physical checkout for that exact branch, or
+   bootstraps one absent branch at the exact live approved base. This removes
+   default clone/worktree provisioning for eligible sequential transfers;
+   source durability, WIP cleanliness, writer exclusion, exact refs, Host
+   scope, fresh Context, and the exceptional isolation gates remain required.
 
 3. **Provision an isolated canonical workspace when none is usable.** If no
    usable queried-Issue workspace exists, provision a separate isolated
@@ -491,6 +555,44 @@ and do not ask the Founder to run Git clone/fetch/checkout commands manually.
 Do not alter the original wrong-Issue checkout. This does not change #571 Bridge
 B, which owns protected-main command-source reachability for evaluating an
 unchanged stale target.
+
+### Exact same-Issue dirty-WIP read-only re-entry
+
+The exact same-Issue WIP re-entry exception is limited to the original Issue
+#666 checkout and the immutable seven-file ledger in Issue #666 comment
+6318612115. It exists only to permit read-only CLI Discovery and fresh Context
+in that existing checkout. It requires canonical repo and exact
+Issue/topic branch/HEAD/upstream/live remote
+identity; an immutable seven-file per-path SHA-256 and raw diff ledger;
+complete staged/unstaged/untracked/ignored inventory; no unrelated work;
+provenance and sole-writer exclusion; supported working-directory binding;
+and effective Host Gitdir/ref access. Independently verify each predicate and
+recheck immediately before each action; fail closed on conflict or drift.
+Before using installed dependencies or invoking any registered CLI, complete
+every P1 read-only reuse proof below for this same physical #666 checkout and
+its actual dependency roots, including approved read-only realpaths, actual
+store, lock equivalence, artifact fingerprints, and non-mutating CLI module
+resolution. P1 evidence from the separate clean authoring checkout or another
+dependency root cannot be transferred or substituted. Missing, failed, or
+unsupported P1 proof is `STOP`; this exception authorizes no P2/P3 install,
+repair, store switch, or other dependency mutation.
+Reject unrelated/unknown dirty changes, competing writer, missing provenance,
+hash mismatch, changed tracked/ignored scope, bad origin/branch/upstream/ref,
+Host EPERM, and no native COMMAND before commit; the last condition forbids
+mutation, while the others deny read-only admission. Missing or ambiguous ledger,
+inventory, ownership, access, or identity is `STOP`.
+
+Do not copy/stash/pop/reset/clean/switch/rebase/force-push the original WIP.
+This exception does not grant pre-Context source edits, stage/commit/push,
+dependency installation, a Context route, or a first-edit waiver. WIP is held
+as read-only input until fresh native Context returns an independently valid
+`COMMAND` for the bounded same-Issue objective and the separately required
+first-edit trigger is satisfied. Only then may the assigned implementation
+worker inspect and adopt or correct scoped WIP through ordinary focused proof,
+nonforce semantic checkpoint commit/push, and exact remote SHA readback. If
+Context remains `STOP`, `FOUNDER_GATE`, or unsupported, preserve WIP unchanged:
+no staging/commit/push. Existing P1/P2/P3 runtime and dependency predicates
+remain unchanged; this exception cannot make unproven tooling usable.
 
 ### Pre-Context dependency preparation
 
