@@ -148,6 +148,51 @@ the PR. This starter currently has no `dev` branch, so use current live `main`
 and target `main` as the bootstrap exception. In either case, do not use a
 local-only branch-creation sequence; use the durable bootstrap below.
 
+## Ordinary sequential Issue checkout
+
+Use one canonical physical checkout and durable Issue branches for sequential
+work. Before leaving Issue A, apply the source-release gate in the
+[execution handoff contract §12](../mission-control/execution-handoff-contract.md#wrong-issue-workspace-acquisition):
+all task-owned changes must be committed under valid authority, pushed without
+force, and read back at the exact live remote SHA. The index and tracked
+worktree must be clean; inventory every staged, unstaged, untracked, and
+ignored path and exclude unresolved task-owned, unknown, conflicting,
+secret-bearing, or dependency-contaminated state. Retain independently
+P1-approved ignored dependency trees and stores as verified inputs; do not
+classify or sweep them as task WIP. Unproven or drifting ignored artifacts
+block release. Source branch, upstream tracking
+ref, and live remote head must agree. A terminal COMPLETE/merged result or a
+durably parked non-`COMMAND` HANDOFF with readback, plus no active writer or
+controller, is required. A pushed RED/WIP checkpoint alone does not release
+the source.
+
+After release, independently verify the canonical repository, exact live
+approved base, unique Issue-B branch ownership, Host Gitdir/ref write scope,
+and target refs. Before any fetch, independently read the exact live canonical
+remote B head or prove its absence; inspect both the local B branch ref and
+`refs/remotes/origin/<B-branch>` even if the local branch is absent. Every
+pre-existing local or tracking ref must already equal the exact live head.
+Any stale or mismatched tracking ref, including a tracking-only ref or one
+with no live target, stops before fetch/checkout; so does a local ref with no
+live target. Do not fetch to repair, prune, or delete a ref. For one existing
+Issue-B branch, use `git fetch` only for its
+validated ref and `git checkout` only after local, tracking, upstream, and
+live remote heads are consistent and the exact live approved-base SHA is
+proven an ancestor of B's exact live head under the unchanged §12 startup
+gate; create a local tracking branch only when it is absent and the remote
+identity is exact. A remote-only B branch remains eligible when no stale local
+or tracking ref conflicts. A genuinely behind-base target, unproven ancestry, or
+stale, divergent, unpushed, ambiguous, or competing refs stop before checkout
+or Context. No `git pull`, merge, rebase, reset, stash, or clean is part of
+this transfer, and there is no automatic synchronization fallback.
+Read back Issue A's unchanged local and live refs and Issue B's exact HEAD,
+upstream, tracking and live remote ref, then apply Issue B's unchanged
+pre-Context dependency gate before registered CLI Discovery and fresh Context
+in the same checkout. Preserve ignored dependency artifacts; Issue A's P1
+proof does not transfer to B. If Issue B is absent everywhere, use only
+the zero-delta bootstrap below from the exact live approved base. Isolated
+workspace provisioning retains its narrowly supported §12 exceptional gates.
+
 ## Durable zero-delta branch bootstrap
 
 This is the only branch-setup exception permitted before a passing Context

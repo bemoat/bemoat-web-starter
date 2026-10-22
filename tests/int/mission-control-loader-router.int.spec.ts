@@ -249,6 +249,220 @@ describe('Global Mission Control progressive-disclosure router', () => {
     expect(releaseContract).toMatch(/Preserve existing exact-target `SWITCH_BRANCH` recovery/i)
   })
 
+  // Oracle: live #666 Acceptance Criteria require terminal Issue A to transfer
+  // the same checkout to a valid existing Issue-B branch, preserve A's local
+  // and remote refs, and require fresh Context afterward. Founder decision
+  // 6340800913 establishes one canonical physical checkout with durable
+  // per-Issue branches and forbids switching away from an unreleased source.
+  // The merged §12 release and bootstrap contract supply the safety boundary:
+  // source release must be terminal or a verified parked non-COMMAND HANDOFF
+  // with readback and no writer; existing-target selection cannot invent a
+  // Context route, and setup must be followed by fresh Context. This asserts
+  // only that transfer contract, not a new route/evidence field or dirty-WIP
+  // admission rule.
+  it('transfers a released source to one valid existing Issue branch without changing source refs, then requires fresh Context', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+
+    expect(continuationContract).toMatch(/terminal (?:source )?Issue.{0,80}(?:existing|already.present) Issue.{0,50}branch/i)
+    expect(continuationContract).toMatch(/(?:switch|select|reuse).{0,100}(?:exactly one|unique|verified).{0,80}(?:existing|already.present).{0,50}(?:target|Issue).{0,30}branch/i)
+    expect(continuationContract).toMatch(/source (?:branch|refs?).{0,100}(?:unchanged|intact).{0,80}(?:remote|live)/i)
+    expect(continuationContract).toMatch(/after (?:the )?(?:switch|transfer|checkout).{0,100}(?:registered CLI Discovery|fresh Context)/i)
+  })
+
+  // Oracle: live #666 acceptance criteria and Founder decision 6340800913
+  // require the ordinary released Issue-A to Issue-B transfer in one physical
+  // checkout. Section 12 explicitly provides that setup path. Section 8 must
+  // not categorically restrict all pre-COMMAND workspace acquisition to clean,
+  // isolated preparation, which would exclude the authorized same-checkout
+  // branch transfer. This checks the policy contradiction, not a Context route.
+  it('does not exclude the section 12 same-checkout transfer from pre-COMMAND acquisition', () => {
+    const preCommandRule = normalizedExecutionHandoff
+      .split('No controller or worker may mutate the authorized objective before fresh Context')[1]
+      ?.split('## 9. Validation requirements')[0] ?? ''
+
+    expect(preCommandRule).not.toBe('')
+    expect(preCommandRule).not.toMatch(/workspace acquisition is limited to the clean, isolated preparation described there/i)
+  })
+
+  // Oracle: live #666 negative acceptance criteria and Founder decision
+  // 6340800913 require each unsafe source to STOP before Git mutation. This
+  // is contract-level coverage of §12's release predicate and STOP boundary,
+  // not proof that a runtime transfer gate evaluates these cases.
+  it.each([
+    ['#588 OPEN and clean without verified release', /missing or ambiguous release evidence/i],
+    ['uncommitted or unverified tracked work', /dirty or unresolved source work/i],
+    ['unpushed source ref or missing live remote readback', /detached or local-only source/i],
+    ['competing source writer or controller', /active source writer\/controller/i],
+    ['live same-Issue COMMAND', /live same-Issue `COMMAND`/i],
+    ['stale or moving approved base', /stale or moving base/i],
+    ['duplicate or colliding target', /competing target or target collision/i],
+    ['wrong canonical origin or source upstream', /wrong origin\/upstream/i],
+    ['missing effective Host write scope', /missing independent host write-scope proof/i],
+  ] as const)('requires STOP before Git mutation for %s', (_case, deniedCondition) => {
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
+    const sourceStop = releaseContract
+      .match(/Any dirty or unresolved source work[\s\S]*?`STOP` before Git mutation\./i)?.[0] ?? ''
+
+    expect(releaseContract).toMatch(/source Issue is independently proven releasable/i)
+    expect(releaseContract).toMatch(/inventory every staged, unstaged, untracked, and ignored path/i)
+    expect(releaseContract).toMatch(/authorized semantic or RED\/WIP checkpoint commit, nonforce push, and exact live remote SHA readback/i)
+    expect(releaseContract).toMatch(/verified terminal COMPLETE evidence or merged evidence, or a verified parked non-COMMAND durable boundary with its required HANDOFF and readback/i)
+    expect(sourceStop).toMatch(deniedCondition)
+    expect(sourceStop).toMatch(/is `STOP` before Git mutation/i)
+  })
+
+  it('stops unresolved untracked, ignored, secret-bearing, or dependency-contaminated source state before Git mutation', () => {
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
+
+    expect(releaseContract).toMatch(/inventory every staged, unstaged, untracked, and ignored path.*prove no unresolved task-owned, unknown, conflicting, secret-bearing, or dependency-contaminated state remains/i)
+    expect(releaseContract).toMatch(/unproven or drifting ignored artifacts are `STOP`/i)
+    expect(releaseContract).toMatch(/any dirty or unresolved source work.*is `STOP` before Git mutation/i)
+  })
+
+  // Oracle: live #666 negative acceptance criteria require exact source and
+  // target identity, current-head parked evidence, and collision-free target
+  // refs before transfer. §12 uniquely says mismatch is STOP before mutation
+  // or before fetch/checkout; this is contract-level coverage only.
+  it('stops stale or mismatched parked HANDOFF binding and target refs before transfer', () => {
+    const releaseContract = normalizedExecutionHandoff
+      .split('2. **Release a completed or durably parked source checkout for sequential same-checkout setup.**')[1]
+      ?.split('3. **Provision an isolated canonical workspace when none is usable.**')[0] ?? ''
+    const sourceBinding = releaseContract
+      .split('Terminal or parked release evidence must bind')[1]
+      ?.split('Before mutation')[0] ?? ''
+    const prefetch = releaseContract
+      .split('Before any fetch')[1]
+      ?.split('For a terminal source Issue transferring')[0] ?? ''
+
+    expect(sourceBinding).toMatch(/same canonical source Issue and same source branch to the exact current live source HEAD, with no later source advancement/i)
+    expect(sourceBinding).toMatch(/missing, stale, or mismatched binding is `STOP` before mutation/i)
+    expect(prefetch).toMatch(/exact live canonical remote target head or prove its absence/i)
+    expect(prefetch).toMatch(/every pre-existing local target ref and every pre-existing tracking ref must already equal that exact live head/i)
+    expect(prefetch).toMatch(/stale or mismatched tracking ref.*`STOP` before fetch or checkout/i)
+    expect(releaseContract).toMatch(/exactly one existing target Issue branch on the canonical remote, its Issue ownership/i)
+    expect(releaseContract).toMatch(/ambiguous, or competing target refs are `STOP`/i)
+  })
+
+  // Oracle: live #666 acceptance requires exact head/upstream/readback for an
+  // existing remote target and names stale/divergent refs, wrong ownership,
+  // and permissions as mutation blockers. Founder direction permits reuse only
+  // with independent freshness/durability proof; §12 remains fail-closed on
+  // stale, ambiguous, or competing evidence. This excludes invalid reuse only;
+  // it does not choose a fallback route.
+  it('stops existing-target checkout when target ownership or durable refs are stale or ambiguous', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+    const existingTarget = continuationContract
+      .split('For a terminal source Issue transferring to an existing Issue-B branch')[1]
+      ?.split('If Issue B is absent from local branches')[0] ?? ''
+    const prefetchTargetCheck = continuationContract
+      .split('Before any fetch, independently read the exact live canonical remote')[1]
+      ?.split('For a terminal source Issue transferring to an existing Issue-B branch')[0] ?? ''
+
+    expect(existingTarget).not.toBe('')
+    expect(prefetchTargetCheck).not.toBe('')
+    expect(existingTarget).toMatch(/verify exactly one existing target Issue branch on the canonical remote, its Issue ownership, exact live head/i)
+    expect(prefetchTargetCheck).toMatch(/every pre-existing local target ref and every pre-existing tracking ref must already equal that exact live head/i)
+    expect(prefetchTargetCheck).toMatch(/any pre-existing local or tracking ref with no live target.*`STOP` before fetch or checkout/i)
+    expect(prefetchTargetCheck).toMatch(/do not fetch to repair it, prune or delete refs/i)
+    expect(existingTarget).toMatch(/local target must equal its tracking and live remote head/i)
+    expect(existingTarget).toMatch(/Stale-base ancestry, divergent, unpushed, ambiguous, or competing target refs are `STOP`/i)
+    expect(existingTarget).toMatch(/read back its tracking ref at the exact live remote head before checkout/i)
+    // Existing remote-only targets are reusable only from already consistent
+    // evidence. A stale tracking ref must not be silently refreshed by fetch;
+    // a missing live target must not be recreated by pruning/deletion or fetch.
+    expect(existingTarget).toMatch(/remote-only target may be reused when no stale local or tracking ref conflicts/i)
+    expect(existingTarget).toMatch(/Do not pull, merge, or rebase another Issue into the source branch or target/i)
+    expect(existingTarget).toMatch(/do not use an automatic fast-forward fallback/i)
+  })
+
+  // Oracle: merged §12 dependency-preparation/P1 rules require the exact live
+  // approved-base SHA to be an ancestor of HEAD in the ordinary development
+  // checkout before Context. Issue #666 only permits reuse of an existing
+  // target with independent freshness/durability proof and explicitly rejects
+  // stale/divergent refs. Therefore, an existing target failing this current
+  // ancestry prerequisite cannot be checked out for Context; do not invent an
+  // automatic pull/rebase or a fallback route.
+  it('stops an existing Issue-B target that fails current approved-base ancestry before checkout and Context', () => {
+    const continuationContract = normalizedExecutionHandoff
+      .split('## 12. Continuation rule')[1]
+      ?.split('## 13. Stop conditions')[0] ?? ''
+    const existingTarget = continuationContract
+      .split('For a terminal source Issue transferring to an existing Issue-B branch')[1]
+      ?.split('If Issue B is absent from local branches')[0] ?? ''
+    const preContextSetup = normalizedExecutionHandoff
+      .split('### Pre-Context dependency preparation')[1]
+      ?.split('**P1 — read-only reuse.**')[0] ?? ''
+
+    expect(preContextSetup).toMatch(/exact live approved.base SHA must be an ancestor of `HEAD`/i)
+    expect(existingTarget).toMatch(/exact live approved.base SHA is an ancestor of the existing target's exact live head/i)
+    expect(existingTarget).toMatch(/target genuinely behind the live approved base, or one whose ancestry cannot be proven, is `STOP` before checkout or Context/i)
+    expect(existingTarget).toMatch(/do not synchronize it as part of this transfer/i)
+  })
+
+  // Oracle: live Issue #666's “Founder policy-change decision — unblock
+  // verified pre-Context WIP admission” authorizes a narrowly bound same-Issue
+  // dirty-WIP exception solely for read-only CLI Discovery and fresh Context.
+  // It requires exact repo/Issue/branch/HEAD/upstream/live-ref identity,
+  // immutable per-path SHA-256/raw-diff evidence, complete tracked and ignored
+  // inventory, provenance, sole-writer exclusion, supported cwd binding, and
+  // effective Host Gitdir/ref access, rechecked before each read action. It
+  // explicitly grants no WIP edit/stage/commit authority, and keeps valid
+  // Context COMMAND plus the separate first-edit trigger as later gates. This
+  // story asserts those boundaries and exclusions only; it creates no route or
+  // evidence-field semantics and does not claim the decision changed current
+  // merged policy. Read together with merged §12 P1, using installed tooling
+  // also requires the full P1 proof against this exact checkout; every
+  // dependency location approval remains separately bound, so another
+  // checkout's P1 result cannot establish this one's tooling integrity.
+  it('limits same-Issue dirty-WIP admission to verified read-only Discovery and Context', () => {
+    const wipAdmission = normalizedExecutionHandoff
+      .split('### Exact same-Issue dirty-WIP read-only re-entry')[1]
+      ?.split('### Pre-Context dependency preparation')[0] ?? ''
+    const readOnlyP1 = normalizedExecutionHandoff
+      .split('**P1 — read-only reuse.**')[1]
+      ?.split('**P2 — fresh preparation.**')[0] ?? ''
+
+    expect(wipAdmission).not.toBe('')
+    expect(readOnlyP1).not.toBe('')
+    expect(normalizedExecutionHandoff).toMatch(/exact same-Issue WIP re-entry exception.*only to permit read-only CLI Discovery and fresh Context/i)
+    expect(normalizedExecutionHandoff).toMatch(/canonical repo.*exact Issue\/topic branch\/HEAD\/upstream\/live remote/i)
+    expect(normalizedExecutionHandoff).toMatch(/immutable.*per-path SHA-256.*raw diff ledger.*complete staged\/unstaged\/untracked\/ignored inventory/i)
+    expect(normalizedExecutionHandoff).toMatch(/no unrelated work.*provenance and sole-writer exclusion.*supported working-directory binding.*effective Host Gitdir\/ref access/i)
+    expect(normalizedExecutionHandoff).toMatch(/recheck immediately before each action.*fail closed on conflict or drift/i)
+    expect(normalizedExecutionHandoff).toMatch(/WIP is held as read-only input until fresh native Context returns an independently valid `COMMAND`.*separately required first-edit trigger is satisfied/i)
+    expect(normalizedExecutionHandoff).toMatch(/does not grant pre-Context source edits, stage\/commit\/push/i)
+    expect(normalizedExecutionHandoff).toMatch(/Do not copy\/stash\/pop\/reset\/clean\/switch\/rebase\/force-push/i)
+    expect(normalizedExecutionHandoff).toMatch(/no staging\/commit\/push/i)
+    expect(normalizedExecutionHandoff).toMatch(/reject unrelated\/unknown dirty changes, competing writer, missing provenance, hash mismatch, changed tracked\/ignored scope, bad origin\/branch\/upstream\/ref, Host EPERM, and no native COMMAND before commit/i)
+
+    // The exact dirty checkout does not weaken P1's prerequisite for reading
+    // installed tooling, and P1 evidence remains bound to that checkout.
+    expect(wipAdmission).toMatch(/before using installed dependencies or invoking any registered CLI, complete every P1 read-only reuse proof below for this same physical #666 checkout and its actual dependency roots/i)
+    expect(wipAdmission).toMatch(/approved read-only realpaths, actual store, lock equivalence, artifact fingerprints, and non-mutating CLI module resolution/i)
+    expect(wipAdmission).toMatch(/P1 evidence from the separate clean authoring checkout or another dependency root cannot be transferred or substituted/i)
+    expect(readOnlyP1).toMatch(/read-only preflight positively proves every item below/i)
+    expect(readOnlyP1).toMatch(/resolve required symlinks and realpaths only within explicitly approved read-only dependency locations/i)
+    expect(readOnlyP1).toMatch(/record the resolved actual `storeDir`/i)
+    expect(readOnlyP1).toMatch(/registered CLI entrypoint dependencies with non-mutating Node module resolution/i)
+
+    // Oracle: merged §12 P1 plus Issue #666's source-cleanliness rule require
+    // a complete ignored-path inventory, while preserving positively proven
+    // dependency inputs. Unknown/contaminated ignored task state stops; the
+    // policy does not require blanket absence of every ignored path or permit
+    // sweeping approved dependency trees/stores.
+    expect(normalizedExecutionHandoff).toMatch(/inventory every staged, unstaged, untracked, and ignored path/i)
+    expect(normalizedExecutionHandoff).toMatch(/P1-approved ignored dependency trees and stores are retained as verified dependency inputs, not classified as task WIP or swept\/removed/i)
+    expect(normalizedExecutionHandoff).toMatch(/unproven or drifting ignored artifacts are `STOP`/i)
+  })
+
   // Oracle: Issue #605's live-COMMAND denial and negative acceptance criteria
   // exclude abandoning an active source or proceeding with dirty/unresolved,
   // stale, conflicting, colliding, concurrent, or unproven-host state. The
