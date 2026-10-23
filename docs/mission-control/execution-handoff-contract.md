@@ -82,6 +82,8 @@ If a worker cannot be created or fails, retry or reassign that bounded role when
 
 No controller or worker may mutate the authorized objective before fresh Context independently returns `next_action.type: COMMAND`. A pre-COMMAND recovery is permitted only when fresh Context explicitly prescribes that exact bounded recovery under section 12, the canonical wrong-Issue workspace acquisition conditions under section 12 are met, or every condition of the Bridge B recovery in section 12 is satisfied. The single pre-Context dependency preparation in section 12 is an additional setup-only exception, permitted only on the verified development checkout and before CLI Discovery; it grants no objective-work authority. Exact same-Issue dirty-WIP admission is read-only and grants no mutation authority. Canonical pre-COMMAND workspace acquisition and zero-delta branch bootstrap are setup authority only, not substantive objective execution; workspace acquisition may include §12's gated same-checkout release and target selection or bootstrap, or its bounded isolated preparation, and grants no objective-work authority. After routing, authorized objective or recovery mutation remains worker-owned, and the controller verifies the durable result. Workers receive no new authority and cannot decide gates, expand scope, or start future work. Keep independent review separate.
 
+When the pinned PStack HOW layer is used, load `docs/mission-control/pstack-execution-contract.md` only for an already-authorized objective. On Cursor, apply `.cursor/rules/bemoat-pstack-execution.mdc`; on Codex, load `docs/mission-control/pstack-codex-adapter.md`. PStack remains subordinate to fresh Context `COMMAND`: it cannot run mutation at STOP or FOUNDER_GATE, replace the route vocabulary, or become a controller or mutation fallback. The project-local contract binds PStack playbooks and skills to existing worker roles, exact Issue lineage, independent review, HANDOFF, and fresh Context seams. It adds no scheduler or authority layer. If the host cannot provide the required PStack worker capability, report that limitation and stop rather than simulating execution.
+
 ## 9. Validation requirements
 Discover public commands before use. Run focused regressions and the repository-required validation tier for the changed files; report exact commands and results. Require exact-head CI and independent review when current policy requires them. Do not invent a validation tier or claim checks that were not run.
 
@@ -114,9 +116,11 @@ Classify the destination session before choosing a cross-session action:
   context. Emitting the full
   15-section handoff for this valid same-session case is avoidable operator
   overhead and MUST NOT be used when the compact continuation is sufficient.
-- **New Global MC reconstruction:** a bare Issue number remains sufficient
-  because Global MC reconstructs live GitHub, loader, and policy state itself.
-  This bare-Issue shortcut does not apply to a new Execution/IDE handoff.
+- **New Global MC reconstruction at a real control-plane boundary:** a bare
+  Issue number remains sufficient because Global MC reconstructs live GitHub,
+  loader, and policy state itself. This names a new Global MC session only when
+  that boundary requires one. A different Issue alone is not such a boundary;
+  this bare-Issue shortcut does not apply to a new Execution/IDE handoff.
 - **Ambiguous destination:** if Global MC cannot prove whether the destination
   is a new Execution session or an existing valid same-Issue session, it MUST
   NOT choose the shortened form. Fail closed toward the full canonical
@@ -197,7 +201,12 @@ Context results are `COMMAND`, start each newly authorized objective in the
 same session after its own result. Objective completion alone is not a Founder
 gate. Terminal `COMPLETE` ends this Issue's active Execution session; return.
 A different Issue requires fresh Global MC reconstruction and a newly
-appropriate Execution handoff.
+appropriate Execution handoff. Here, “fresh Global MC reconstruction” means
+fresh live authority reconstruction within the same active Global MC session
+when it remains valid; a new Global MC session is not required solely because
+the Issue changed. A different Issue requires a newly appropriate Execution
+handoff and its own Execution lineage. Start a new Global MC session only at a
+real control-plane boundary. This does not authorize post-turn continuation.
 For `FOUNDER_GATE`, do not mutate and return to Founder once for the required
 decision, then stop at the gate. For `STOP`, unsupported state, or evidence
 conflict, do not mutate the authorized objective; stop fail-closed and report

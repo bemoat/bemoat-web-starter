@@ -23,6 +23,7 @@ recreate long-form framework manuals here.
 | UI animation workflow | `.agents/skills/ui-animation.md`, `docs/ai/ui-execution-workflow.md` |
 | Harness sync contract | `docs/harness-sync-contract.md` |
 | Coordination protocol | `docs/mission-control/mission-control-guide.md`, `prompts/mission-control/chatgpt-project-loader.md` |
+| PStack execution/HOW adapter | `docs/mission-control/pstack-execution-contract.md`, `docs/mission-control/pstack-codex-adapter.md` |
 
 ## Coordination protocol
 
