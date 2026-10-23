@@ -1,0 +1,292 @@
+name: CI (B2 runtime smoke)
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: b2-runtime-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PAYLOAD_SECRET: b2-runtime-smoke-only-secret
+      PAYLOAD_LOG_LEVEL: error
+      CI: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # payload.config.ts calls getPlatformProxy() without configPath. Replace the
+      # tracked resource config in this disposable checkout before any app code runs.
+      - name: Create synthetic local-only Cloudflare config
+        shell: bash
+        run: |
+          mkdir -p .bemoat-ci
+          git show HEAD:wrangler.jsonc > .bemoat-ci/wrangler.original.jsonc
+          cat > wrangler.jsonc <<'JSON'
+          {
+            "$schema": "node_modules/wrangler/config-schema.json",
+            "main": ".open-next/worker.js",
+            "name": "bemoat-ci-b2-runtime-smoke",
+            "compatibility_date": "2025-08-15",
+            "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+            "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+            "d1_databases": [
+              { "binding": "D1", "database_name": "bemoat-ci-b2-runtime-smoke", "database_id": "00000000-0000-0000-0000-000000000001" }
+            ],
+            "r2_buckets": [
+              { "binding": "R2", "bucket_name": "bemoat-ci-b2-runtime-smoke" }
+            ]
+          }
+          JSON
+          mkdir -p runtime-smoke-artifact
+          cat > runtime-smoke-artifact/results.txt <<'RESULTS'
+          FAIL | Worker startup | smoke assertions did not run
+          FAIL | SSR | smoke assertions did not run
+          FAIL | Admin | smoke assertions did not run
+          FAIL | Synthetic login | smoke assertions did not run
+          FAIL | App API | smoke assertions did not run
+          FAIL | D1 write/readback | smoke assertions did not run
+          FAIL | R2 upload/read/delete | smoke assertions did not run
+          FAIL | Runtime error log review | smoke assertions did not run
+          FAIL | Cleanup | smoke assertions did not run
+          RESULTS
+          : > runtime-smoke-artifact/worker.log
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare local D1 schema
+        run: pnpm exec payload migrate --config src/payload.config.ts
+
+      - name: Build the OpenNext Worker
+        run: pnpm exec opennextjs-cloudflare build --config wrangler.jsonc
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run local Worker runtime smoke
+        id: smoke
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p .bemoat-ci
+          cat > .bemoat-ci/runtime-smoke.mjs <<'JS'
+          import { spawn } from 'node:child_process'
+          import { createWriteStream, existsSync, readFileSync, writeFileSync } from 'node:fs'
+          import { once } from 'node:events'
+          import { setTimeout as delay } from 'node:timers/promises'
+          import { chromium } from '@playwright/test'
+          import { getPayload } from 'payload'
+          import config from '../src/payload.config.ts'
+
+          const base = 'http://127.0.0.1:8787'
+          const email = 'b2-runtime-smoke@example.invalid'
+          const password = 'B2-smoke-only-password-2026'
+          const results = []
+          const output = createWriteStream('.bemoat-ci/wrangler.log', { flags: 'w' })
+          let worker
+          let browser
+          let page
+          let payload
+          let userId
+          let categoryId
+          let mediaId
+          let mediaFilename
+          let workerStarted = false
+          let cleanupOkay = true
+
+          const pass = (name, detail = '') => results.push({ name, status: 'PASS', detail })
+          const fail = (name, error) => results.push({ name, status: 'FAIL', detail: String(error?.message ?? error).slice(0, 500) })
+          const check = async (name, fn) => {
+            try {
+              await fn()
+              pass(name)
+            } catch (error) {
+              fail(name, error)
+            }
+          }
+
+          try {
+            payload = await getPayload({ config })
+            const prior = await payload.find({ collection: 'users', where: { email: { equals: email } }, limit: 1 })
+            if (prior.docs[0]) await payload.delete({ collection: 'users', id: prior.docs[0].id })
+            const user = await payload.create({ collection: 'users', data: { email, password } })
+            userId = user.id
+
+            if (!existsSync('.open-next/worker.js')) throw new Error('Expected built .open-next/worker.js was not found')
+            worker = spawn('pnpm', ['exec', 'wrangler', 'dev', '--local', '--config', 'wrangler.jsonc', '--ip', '127.0.0.1', '--port', '8787', '--log-level', 'info'], {
+              stdio: ['ignore', 'pipe', 'pipe'],
+              env: { ...process.env, CLOUDFLARE_ENV: '' },
+            })
+            worker.stdout.pipe(output)
+            worker.stderr.pipe(output)
+            for (let i = 0; i < 120; i += 1) {
+              if (worker.exitCode !== null) throw new Error(`Wrangler exited before startup (${worker.exitCode})`)
+              try {
+                const response = await fetch(base, { signal: AbortSignal.timeout(1500) })
+                if (response.status < 500) { workerStarted = true; break }
+              } catch {}
+              await delay(1000)
+            }
+            if (!workerStarted) throw new Error('Wrangler local Worker did not become ready within 120 seconds')
+            pass('Worker startup', 'wrangler dev --local with synthetic local D1 and R2')
+
+            await check('SSR', async () => {
+              const response = await fetch(base)
+              const html = await response.text()
+              if (!response.ok || !html.includes('Project CMS, portfolio, blog, and custom request starter.')) throw new Error(`GET / returned ${response.status} without expected server-rendered content`)
+            })
+
+            await check('Admin', async () => {
+              const response = await fetch(`${base}/admin/login`)
+              const html = await response.text()
+              if (!response.ok || !html.toLowerCase().includes('password')) throw new Error(`GET /admin/login returned ${response.status} without login UI`)
+            })
+
+            await check('Synthetic login', async () => {
+              browser = await chromium.launch({ headless: true })
+              const context = await browser.newContext()
+              page = await context.newPage()
+              await page.goto(`${base}/admin/login`, { waitUntil: 'domcontentloaded' })
+              await page.locator('input[name="email"]').fill(email)
+              await page.locator('input[name="password"]').fill(password)
+              await page.locator('button[type="submit"]').click()
+              await page.waitForURL((url) => url.pathname === '/admin', { timeout: 20000 })
+              if (!await page.locator('body').innerText().then((text) => text.length > 0)) throw new Error('Admin page was empty after login')
+            })
+
+            await check('App API', async () => {
+              const response = await fetch(`${base}/my-route`)
+              const json = await response.json()
+              if (!response.ok || json.message !== 'This is an example of a custom route.') throw new Error(`GET /my-route returned ${response.status} with unexpected JSON`)
+            })
+
+            await check('D1 write/readback', async () => {
+              if (!page) throw new Error('Synthetic login did not establish an authenticated browser session')
+              const title = `B2 runtime smoke ${crypto.randomUUID()}`
+              const createResponse = await page.request.post(`${base}/api/categories`, { data: { title } })
+              const created = await createResponse.json()
+              if (!createResponse.ok() || !created.doc?.id) throw new Error(`POST /api/categories returned ${createResponse.status()}`)
+              categoryId = created.doc.id
+              const readResponse = await page.request.get(`${base}/api/categories/${categoryId}`)
+              const read = await readResponse.json()
+              if (!readResponse.ok() || read.doc?.id !== categoryId || !JSON.stringify(read.doc.title).includes(title)) throw new Error(`D1-backed category readback returned ${readResponse.status()}`)
+            })
+
+            await check('R2 upload/read/delete', async () => {
+              if (!page) throw new Error('Synthetic login did not establish an authenticated browser session')
+              const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/nWQAAAAASUVORK5CYII=', 'base64')
+              const uploadResponse = await page.request.post(`${base}/api/media`, {
+                multipart: { alt: 'B2 synthetic runtime smoke', file: { name: 'b2-runtime-smoke.png', mimeType: 'image/png', buffer: png } },
+              })
+              const uploaded = await uploadResponse.json()
+              if (!uploadResponse.ok() || !uploaded.doc?.id || !uploaded.doc?.filename) throw new Error(`POST /api/media returned ${uploadResponse.status()}`)
+              mediaId = uploaded.doc.id
+              mediaFilename = uploaded.doc.filename
+              const fileResponse = await page.request.get(`${base}/api/media/file/${encodeURIComponent(mediaFilename)}`)
+              if (!fileResponse.ok() || (await fileResponse.body()).length === 0) throw new Error(`GET media file returned ${fileResponse.status()}`)
+              const deleteResponse = await page.request.delete(`${base}/api/media/${mediaId}`)
+              if (!deleteResponse.ok()) throw new Error(`DELETE /api/media/${mediaId} returned ${deleteResponse.status()}`)
+              mediaId = undefined
+            })
+          } catch (error) {
+            if (!results.some((result) => result.name === 'Worker startup')) fail('Worker startup', error)
+          } finally {
+            if (page && categoryId) {
+              try {
+                const response = await page.request.delete(`${base}/api/categories/${categoryId}`)
+                if (!response.ok()) throw new Error(`category delete returned ${response.status()}`)
+                categoryId = undefined
+              } catch (error) { cleanupOkay = false; fail('Cleanup details', error) }
+            }
+            if (page && mediaId) {
+              try {
+                const response = await page.request.delete(`${base}/api/media/${mediaId}`)
+                if (!response.ok()) throw new Error(`media delete returned ${response.status()}`)
+                mediaId = undefined
+              } catch (error) { cleanupOkay = false; fail('Cleanup details', error) }
+            }
+            if (payload && userId) {
+              try { await payload.delete({ collection: 'users', id: userId }); userId = undefined }
+              catch (error) { cleanupOkay = false; fail('Cleanup details', error) }
+            }
+            if (worker && worker.exitCode === null) {
+              worker.kill('SIGTERM')
+              await Promise.race([once(worker, 'exit'), delay(10000)])
+              if (worker.exitCode === null) { worker.kill('SIGKILL'); cleanupOkay = false }
+            }
+            if (browser) await browser.close().catch(() => { cleanupOkay = false })
+            output.end()
+            await once(output, 'finish')
+
+            for (const name of ['Worker startup', 'SSR', 'Admin', 'Synthetic login', 'App API', 'D1 write/readback', 'R2 upload/read/delete']) {
+              if (!results.some((result) => result.name === name)) fail(name, 'Smoke assertion was not reached')
+            }
+
+            const log = readFileSync('.bemoat-ci/wrangler.log', 'utf8')
+            const errorLines = log.split(/\r?\n/).filter((line) => /\b(error|exception|unhandled|panic)\b/i.test(line) && !/no error/i.test(line))
+            if (!workerStarted) fail('Runtime error log review', 'Worker did not start, so runtime logs were unavailable')
+            else if (errorLines.length === 0) pass('Runtime error log review', 'No error, exception, unhandled, or panic entries')
+            else fail('Runtime error log review', `${errorLines.length} runtime error-like log line(s) found`)
+            if (cleanupOkay && !userId && !categoryId && !mediaId && (!worker || worker.exitCode !== null)) pass('Cleanup')
+            else fail('Cleanup', 'Synthetic resources or local Worker may remain')
+
+            const rows = results.map(({ name, status, detail }) => `${status} | ${name}${detail ? ` | ${detail}` : ''}`)
+            const summary = `B2 runtime smoke results\n${rows.join('\n')}\n`
+            writeFileSync('runtime-smoke-artifact/results.txt', summary)
+            const sanitized = log
+              .replaceAll(email, '[REDACTED_EMAIL]')
+              .replaceAll(password, '[REDACTED_PASSWORD]')
+              .replaceAll(process.env.PAYLOAD_SECRET ?? '', '[REDACTED_SECRET]')
+              .replace(/(authorization:\s*bearer\s+)[^\s"']+/gi, '$1[REDACTED]')
+            writeFileSync('runtime-smoke-artifact/worker.log', sanitized.slice(-200000))
+            process.env.GITHUB_STEP_SUMMARY && writeFileSync(process.env.GITHUB_STEP_SUMMARY, `## B2 runtime smoke\n\n${rows.map((row) => `- ${row}`).join('\n')}\n`)
+          }
+
+          if (results.some((result) => result.status === 'FAIL')) process.exitCode = 1
+          JS
+          node --import=tsx/esm .bemoat-ci/runtime-smoke.mjs
+
+      - name: Restore tracked config and remove synthetic local state
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f .bemoat-ci/wrangler.original.jsonc ]]; then cp .bemoat-ci/wrangler.original.jsonc wrangler.jsonc; fi
+          rm -rf .wrangler .bemoat-ci
+          if [[ -f runtime-smoke-artifact/results.txt ]]; then
+            sed -i 's/^FAIL | Cleanup | smoke assertions did not run$/PASS | Cleanup | synthetic config and local state removed/' runtime-smoke-artifact/results.txt
+          fi
+
+      - name: Upload sanitized smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b2-runtime-smoke-${{ github.run_id }}
+          path: runtime-smoke-artifact/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Require smoke assertions to pass
+        if: always()
+        run: test "${{ steps.smoke.outcome }}" = success
