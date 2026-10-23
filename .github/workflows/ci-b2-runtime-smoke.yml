@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      PAYLOAD_SECRET: b2-runtime-smoke-only-secret
+      PAYLOAD_SECRET: ci-placeholder
       PAYLOAD_LOG_LEVEL: error
       CI: 'true'
 
@@ -30,25 +30,28 @@ jobs:
       - name: Create synthetic local-only Cloudflare config
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p .bemoat-ci
           git show HEAD:wrangler.jsonc > .bemoat-ci/wrangler.original.jsonc
-          cat > wrangler.jsonc <<'JSON'
-          {
-            "$schema": "node_modules/wrangler/config-schema.json",
-            "main": ".open-next/worker.js",
-            "name": "bemoat-ci-b2-runtime-smoke",
-            "compatibility_date": "2025-08-15",
-            "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-            "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
-            "d1_databases": [
-              { "binding": "D1", "database_name": "bemoat-ci-b2-runtime-smoke", "database_id": "00000000-0000-0000-0000-000000000001" }
-            ],
-            "r2_buckets": [
-              { "binding": "R2", "bucket_name": "bemoat-ci-b2-runtime-smoke" }
-            ]
-          }
-          JSON
           mkdir -p runtime-smoke-artifact
+          node --input-type=module <<'JS'
+          import { randomUUID } from 'node:crypto'
+          import { writeFileSync } from 'node:fs'
+          const suffix = randomUUID()
+          const config = {
+            $schema: 'node_modules/wrangler/config-schema.json',
+            main: '.open-next/worker.js',
+            name: `bemoat-ci-b2-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+            compatibility_date: '2025-08-15',
+            compatibility_flags: ['nodejs_compat', 'global_fetch_strictly_public'],
+            assets: { directory: '.open-next/assets', binding: 'ASSETS' },
+            d1_databases: [{ binding: 'D1', database_name: `b2-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`, database_id: suffix, remote: false }],
+            r2_buckets: [{ binding: 'R2', bucket_name: `b2-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${suffix.slice(0, 8)}`, remote: false }],
+          }
+          writeFileSync('wrangler.jsonc', `${JSON.stringify(config, null, 2)}\n`)
+          writeFileSync('runtime-smoke-artifact/effective-wrangler-config.json', `${JSON.stringify(config, null, 2)}\n`)
+          writeFileSync('.bemoat-ci/persistence-path', `${process.cwd()}/.wrangler/b2-runtime-smoke\n`)
+          JS
           cat > runtime-smoke-artifact/results.txt <<'RESULTS'
           FAIL | Worker startup | smoke assertions did not run
           FAIL | SSR | smoke assertions did not run
@@ -61,6 +64,7 @@ jobs:
           FAIL | Cleanup | smoke assertions did not run
           RESULTS
           : > runtime-smoke-artifact/worker.log
+          : > runtime-smoke-artifact/diagnostics.log
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -76,19 +80,205 @@ jobs:
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare local D1 schema
-        run: pnpm exec payload migrate --config src/payload.config.ts
-
       - name: Build the OpenNext Worker
         run: pnpm exec opennextjs-cloudflare build --config wrangler.jsonc
+
+      - name: Run bounded migration and fresh initialization diagnostics
+        id: diagnostics
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .bemoat-ci/diagnostics.mjs <<'JS'
+          import { spawnSync } from 'node:child_process'
+          import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+          import path from 'node:path'
+          import { randomUUID } from 'node:crypto'
+
+          mkdirSync('.wrangler/b2-runtime-smoke', { recursive: true })
+          const persistPath = realpathSync('.wrangler/b2-runtime-smoke')
+          const artifact = 'runtime-smoke-artifact/diagnostics.log'
+          const secret = process.env.PAYLOAD_SECRET
+          const redactions = [secret]
+          const cleanEnv = { ...process.env, NODE_ENV: 'test', CLOUDFLARE_ENV: '', BEMOAT_TEST_WRANGLER_PERSIST: persistPath }
+          for (const key of ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CF_API_TOKEN', 'CF_ACCOUNT_ID']) delete cleanEnv[key]
+          const scrub = (text) => redactions.filter(Boolean).reduce((output, value) => output.replaceAll(value, '[REDACTED]'), String(text)).replace(/(authorization:\s*bearer\s+)[^\s"']+/gi, '$1[REDACTED]')
+          const artifactLimit = 600000
+          const entryLimit = 100000
+          const truncationNotice = '\nDIAGNOSTICS_ARTIFACT_TRUNCATED; evidence incomplete\n'
+          let artifactBytes = existsSync(artifact) ? statSync(artifact).size : 0
+          let artifactTruncated = false
+          const append = (label, text) => {
+            if (artifactTruncated) return
+            const header = `${label}\n`
+            const available = Math.min(entryLimit, artifactLimit - artifactBytes - Buffer.byteLength(header) - Buffer.byteLength(truncationNotice) - 1)
+            if (available <= 0) {
+              artifactTruncated = true
+              writeFileSync(artifact, truncationNotice, { flag: 'a' })
+              artifactBytes += Buffer.byteLength(truncationNotice)
+              return
+            }
+            const raw = Buffer.from(scrub(text))
+            const wasTruncated = raw.length > available
+            const body = raw.subarray(Math.max(0, raw.length - available)).toString('utf8')
+            const record = `${header}${body}\n`
+            writeFileSync(artifact, record, { flag: 'a' })
+            artifactBytes += Buffer.byteLength(record)
+            if (wasTruncated) {
+              artifactTruncated = true
+              writeFileSync(artifact, truncationNotice, { flag: 'a' })
+              artifactBytes += Buffer.byteLength(truncationNotice)
+            }
+          }
+          const run = (label, command, args, timeout = 120000) => {
+            const result = spawnSync(command, args, { encoding: 'utf8', timeout, maxBuffer: 2 * 1024 * 1024, env: cleanEnv })
+            append(`${label}: exit=${result.status ?? 'null'} signal=${result.signal ?? 'none'} error=${result.error?.code ?? 'none'}`, `${result.stdout ?? ''}\n${result.stderr ?? ''}`)
+            return result
+          }
+          const listFiles = (root) => {
+            if (!existsSync(root)) return []
+            return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+              const target = path.join(root, entry.name)
+              return entry.isDirectory() ? listFiles(target) : /\.(sqlite|sqlite3|db)$/i.test(entry.name) ? [{ path: path.relative(persistPath, target), bytes: statSync(target).size }] : []
+            })
+          }
+          const snapshot = (label) => {
+            const files = listFiles(persistPath)
+            append(`${label} persistence: root=${persistPath}; sqliteFiles=${JSON.stringify(files)}`, '')
+            return files
+          }
+          const effectiveWrangler = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'))
+          const syntheticD1 = effectiveWrangler.d1_databases[0]
+          if (syntheticD1.binding !== 'D1' || syntheticD1.remote !== false || cleanEnv.BEMOAT_TEST_WRANGLER_PERSIST !== persistPath) {
+            throw new Error('Effective Wrangler config or explicit local persistence does not match the synthetic D1 diagnostic state')
+          }
+          append(`Synthetic D1 binding: name=${syntheticD1.database_name}; id=${syntheticD1.database_id}; local=true; remote=${syntheticD1.remote}; persistence=${persistPath}`, '')
+          const migration = run('Process A payload migrate', 'pnpm', ['exec', 'payload', 'migrate', '--config', 'src/payload.config.ts'])
+          const filesA = snapshot('Process A')
+          const inspect = (label, sql) => run(label, 'pnpm', ['exec', 'wrangler', 'd1', 'execute', 'D1', '--local', '--persist-to', persistPath, '--config', 'wrangler.jsonc', '--command', sql], 30000)
+          const schemaA = inspect('Process A schema and index evidence', "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type,name")
+          const ledgerA = inspect('Process A migration ledger evidence', 'SELECT * FROM payload_migrations ORDER BY id')
+          const seedFile = '.bemoat-ci/seed.json'
+          const seedEmail = `b2-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${randomUUID()}@example.invalid`
+          const seedPassword = randomUUID()
+          const persistenceMarker = `b2-payload-d1-continuity-${randomUUID()}`
+          writeFileSync('.bemoat-ci/persistence-marker.json', JSON.stringify({ value: persistenceMarker, databaseName: syntheticD1.database_name, databaseId: syntheticD1.database_id, persistPath }))
+          redactions.push(seedEmail, seedPassword)
+          writeFileSync(seedFile, JSON.stringify({ email: seedEmail, password: seedPassword }))
+          writeFileSync('.bemoat-ci/write-persistence-marker.mjs', `
+            import { readFileSync } from 'node:fs'
+            import { getPayload } from 'payload'
+            import config from '../src/payload.config.ts'
+            const errorEvidence = (error, depth = 0) => {
+              if (error == null) return undefined
+              if (depth > 5) return '[cause depth limit reached]'
+              if (typeof error !== 'object') return typeof error === 'string' ? error.slice(0, 4000) : undefined
+              const scalar = (value, limit = 4000) => typeof value === 'string' ? value.slice(0, limit) : (value === null || ['number', 'boolean'].includes(typeof value) ? value : undefined)
+              const query = error.query
+              const querySql = query && typeof query === 'object' && Object.hasOwn(query, 'sql') ? query.sql : undefined
+              const sql = typeof query === 'string' ? query : (Object.hasOwn(error, 'sql') ? error.sql : (querySql ?? (Object.hasOwn(error, 'statement') ? error.statement : undefined)))
+              return {
+                ...(Object.hasOwn(error, 'name') && scalar(error.name, 256) !== undefined ? { name: scalar(error.name, 256) } : {}),
+                ...(Object.hasOwn(error, 'code') && scalar(error.code, 256) !== undefined ? { code: scalar(error.code, 256) } : {}),
+                ...(Object.hasOwn(error, 'extendedCode') && scalar(error.extendedCode, 256) !== undefined ? { extendedCode: scalar(error.extendedCode, 256) } : {}),
+                ...(Object.hasOwn(error, 'errno') && scalar(error.errno, 256) !== undefined ? { errno: scalar(error.errno, 256) } : {}),
+                ...(Object.hasOwn(error, 'message') && scalar(error.message) !== undefined ? { message: scalar(error.message) } : {}),
+                ...(sql !== undefined && scalar(sql, 12000) !== undefined ? { sql: scalar(sql, 12000) } : {}),
+                ...(Object.hasOwn(error, 'stack') && scalar(error.stack, 12000) !== undefined ? { stack: scalar(error.stack, 12000) } : {}),
+                ...(Object.hasOwn(error, 'schema') && scalar(error.schema, 4000) !== undefined ? { schema: scalar(error.schema, 4000) } : {}),
+                ...((error.cause ?? error.originalError ?? error.driverError) != null
+                  ? { cause: errorEvidence(error.cause ?? error.originalError ?? error.driverError, depth + 1) }
+                  : {}),
+              }
+            }
+            const { value, databaseName, databaseId, persistPath } = JSON.parse(readFileSync('.bemoat-ci/persistence-marker.json', 'utf8'))
+            let payload
+            try {
+              const effective = JSON.parse(readFileSync('wrangler.jsonc', 'utf8')).d1_databases[0]
+              if (effective.binding !== 'D1' || effective.remote !== false || effective.database_id !== databaseId || process.env.BEMOAT_TEST_WRANGLER_PERSIST !== persistPath) throw new Error('Process A marker writer is not using the verified synthetic local D1 config and persistence path')
+              payload = await getPayload({ config })
+              const doc = await payload.create({ collection: 'categories', data: { title: value } })
+              console.log(JSON.stringify({ process: 'A-after-migrate', markerWritten: true, marker: value, documentId: doc.id, databaseName, databaseId, persistPath }))
+            } catch (error) {
+              console.error(JSON.stringify({ process: 'A-after-migrate', markerWritten: false, error: errorEvidence(error) }))
+              process.exitCode = 1
+            } finally { await payload?.destroy?.() }
+          `)
+          const markerWrite = migration.status === 0
+            ? run('Process A Payload marker write after migration', 'node', ['--import=tsx/esm', '.bemoat-ci/write-persistence-marker.mjs'])
+            : (append('Process A Payload marker write after migration: not run because migration failed', ''), { status: null })
+          writeFileSync('.bemoat-ci/initialize.mjs', `
+            import { readFileSync, writeFileSync } from 'node:fs'
+            import { getPayload } from 'payload'
+            import config from '../src/payload.config.ts'
+            const errorEvidence = (error, depth = 0) => {
+              if (error == null) return undefined
+              if (depth > 5) return '[cause depth limit reached]'
+              if (typeof error !== 'object') return typeof error === 'string' ? error.slice(0, 4000) : undefined
+              const scalar = (value, limit = 4000) => typeof value === 'string' ? value.slice(0, limit) : (value === null || ['number', 'boolean'].includes(typeof value) ? value : undefined)
+              const query = error.query
+              const querySql = query && typeof query === 'object' && Object.hasOwn(query, 'sql') ? query.sql : undefined
+              const sql = typeof query === 'string' ? query : (Object.hasOwn(error, 'sql') ? error.sql : (querySql ?? (Object.hasOwn(error, 'statement') ? error.statement : undefined)))
+              return {
+                ...(Object.hasOwn(error, 'name') && scalar(error.name, 256) !== undefined ? { name: scalar(error.name, 256) } : {}),
+                ...(Object.hasOwn(error, 'code') && scalar(error.code, 256) !== undefined ? { code: scalar(error.code, 256) } : {}),
+                ...(Object.hasOwn(error, 'extendedCode') && scalar(error.extendedCode, 256) !== undefined ? { extendedCode: scalar(error.extendedCode, 256) } : {}),
+                ...(Object.hasOwn(error, 'errno') && scalar(error.errno, 256) !== undefined ? { errno: scalar(error.errno, 256) } : {}),
+                ...(Object.hasOwn(error, 'message') && scalar(error.message) !== undefined ? { message: scalar(error.message) } : {}),
+                ...(sql !== undefined && scalar(sql, 12000) !== undefined ? { sql: scalar(sql, 12000) } : {}),
+                ...(Object.hasOwn(error, 'stack') && scalar(error.stack, 12000) !== undefined ? { stack: scalar(error.stack, 12000) } : {}),
+                ...(Object.hasOwn(error, 'schema') && scalar(error.schema, 4000) !== undefined ? { schema: scalar(error.schema, 4000) } : {}),
+                ...((error.cause ?? error.originalError ?? error.driverError) != null
+                  ? { cause: errorEvidence(error.cause ?? error.originalError ?? error.driverError, depth + 1) }
+                  : {}),
+              }
+            }
+            const seed = JSON.parse(readFileSync('.bemoat-ci/seed.json', 'utf8'))
+            const marker = JSON.parse(readFileSync('.bemoat-ci/persistence-marker.json', 'utf8'))
+            let payload
+            try {
+              const effective = JSON.parse(readFileSync('wrangler.jsonc', 'utf8')).d1_databases[0]
+              if (effective.binding !== 'D1' || effective.remote !== false || effective.database_id !== marker.databaseId || process.env.BEMOAT_TEST_WRANGLER_PERSIST !== marker.persistPath) throw new Error('Process B is not using the verified synthetic local D1 config and persistence path')
+              payload = await getPayload({ config })
+              const markerResult = await payload.find({ collection: 'categories', where: { title: { equals: marker.value } }, limit: 1 })
+              const markerTitle = markerResult.docs[0]?.title
+              const markerReadBack = typeof markerTitle === 'string'
+                ? markerTitle === marker.value
+                : Object.values(markerTitle ?? {}).some((value) => value === marker.value)
+              if (!markerReadBack) throw new Error('Fresh Process B did not read Process A Payload marker from the synthetic D1 state')
+              console.log(JSON.stringify({ process: 'B-fresh-init', markerReadBack, marker: marker.value, databaseName: marker.databaseName, databaseId: marker.databaseId, persistPath: marker.persistPath }))
+              await payload.delete({ collection: 'categories', id: markerResult.docs[0].id })
+              const user = await payload.create({ collection: 'users', data: { email: seed.email, password: seed.password } })
+              console.log(JSON.stringify({ initialized: true, seeded: true, userId: user.id }))
+              writeFileSync('.bemoat-ci/seed.json', JSON.stringify({ ...seed, userId: user.id }))
+            } catch (error) {
+              console.error(JSON.stringify({ initialized: Boolean(payload), seeded: false, error: errorEvidence(error) }))
+              process.exitCode = 1
+            } finally { await payload?.destroy?.() }
+          `)
+          const initialization = run('Process B fresh getPayload initialization and synthetic-user seed', 'node', ['--import=tsx/esm', '.bemoat-ci/initialize.mjs'])
+          const filesB = snapshot('Process B')
+          const schemaB = inspect('Process B schema and index evidence', "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type,name")
+          const ledgerB = inspect('Process B migration ledger evidence', 'SELECT * FROM payload_migrations ORDER BY id')
+          const filesAIdentity = filesA.map(({ path: file }) => file).sort()
+          const filesBIdentity = filesB.map(({ path: file }) => file).sort()
+          const sharedState = filesAIdentity.length > 0 && JSON.stringify(filesAIdentity) === JSON.stringify(filesBIdentity)
+          append(`Process A/Process B shared synthetic local D1 state: ${sharedState}; sameRoot=${persistPath}; sameBinding=${syntheticD1.binding === 'D1'}; sameDatabaseId=${syntheticD1.database_id}; ProcessAFiles=${JSON.stringify(filesAIdentity)}; ProcessBFiles=${JSON.stringify(filesBIdentity)}`, '')
+          if (migration.status !== 0 || markerWrite.status !== 0 || initialization.status !== 0 || schemaA.status !== 0 || ledgerA.status !== 0 || schemaB.status !== 0 || ledgerB.status !== 0 || !sharedState || artifactTruncated) process.exitCode = 1
+          JS
+          node .bemoat-ci/diagnostics.mjs
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run local Worker runtime smoke
         id: smoke
+        if: steps.diagnostics.outcome == 'success'
         continue-on-error: true
         shell: bash
+        env:
+          NODE_ENV: test
+          BEMOAT_TEST_WRANGLER_PERSIST: ${{ github.workspace }}/.wrangler/b2-runtime-smoke
         run: |
           mkdir -p .bemoat-ci
           cat > .bemoat-ci/runtime-smoke.mjs <<'JS'
@@ -101,8 +291,8 @@ jobs:
           import config from '../src/payload.config.ts'
 
           const base = 'http://127.0.0.1:8787'
-          const email = 'b2-runtime-smoke@example.invalid'
-          const password = 'B2-smoke-only-password-2026'
+          const seed = JSON.parse(readFileSync('.bemoat-ci/seed.json', 'utf8'))
+          const { email, password } = seed
           const results = []
           const output = createWriteStream('.bemoat-ci/wrangler.log', { flags: 'w' })
           let worker
@@ -115,9 +305,10 @@ jobs:
           let mediaFilename
           let workerStarted = false
           let cleanupOkay = true
+          const sanitize = (value) => String(value).replaceAll(password, '[REDACTED_PASSWORD]').replaceAll(email, '[REDACTED_EMAIL]').replaceAll(process.env.PAYLOAD_SECRET, '[REDACTED_SECRET]').replace(/(authorization:\s*bearer\s+)[^\s"']+/gi, '$1[REDACTED]')
 
           const pass = (name, detail = '') => results.push({ name, status: 'PASS', detail })
-          const fail = (name, error) => results.push({ name, status: 'FAIL', detail: String(error?.message ?? error).slice(0, 500) })
+          const fail = (name, error) => results.push({ name, status: 'FAIL', detail: sanitize(error?.message ?? error).slice(0, 500) })
           const check = async (name, fn) => {
             try {
               await fn()
@@ -129,15 +320,15 @@ jobs:
 
           try {
             payload = await getPayload({ config })
-            const prior = await payload.find({ collection: 'users', where: { email: { equals: email } }, limit: 1 })
-            if (prior.docs[0]) await payload.delete({ collection: 'users', id: prior.docs[0].id })
-            const user = await payload.create({ collection: 'users', data: { email, password } })
-            userId = user.id
+            userId = seed.userId
+            if (!userId) throw new Error('Fresh Process B did not record a synthetic user ID')
 
             if (!existsSync('.open-next/worker.js')) throw new Error('Expected built .open-next/worker.js was not found')
-            worker = spawn('pnpm', ['exec', 'wrangler', 'dev', '--local', '--config', 'wrangler.jsonc', '--ip', '127.0.0.1', '--port', '8787', '--log-level', 'info'], {
+            const workerEnv = { ...process.env, CLOUDFLARE_ENV: '', BEMOAT_TEST_WRANGLER_PERSIST: readFileSync('.bemoat-ci/persistence-path', 'utf8').trim() }
+            for (const key of ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CF_API_TOKEN', 'CF_ACCOUNT_ID']) delete workerEnv[key]
+            worker = spawn('pnpm', ['exec', 'wrangler', 'dev', '--local', '--persist-to', workerEnv.BEMOAT_TEST_WRANGLER_PERSIST, '--config', 'wrangler.jsonc', '--ip', '127.0.0.1', '--port', '8787', '--log-level', 'info'], {
               stdio: ['ignore', 'pipe', 'pipe'],
-              env: { ...process.env, CLOUDFLARE_ENV: '' },
+              env: workerEnv,
             })
             worker.stdout.pipe(output)
             worker.stderr.pipe(output)
@@ -153,13 +344,13 @@ jobs:
             pass('Worker startup', 'wrangler dev --local with synthetic local D1 and R2')
 
             await check('SSR', async () => {
-              const response = await fetch(base)
+              const response = await fetch(base, { signal: AbortSignal.timeout(15000) })
               const html = await response.text()
               if (!response.ok || !html.includes('Project CMS, portfolio, blog, and custom request starter.')) throw new Error(`GET / returned ${response.status} without expected server-rendered content`)
             })
 
             await check('Admin', async () => {
-              const response = await fetch(`${base}/admin/login`)
+              const response = await fetch(`${base}/admin/login`, { signal: AbortSignal.timeout(15000) })
               const html = await response.text()
               if (!response.ok || !html.toLowerCase().includes('password')) throw new Error(`GET /admin/login returned ${response.status} without login UI`)
             })
@@ -167,6 +358,8 @@ jobs:
             await check('Synthetic login', async () => {
               browser = await chromium.launch({ headless: true })
               const context = await browser.newContext()
+              context.setDefaultTimeout(15000)
+              context.setDefaultNavigationTimeout(20000)
               page = await context.newPage()
               await page.goto(`${base}/admin/login`, { waitUntil: 'domcontentloaded' })
               await page.locator('input[name="email"]').fill(email)
@@ -177,7 +370,7 @@ jobs:
             })
 
             await check('App API', async () => {
-              const response = await fetch(`${base}/my-route`)
+              const response = await fetch(`${base}/my-route`, { signal: AbortSignal.timeout(15000) })
               const json = await response.json()
               if (!response.ok || json.message !== 'This is an example of a custom route.') throw new Error(`GET /my-route returned ${response.status} with unexpected JSON`)
             })
@@ -185,11 +378,11 @@ jobs:
             await check('D1 write/readback', async () => {
               if (!page) throw new Error('Synthetic login did not establish an authenticated browser session')
               const title = `B2 runtime smoke ${crypto.randomUUID()}`
-              const createResponse = await page.request.post(`${base}/api/categories`, { data: { title } })
+              const createResponse = await page.request.post(`${base}/api/categories`, { data: { title }, timeout: 15000 })
               const created = await createResponse.json()
               if (!createResponse.ok() || !created.doc?.id) throw new Error(`POST /api/categories returned ${createResponse.status()}`)
               categoryId = created.doc.id
-              const readResponse = await page.request.get(`${base}/api/categories/${categoryId}`)
+              const readResponse = await page.request.get(`${base}/api/categories/${categoryId}`, { timeout: 15000 })
               const read = await readResponse.json()
               if (!readResponse.ok() || read.doc?.id !== categoryId || !JSON.stringify(read.doc.title).includes(title)) throw new Error(`D1-backed category readback returned ${readResponse.status()}`)
             })
@@ -199,15 +392,18 @@ jobs:
               const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/nWQAAAAASUVORK5CYII=', 'base64')
               const uploadResponse = await page.request.post(`${base}/api/media`, {
                 multipart: { alt: 'B2 synthetic runtime smoke', file: { name: 'b2-runtime-smoke.png', mimeType: 'image/png', buffer: png } },
+                timeout: 15000,
               })
               const uploaded = await uploadResponse.json()
               if (!uploadResponse.ok() || !uploaded.doc?.id || !uploaded.doc?.filename) throw new Error(`POST /api/media returned ${uploadResponse.status()}`)
               mediaId = uploaded.doc.id
               mediaFilename = uploaded.doc.filename
-              const fileResponse = await page.request.get(`${base}/api/media/file/${encodeURIComponent(mediaFilename)}`)
+              const fileResponse = await page.request.get(`${base}/api/media/file/${encodeURIComponent(mediaFilename)}`, { timeout: 15000 })
               if (!fileResponse.ok() || (await fileResponse.body()).length === 0) throw new Error(`GET media file returned ${fileResponse.status()}`)
-              const deleteResponse = await page.request.delete(`${base}/api/media/${mediaId}`)
+              const deleteResponse = await page.request.delete(`${base}/api/media/${mediaId}`, { timeout: 15000 })
               if (!deleteResponse.ok()) throw new Error(`DELETE /api/media/${mediaId} returned ${deleteResponse.status()}`)
+              const absentResponse = await page.request.get(`${base}/api/media/file/${encodeURIComponent(mediaFilename)}`, { timeout: 15000 })
+              if (absentResponse.status() !== 404) throw new Error(`Deleted R2-backed media file returned ${absentResponse.status()} instead of 404 through the application API`)
               mediaId = undefined
             })
           } catch (error) {
@@ -215,14 +411,14 @@ jobs:
           } finally {
             if (page && categoryId) {
               try {
-                const response = await page.request.delete(`${base}/api/categories/${categoryId}`)
+                const response = await page.request.delete(`${base}/api/categories/${categoryId}`, { timeout: 15000 })
                 if (!response.ok()) throw new Error(`category delete returned ${response.status()}`)
                 categoryId = undefined
               } catch (error) { cleanupOkay = false; fail('Cleanup details', error) }
             }
             if (page && mediaId) {
               try {
-                const response = await page.request.delete(`${base}/api/media/${mediaId}`)
+                const response = await page.request.delete(`${base}/api/media/${mediaId}`, { timeout: 15000 })
                 if (!response.ok()) throw new Error(`media delete returned ${response.status()}`)
                 mediaId = undefined
               } catch (error) { cleanupOkay = false; fail('Cleanup details', error) }
@@ -255,11 +451,7 @@ jobs:
             const rows = results.map(({ name, status, detail }) => `${status} | ${name}${detail ? ` | ${detail}` : ''}`)
             const summary = `B2 runtime smoke results\n${rows.join('\n')}\n`
             writeFileSync('runtime-smoke-artifact/results.txt', summary)
-            const sanitized = log
-              .replaceAll(email, '[REDACTED_EMAIL]')
-              .replaceAll(password, '[REDACTED_PASSWORD]')
-              .replaceAll(process.env.PAYLOAD_SECRET ?? '', '[REDACTED_SECRET]')
-              .replace(/(authorization:\s*bearer\s+)[^\s"']+/gi, '$1[REDACTED]')
+            const sanitized = sanitize(log)
             writeFileSync('runtime-smoke-artifact/worker.log', sanitized.slice(-200000))
             process.env.GITHUB_STEP_SUMMARY && writeFileSync(process.env.GITHUB_STEP_SUMMARY, `## B2 runtime smoke\n\n${rows.map((row) => `- ${row}`).join('\n')}\n`)
           }
@@ -272,10 +464,16 @@ jobs:
         if: always()
         shell: bash
         run: |
-          if [[ -f .bemoat-ci/wrangler.original.jsonc ]]; then cp .bemoat-ci/wrangler.original.jsonc wrangler.jsonc; fi
-          rm -rf .wrangler .bemoat-ci
+          set -euo pipefail
+          cleanup_ok=true
+          if [[ -f .bemoat-ci/wrangler.original.jsonc ]]; then cp .bemoat-ci/wrangler.original.jsonc wrangler.jsonc || cleanup_ok=false; fi
+          rm -rf .wrangler/b2-runtime-smoke .bemoat-ci || cleanup_ok=false
           if [[ -f runtime-smoke-artifact/results.txt ]]; then
-            sed -i 's/^FAIL | Cleanup | smoke assertions did not run$/PASS | Cleanup | synthetic config and local state removed/' runtime-smoke-artifact/results.txt
+            if [[ "$cleanup_ok" == true && ! -e .wrangler/b2-runtime-smoke && ! -e .bemoat-ci ]] && cmp -s wrangler.jsonc <(git show HEAD:wrangler.jsonc); then
+              printf '%s\n' 'PASS | Runner cleanup | restored tracked config and removed only task-owned synthetic state' >> runtime-smoke-artifact/results.txt
+            else
+              printf '%s\n' 'FAIL | Runner cleanup | tracked config or task-owned state cleanup could not be verified' >> runtime-smoke-artifact/results.txt
+            fi
           fi
 
       - name: Upload sanitized smoke evidence
@@ -289,4 +487,4 @@ jobs:
 
       - name: Require smoke assertions to pass
         if: always()
-        run: test "${{ steps.smoke.outcome }}" = success
+        run: test "${{ steps.diagnostics.outcome }}" = success && test "${{ steps.smoke.outcome }}" = success && ! grep -q '^FAIL |' runtime-smoke-artifact/results.txt
