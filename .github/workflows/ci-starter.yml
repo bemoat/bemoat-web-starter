@@ -11,7 +11,7 @@ on:
 
 jobs:
   starter-ci:
-    if: github.repository == 'boat1994/bemoat-web-starter'
+    if: github.repository == 'bemoat/bemoat-web-starter'
     runs-on: ubuntu-latest
     env:
       PAYLOAD_SECRET: ci-placeholder
