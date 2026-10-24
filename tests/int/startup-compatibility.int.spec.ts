@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { posix, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -362,6 +362,7 @@ type FixtureDependencyTree = {
 type RecoveryFixture = {
   expectedIdentity: FixtureIdentity
   observedIdentity: FixtureIdentity
+  approvedDependencyRoots: string[]
   committed: {
     manifestSha: string
     nextVersion: string
@@ -403,6 +404,7 @@ type RecoveryFixture = {
   }
   installResult: 'success' | 'failure' | 'interrupted'
   postInstallProofTampered: boolean
+  postInstallSymlinkScopeTampered: boolean
   attemptCount: number
   recoveryConsumed: boolean
   installCommands: string[]
@@ -415,6 +417,17 @@ type RecoveryFixture = {
   }
   partialNewArtifacts: null | { treeBytesHex: string; storeBytesHex: string }
   lastP1Proof: null | { passed: boolean; failures: string[] }
+}
+
+const isWithinApprovedDependencyRoots = (candidatePath: string, approvedRoots: string[]) => {
+  const candidate = posix.normalize(candidatePath)
+  if (!posix.isAbsolute(candidate)) return false
+  return approvedRoots.some((rootPath) => {
+    const root = posix.normalize(rootPath)
+    if (!posix.isAbsolute(root)) return false
+    const boundary = root === '/' ? '/' : `${root}/`
+    return candidate === root || candidate.startsWith(boundary)
+  })
 }
 
 const fixtureIdentity = (): FixtureIdentity => ({
@@ -482,6 +495,7 @@ const createRecoveryFixture = (stale = true): RecoveryFixture => {
   return {
     expectedIdentity,
     observedIdentity: { ...expectedIdentity },
+    approvedDependencyRoots: ['/checkout/node_modules/.pnpm'],
     committed,
     installedTree,
     originalStore,
@@ -521,6 +535,7 @@ const createRecoveryFixture = (stale = true): RecoveryFixture => {
     },
     installResult: 'success',
     postInstallProofTampered: false,
+    postInstallSymlinkScopeTampered: false,
     attemptCount: 0,
     recoveryConsumed: false,
     installCommands: [],
@@ -581,7 +596,8 @@ const safeDependencyInputs = (fixture: RecoveryFixture) => {
     || fixture.originalStore.ownerCheckout !== '/checkout'
     || !fixture.originalStore.path.startsWith('/checkout/')) return false
   if (tree && !tree.symlinks.every((link) =>
-    link.exists && !link.ambiguous && link.realpath.startsWith(`${link.approvedRoot}/`))) return false
+    link.exists && !link.ambiguous
+      && isWithinApprovedDependencyRoots(link.realpath, fixture.approvedDependencyRoots))) return false
   if (!writerExclusionProven(fixture)) return false
   return true
 }
@@ -606,7 +622,8 @@ const verifyP1InMemory = (
   if (tree.artifactFingerprint !== `sha256:artifacts-v2`) failures.push('artifact-fingerprint-mismatch')
   if (!tree.complete || !tree.cliEntrypointResolved) failures.push('required-artifact-or-cli-resolution-failed')
   if (!tree.symlinks.every((link) =>
-    link.exists && !link.ambiguous && link.realpath.startsWith(`${link.approvedRoot}/`))) failures.push('symlink-proof-failed')
+    link.exists && !link.ambiguous
+      && isWithinApprovedDependencyRoots(link.realpath, fixture.approvedDependencyRoots))) failures.push('symlink-proof-failed')
   return { passed: failures.length === 0, failures }
 }
 
@@ -698,7 +715,7 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
   fixture.taskLocalStore.bytesHex = '0x66726573682d7461736b2d73746f7265'
   fixture.taskLocalStore.fingerprint = 'sha256:fresh-task-store'
   fixture.taskLocalStore.initiallyEmpty = false
-  fixture.installedTree = {
+  const installedTree: FixtureDependencyTree = {
     ownerIssue: 675,
     ownerCheckout: '/checkout',
     unique: true,
@@ -719,7 +736,12 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
     cliEntrypointResolved: !fixture.postInstallProofTampered,
     symlinks: fixtureSymlinks(),
   }
-  const postInstallProof = verifyP1InMemory(fixture, fixture.installedTree, fixture.taskLocalStore)
+  if (fixture.postInstallSymlinkScopeTampered) {
+    installedTree.symlinks[0].realpath = '/outside/store/next'
+    installedTree.symlinks[0].approvedRoot = '/outside/store'
+  }
+  fixture.installedTree = installedTree
+  const postInstallProof = verifyP1InMemory(fixture, installedTree, fixture.taskLocalStore)
   fixture.lastP1Proof = postInstallProof
   if (!postInstallProof.passed || !quarantinePreservedByteForByte(fixture)) {
     return stopFixture('POST_INSTALL_P1_OR_PRESERVATION_PROOF_FAILED', fixture)
@@ -835,6 +857,14 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
       ['incomplete ignored inventory', (f) => { f.ignoredInventoryComplete = false }],
       ['ambiguous symlink', (f) => { f.installedTree!.symlinks[0].ambiguous = true }],
       ['escaping symlink realpath', (f) => { f.installedTree!.symlinks[0].realpath = '/outside/store/next' }],
+      ['forged realpath and descriptive approved root', (f) => {
+        f.installedTree!.symlinks[0].realpath = '/outside/store/next'
+        f.installedTree!.symlinks[0].approvedRoot = '/outside/store'
+      }],
+      ['normalized sibling-prefix escape', (f) => {
+        f.installedTree!.symlinks[0].realpath = '/checkout/node_modules/.pnpm/../.pnpm-escape/next'
+        f.installedTree!.symlinks[0].approvedRoot = '/checkout/node_modules/.pnpm-escape'
+      }],
       ['ambiguous original store', (f) => { f.originalStore.unique = false }],
       ['task store already populated', (f) => { f.taskLocalStore.bytesHex = '0xexisting' }],
       ['task store not unique', (f) => { f.taskLocalStore.unique = false }],
@@ -861,6 +891,7 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
       const result = runDependencyTransition(fixture)
 
       expect(result, name).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
+      expect(fixture.p1VerificationCount).toBe(0)
       expect(fixture.installedTree?.bytesHex).toBe(oldTreeBytes)
       expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
       expect(fixture.quarantineSnapshot).toBeNull()
@@ -908,6 +939,34 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
     expect(replay).toMatchObject({ outcome: 'STOP', reason: 'RECOVERY_ALREADY_USED' })
     expect(fixture.attemptCount).toBe(attemptsAfterFirst)
     expect(fixture.writeCount).toBe(writesAfterFirst)
+    expect(fixture.installCommands).toHaveLength(1)
+  })
+
+  it('rejects a forged post-install symlink scope during independent P1 proof', () => {
+    const fixture = createRecoveryFixture(true)
+    fixture.postInstallSymlinkScopeTampered = true
+    const oldTreeBytes = fixture.installedTree?.bytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+
+    const first = runDependencyTransition(fixture)
+
+    expect(first).toMatchObject({
+      outcome: 'STOP',
+      reason: 'POST_INSTALL_P1_OR_PRESERVATION_PROOF_FAILED',
+      attempts: 1,
+      setupEmitsCommand: false,
+    })
+    expect(fixture.lastP1Proof?.failures).toContain('symlink-proof-failed')
+    expect(fixture.p1VerificationCount).toBe(2)
+    expect(quarantinePreservedByteForByte(fixture)).toBe(true)
+    expect(fixture.quarantinedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+
+    const attemptsAfterFirst = fixture.attemptCount
+    const replay = runDependencyTransition(fixture)
+
+    expect(replay.outcome).toBe('STOP')
+    expect(fixture.attemptCount).toBe(attemptsAfterFirst)
     expect(fixture.installCommands).toHaveLength(1)
   })
 
