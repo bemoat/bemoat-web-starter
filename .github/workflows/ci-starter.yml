@@ -52,7 +52,190 @@ jobs:
         run: pnpm run typecheck
 
       - name: Integration tests
-        run: pnpm run test:int
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostic_file="$RUNNER_TEMP/bemoat-cli-help-filesystem-deltas.jsonl"
+          : > "$diagnostic_file"
+          backup_dir="$(mktemp -d "$RUNNER_TEMP/bemoat-cli-help-diagnostic.XXXXXX")"
+          helper_file="tests/helpers/cli-boundary-harness.ts"
+          spec_file="tests/int/cli-tier-b-boundaries.int.spec.ts"
+          backups_ready=false
+
+          restore_instrumentation() {
+            if [[ "$backups_ready" != true ]]; then
+              rm -rf "$backup_dir"
+              return
+            fi
+            local restore_status=0
+            cp "$backup_dir/cli-boundary-harness.ts" "$helper_file" || restore_status=1
+            cp "$backup_dir/cli-tier-b-boundaries.int.spec.ts" "$spec_file" || restore_status=1
+            cmp -s "$backup_dir/cli-boundary-harness.ts" "$helper_file" || restore_status=1
+            cmp -s "$backup_dir/cli-tier-b-boundaries.int.spec.ts" "$spec_file" || restore_status=1
+            rm -rf "$backup_dir" || restore_status=1
+            if [[ "$restore_status" -ne 0 ]]; then
+              echo 'CLI diagnostic source restoration failed' >&2
+              return 1
+            fi
+          }
+          trap 'restore_instrumentation || exit 97' EXIT
+          cp "$helper_file" "$backup_dir/cli-boundary-harness.ts"
+          cp "$spec_file" "$backup_dir/cli-tier-b-boundaries.int.spec.ts"
+          backups_ready=true
+
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs'
+
+          const path = 'tests/int/cli-tier-b-boundaries.int.spec.ts'
+          const source = readFileSync(path, 'utf8')
+          const importAnchor = 'import {\n  chmodSync,'
+          const functionAnchor = 'function expectHelpBoundary(run: CliBoundaryResult, entry: TierBCase) {'
+          if (source.split(importAnchor).length !== 2 || source.split(functionAnchor).length !== 2) {
+            throw new Error('CLI diagnostic instrumentation anchors did not match exactly once')
+          }
+
+          const helper = String.raw`function emitCliHelpFilesystemDelta(run: CliBoundaryResult, command: string) {
+            const outputPath = process.env.BEMOAT_CLI_FS_DIAGNOSTIC_FILE
+            if (!outputPath || !run.argv.some((argument) => argument === '--help' || argument === '-h')) return
+            const safePath = (value: string) => {
+              let output = String(value)
+              for (const [key, secret] of Object.entries(process.env)) {
+                if (secret && secret.length >= 4 && /(TOKEN|SECRET|PASSWORD|ACCOUNT_ID)/i.test(key)) output = output.replaceAll(secret, '[REDACTED]')
+              }
+              return output
+                .replace(/(^|\/)[^/]*(?:secret|token|password|credential|private)[^/]*(?=\/|$)/gi, '$1[REDACTED_PATH]')
+                .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, '[UUID]')
+                .replace(/\b[0-9a-f]{32,}\b/gi, '[ID]')
+                .slice(0, 512)
+            }
+
+            const changedPaths = new Set([...Object.keys(run.before), ...Object.keys(run.after)])
+            const entries = []
+            for (const path of [...changedPaths].sort()) {
+              const before = run.before[path]
+              const after = run.after[path]
+              if (path === '.git-boundary-state') continue
+              if (!before) entries.push({ path: safePath(path), action: 'added', kind: after.kind, mode: after.mode })
+              else if (!after) entries.push({ path: safePath(path), action: 'removed', kind: before.kind, mode: before.mode })
+              else {
+                const facets = []
+                if (before.kind !== after.kind) facets.push('kind')
+                if (before.mode !== after.mode) facets.push('mode')
+                if (before.content !== after.content) facets.push('content')
+                if (before.target !== after.target) facets.push('symlink-target')
+                if (facets.length) entries.push({ path: safePath(path), action: 'modified', facets })
+              }
+            }
+
+            const gitStateChanged = run.before['.git-boundary-state']?.content !== run.after['.git-boundary-state']?.content
+            const gitChanges = []
+            const gitCommandChanges = []
+            if (gitStateChanged) {
+              const parseGitState = (encoded) => {
+                if (!encoded) return []
+                return Buffer.from(encoded, 'base64').toString('utf8').split('\n---\n').map((section) => {
+                  const lines = section.split('\n')
+                  const command = lines.shift() ?? ''
+                  const exitCode = lines.shift() ?? ''
+                  const paths = new Map()
+                  const residualLines = []
+                  for (const line of lines) {
+                    let entryPath
+                    if (command.startsWith('status ')) {
+                      if (!/^[ MADRCU?!]{2} /.test(line)) {
+                        if (line) residualLines.push(line)
+                        continue
+                      }
+                      entryPath = line.slice(3)
+                    } else {
+                      const tab = line.indexOf('\t')
+                      if (tab < 0) {
+                        if (line) residualLines.push(line)
+                        continue
+                      }
+                      entryPath = line.slice(tab + 1)
+                    }
+                    if (entryPath) paths.set(entryPath, line)
+                  }
+                  return { command, exitCode, paths, residualLines }
+                })
+              }
+              const beforeCommands = parseGitState(run.before['.git-boundary-state']?.content)
+              const afterCommands = parseGitState(run.after['.git-boundary-state']?.content)
+              for (let index = 0; index < Math.max(beforeCommands.length, afterCommands.length); index += 1) {
+                const before = beforeCommands[index]
+                const after = afterCommands[index]
+                const command = after?.command ?? before?.command ?? 'unknown'
+                const paths = new Set([...(before?.paths.keys() ?? []), ...(after?.paths.keys() ?? [])])
+                const commandPaths = []
+                for (const path of [...paths].sort()) {
+                  const beforeLine = before?.paths.get(path)
+                  const afterLine = after?.paths.get(path)
+                  if (beforeLine === afterLine) continue
+                  commandPaths.push({
+                    command,
+                    path: safePath(path),
+                    action: beforeLine === undefined ? 'added' : afterLine === undefined ? 'removed' : 'modified',
+                  })
+                }
+                gitChanges.push(...commandPaths)
+                if (
+                  before?.exitCode !== after?.exitCode
+                  || JSON.stringify(before?.residualLines ?? []) !== JSON.stringify(after?.residualLines ?? [])
+                  || commandPaths.length > 0
+                ) {
+                  gitCommandChanges.push({
+                    command,
+                    exitCodeChanged: before?.exitCode !== after?.exitCode,
+                    residualOutputChanged: JSON.stringify(before?.residualLines ?? []) !== JSON.stringify(after?.residualLines ?? []),
+                    changedPathCount: commandPaths.length,
+                  })
+                }
+              }
+            }
+
+            const record = {
+              type: 'cli-help-filesystem-delta',
+              command,
+              entrypoint: run.entrypoint,
+              argv: run.argv,
+              cwdScope: run.before['.git-boundary-state'] ? 'repository-root' : 'isolated-scratch',
+              filesystemUnchanged: run.filesystem_unchanged,
+              gitStateChanged,
+              gitCommandChanges: gitCommandChanges.slice(0, 100),
+              omittedGitCommandChangeCount: Math.max(0, gitCommandChanges.length - 100),
+              entries: entries.slice(0, 100),
+              omittedEntryCount: Math.max(0, entries.length - 100),
+              gitChanges: gitChanges.slice(0, 100),
+              omittedGitChangeCount: Math.max(0, gitChanges.length - 100),
+            }
+            appendFileSync(outputPath, JSON.stringify(record) + '\n', 'utf8')
+          }
+
+          `
+          const instrumented = source
+            .replace(importAnchor, 'import {\n  appendFileSync,\n  chmodSync,')
+            .replace(functionAnchor, `${helper}${functionAnchor}\n  emitCliHelpFilesystemDelta(run, entry.command)`)
+          writeFileSync(path, instrumented, 'utf8')
+          JS
+
+          set +e
+          BEMOAT_CLI_FS_DIAGNOSTIC_FILE="$diagnostic_file" pnpm run test:int
+          test_status=$?
+          set -e
+
+          restore_instrumentation
+          trap - EXIT
+          exit "$test_status"
+
+      - name: Upload sanitized CLI help filesystem diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: starter-strict-cli-help-delta-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bemoat-cli-help-filesystem-deltas.jsonl
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Build
         run: pnpm run build
