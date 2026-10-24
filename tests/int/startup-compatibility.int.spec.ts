@@ -328,6 +328,9 @@ type FixtureSymlink = {
 
 type FixtureStore = {
   path: string
+  // Independently modeled resolved identity; this is in-memory evidence, not a filesystem read.
+  realpath: string | null
+  realpathUnambiguous: boolean
   ownerIssue: number
   ownerCheckout: string
   unique: boolean
@@ -351,6 +354,7 @@ type FixtureDependencyTree = {
   virtualStoreLockSemanticId: string
   virtualStorePath: string
   storeDir: string
+  storeRealpath: string | null
   linkerCompatible: boolean
   pnpmMetadataCompatible: boolean
   storeFingerprint: string
@@ -363,6 +367,7 @@ type RecoveryFixture = {
   expectedIdentity: FixtureIdentity
   observedIdentity: FixtureIdentity
   approvedDependencyRoots: string[]
+  approvedTaskStoreWriteRoots: string[]
   committed: {
     manifestSha: string
     nextVersion: string
@@ -403,6 +408,10 @@ type RecoveryFixture = {
     }
   }
   installResult: 'success' | 'failure' | 'interrupted'
+  // Optional independently observed command target; null uses the selected store path.
+  actualInstallStorePath: string | null
+  postInstallStorePathDrift: string | null
+  postInstallStoreRealpathDrift: string | null
   postInstallProofTampered: boolean
   postInstallSymlinkScopeTampered: boolean
   attemptCount: number
@@ -428,6 +437,43 @@ const isWithinApprovedDependencyRoots = (candidatePath: string, approvedRoots: s
     const boundary = root === '/' ? '/' : `${root}/`
     return candidate === root || candidate.startsWith(boundary)
   })
+}
+
+// The raw candidate must be canonical before containment; normalizing traversal
+// first would hide the unsafe input that the Host must reject.
+const isCanonicalAbsolutePath = (candidate: string) =>
+  posix.isAbsolute(candidate)
+  && !candidate.split('/').includes('..')
+  && posix.normalize(candidate) === candidate
+
+const isWithinPathRoot = (candidate: string, root: string) =>
+  candidate === root || candidate.startsWith(`${root === '/' ? '' : root}/`)
+
+const selectedTaskStoreIdentity = (fixture: RecoveryFixture) => {
+  const store = fixture.taskLocalStore
+  const old = fixture.originalStore
+  if (!store.realpath || !old.realpath
+    || !store.realpathUnambiguous || !old.realpathUnambiguous
+    || !isCanonicalAbsolutePath(store.path) || !isCanonicalAbsolutePath(store.realpath)
+    || !isCanonicalAbsolutePath(old.realpath)
+    || !fixture.writeScopeProven || !store.insideWriteScope
+    || !store.initiallyEmpty || store.bytesHex !== ''
+    || !store.unique || store.ownerIssue !== fixture.expectedIdentity.issue
+    || store.ownerCheckout !== '/checkout') return null
+
+  const roots = fixture.approvedTaskStoreWriteRoots
+  if (roots.length === 0 || !roots.every(isCanonicalAbsolutePath)) return null
+  const matchingRoots = roots.filter((root) =>
+    store.path !== root && store.realpath !== root
+      && isWithinPathRoot(store.path, root)
+      && isWithinPathRoot(store.realpath, root))
+  if (matchingRoots.length !== 1
+    || !isWithinPathRoot(store.path, '/checkout')
+    || !isWithinPathRoot(store.realpath, '/checkout')
+    || store.realpath === old.realpath
+    || store.path === old.path || store.path === old.realpath
+    || store.realpath === old.path) return null
+  return { path: store.path, realpath: store.realpath }
 }
 
 const fixtureIdentity = (): FixtureIdentity => ({
@@ -463,6 +509,8 @@ const createRecoveryFixture = (stale = true): RecoveryFixture => {
   }
   const originalStore: FixtureStore = {
     path: '/checkout/node_modules/.pnpm-store',
+    realpath: '/checkout/node_modules/.pnpm-store',
+    realpathUnambiguous: true,
     ownerIssue: 675,
     ownerCheckout: '/checkout',
     unique: true,
@@ -485,6 +533,7 @@ const createRecoveryFixture = (stale = true): RecoveryFixture => {
     virtualStoreLockSemanticId: stale ? 'pnpm-lock-semantic-v1' : committed.lockSemanticId,
     virtualStorePath: '/checkout/node_modules/.pnpm',
     storeDir: originalStore.path,
+    storeRealpath: originalStore.realpath,
     linkerCompatible: true,
     pnpmMetadataCompatible: true,
     storeFingerprint: originalStore.fingerprint,
@@ -496,11 +545,15 @@ const createRecoveryFixture = (stale = true): RecoveryFixture => {
     expectedIdentity,
     observedIdentity: { ...expectedIdentity },
     approvedDependencyRoots: ['/checkout/node_modules/.pnpm'],
+    // Fixed Host-approved scope evidence; it is not constructed from taskLocalStore.path.
+    approvedTaskStoreWriteRoots: ['/checkout/.bemoat'],
     committed,
     installedTree,
     originalStore,
     taskLocalStore: {
       path: '/checkout/.bemoat/issue-675-pnpm-store',
+      realpath: '/checkout/.bemoat/issue-675-pnpm-store',
+      realpathUnambiguous: true,
       ownerIssue: 675,
       ownerCheckout: '/checkout',
       unique: true,
@@ -534,6 +587,9 @@ const createRecoveryFixture = (stale = true): RecoveryFixture => {
       },
     },
     installResult: 'success',
+    actualInstallStorePath: null,
+    postInstallStorePathDrift: null,
+    postInstallStoreRealpathDrift: null,
     postInstallProofTampered: false,
     postInstallSymlinkScopeTampered: false,
     attemptCount: 0,
@@ -594,7 +650,11 @@ const safeDependencyInputs = (fixture: RecoveryFixture) => {
   if (!fixture.originalStore.unique
     || fixture.originalStore.ownerIssue !== fixture.expectedIdentity.issue
     || fixture.originalStore.ownerCheckout !== '/checkout'
-    || !fixture.originalStore.path.startsWith('/checkout/')) return false
+    || !fixture.originalStore.realpath || !fixture.originalStore.realpathUnambiguous
+    || !isCanonicalAbsolutePath(fixture.originalStore.path)
+    || !isCanonicalAbsolutePath(fixture.originalStore.realpath)
+    || !isWithinPathRoot(fixture.originalStore.path, '/checkout')
+    || !isWithinPathRoot(fixture.originalStore.realpath, '/checkout')) return false
   if (tree && !tree.symlinks.every((link) =>
     link.exists && !link.ambiguous
       && isWithinApprovedDependencyRoots(link.realpath, fixture.approvedDependencyRoots))) return false
@@ -606,6 +666,7 @@ const verifyP1InMemory = (
   fixture: RecoveryFixture,
   tree: FixtureDependencyTree,
   store: FixtureStore,
+  expectedStoreIdentity = { path: store.path, realpath: store.realpath },
 ) => {
   fixture.p1VerificationCount += 1
   const failures: string[] = []
@@ -615,7 +676,10 @@ const verifyP1InMemory = (
   if (tree.installedNextVersion !== fixture.committed.nextVersion) failures.push('dependency-version-mismatch')
   if (!tree.linkerCompatible || !tree.pnpmMetadataCompatible) failures.push('incompatible-module-metadata')
   if (tree.virtualStorePath !== '/checkout/node_modules/.pnpm') failures.push('virtual-store-path-mismatch')
-  if (tree.storeDir !== store.path) failures.push('store-path-mismatch')
+  if (store.path !== expectedStoreIdentity.path || tree.storeDir !== expectedStoreIdentity.path) failures.push('store-path-mismatch')
+  if (!expectedStoreIdentity.realpath || !store.realpathUnambiguous
+    || store.realpath !== expectedStoreIdentity.realpath
+    || tree.storeRealpath !== expectedStoreIdentity.realpath) failures.push('store-realpath-mismatch')
   if (!store.unique || store.ownerIssue !== fixture.expectedIdentity.issue
     || store.ownerCheckout !== '/checkout') failures.push('ambiguous-store-ownership')
   if (!store.bytesHex || !store.fingerprint || tree.storeFingerprint !== store.fingerprint) failures.push('store-fingerprint-mismatch')
@@ -678,16 +742,14 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
     && oldTree.lockSemanticId !== fixture.committed.lockSemanticId
     && oldP1.failures.length > 0
     && oldP1.failures.every((failure) => staleMismatchKinds.has(failure))
-  const freshTaskStore = fixture.taskLocalStore.path.startsWith('/checkout/')
-    && fixture.taskLocalStore.initiallyEmpty
-    && fixture.taskLocalStore.bytesHex === ''
-    && fixture.taskLocalStore.unique
-    && fixture.taskLocalStore.ownerIssue === fixture.expectedIdentity.issue
-    && fixture.taskLocalStore.ownerCheckout === '/checkout'
-    && fixture.taskLocalStore.insideWriteScope
-    && fixture.taskLocalStore.path !== fixture.originalStore.path
-  if (!staleOnlyForCommittedUpgrade || !freshTaskStore) {
+  const taskStoreIdentity = selectedTaskStoreIdentity(fixture)
+  if (!staleOnlyForCommittedUpgrade || !taskStoreIdentity) {
     return stopFixture('NOT_EXACT_STALE_UPGRADE_OR_UNSAFE_TASK_STORE', fixture)
+  }
+  // Compare separately modeled actual command evidence before quarantine or any write.
+  if (fixture.actualInstallStorePath !== null
+    && fixture.actualInstallStorePath !== taskStoreIdentity.path) {
+    return stopFixture('INSTALL_TARGET_MISMATCH', fixture)
   }
 
   fixture.quarantinedTree = oldTree
@@ -699,7 +761,7 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
   fixture.recoveryConsumed = true
   fixture.attemptCount += 1
   fixture.writeCount += 1
-  const installCommand = 'pnpm install --frozen-lockfile --ignore-scripts --store-dir /checkout/.bemoat/issue-675-pnpm-store'
+  const installCommand = `pnpm install --frozen-lockfile --ignore-scripts --store-dir ${taskStoreIdentity.path}`
   fixture.installCommands.push(installCommand)
   fixture.writeCount += 1
 
@@ -715,6 +777,8 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
   fixture.taskLocalStore.bytesHex = '0x66726573682d7461736b2d73746f7265'
   fixture.taskLocalStore.fingerprint = 'sha256:fresh-task-store'
   fixture.taskLocalStore.initiallyEmpty = false
+  if (fixture.postInstallStorePathDrift) fixture.taskLocalStore.path = fixture.postInstallStorePathDrift
+  if (fixture.postInstallStoreRealpathDrift) fixture.taskLocalStore.realpath = fixture.postInstallStoreRealpathDrift
   const installedTree: FixtureDependencyTree = {
     ownerIssue: 675,
     ownerCheckout: '/checkout',
@@ -729,6 +793,7 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
     virtualStoreLockSemanticId: fixture.committed.lockSemanticId,
     virtualStorePath: '/checkout/node_modules/.pnpm',
     storeDir: fixture.taskLocalStore.path,
+    storeRealpath: fixture.taskLocalStore.realpath,
     linkerCompatible: true,
     pnpmMetadataCompatible: true,
     storeFingerprint: fixture.taskLocalStore.fingerprint,
@@ -741,7 +806,7 @@ const runDependencyTransition = (fixture: RecoveryFixture) => {
     installedTree.symlinks[0].approvedRoot = '/outside/store'
   }
   fixture.installedTree = installedTree
-  const postInstallProof = verifyP1InMemory(fixture, installedTree, fixture.taskLocalStore)
+  const postInstallProof = verifyP1InMemory(fixture, installedTree, fixture.taskLocalStore, taskStoreIdentity)
   fixture.lastP1Proof = postInstallProof
   if (!postInstallProof.passed || !quarantinePreservedByteForByte(fixture)) {
     return stopFixture('POST_INSTALL_P1_OR_PRESERVATION_PROOF_FAILED', fixture)
@@ -842,6 +907,130 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
     expect(fixture.taskLocalStore.bytesHex).not.toBe('')
     expect(fixture.lastP1Proof).toEqual({ passed: true, failures: [] })
     expect(fixture.p1VerificationCount).toBe(2)
+  })
+
+  // Authority: §12 one-shot #675 requires the single frozen install and
+  // independent P1 proof to use the separately validated task-store identity.
+  // This is a deterministic in-memory fixture; no live filesystem is inspected.
+  it('binds an alternate approved Issue-owned task store through command and post-install P1 proof', () => {
+    const fixture = createRecoveryFixture(true)
+    const alternate = '/checkout/.bemoat/issue-675-alternate-pnpm-store'
+    fixture.taskLocalStore.path = alternate
+    fixture.taskLocalStore.realpath = alternate
+    fixture.ignoredArtifacts[1].path = alternate
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({
+      outcome: 'SETUP_COMPLETE',
+      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+      setupEmitsCommand: false,
+      attempts: 1,
+    })
+    expect(fixture.installCommands).toEqual([
+      'pnpm install --frozen-lockfile --ignore-scripts --store-dir /checkout/.bemoat/issue-675-alternate-pnpm-store',
+    ])
+    expect(fixture.installedTree?.storeDir).toBe(alternate)
+    expect(fixture.installedTree?.storeRealpath).toBe(alternate)
+    expect(fixture.lastP1Proof).toEqual({ passed: true, failures: [] })
+    expect(quarantinePreservedByteForByte(fixture)).toBe(true)
+  })
+
+  // Authority: §12 and Founder comment 6386356029 require lexical traversal,
+  // canonical-boundary, realpath, scope, ownership, and old-store identity
+  // rejection before quarantine or install. Each case reaches task-store
+  // selection after the old tree's stale-lock P1 denial.
+  it.each([
+    ['parent traversal', (f: RecoveryFixture) => { f.taskLocalStore.path = '/checkout/../shared/store' }],
+    ['nested parent traversal', (f: RecoveryFixture) => { f.taskLocalStore.path = '/checkout/.bemoat/../shared/store' }],
+    ['sibling-prefix escape', (f: RecoveryFixture) => {
+      f.taskLocalStore.path = '/checkout2/store'
+      f.taskLocalStore.realpath = '/checkout2/store'
+    }],
+    ['realpath escape', (f: RecoveryFixture) => { f.taskLocalStore.realpath = '/outside/store' }],
+    ['unknown realpath', (f: RecoveryFixture) => { f.taskLocalStore.realpath = null }],
+    ['ambiguous realpath', (f: RecoveryFixture) => { f.taskLocalStore.realpathUnambiguous = false }],
+    ['unknown approved write scope', (f: RecoveryFixture) => { f.approvedTaskStoreWriteRoots = [] }],
+    ['ambiguous approved write scope', (f: RecoveryFixture) => {
+      f.approvedTaskStoreWriteRoots = ['/checkout/.bemoat', '/checkout']
+    }],
+    ['unowned task store', (f: RecoveryFixture) => { f.taskLocalStore.ownerIssue = 674 }],
+    ['old-store canonical alias', (f: RecoveryFixture) => {
+      f.originalStore.realpath = '/checkout/.bemoat/issue-675-pnpm-store'
+      f.installedTree!.storeRealpath = f.originalStore.realpath
+    }],
+  ] as const)('stops before any write for %s', (_name, corruptStore) => {
+    const fixture = createRecoveryFixture(true)
+    const oldTreeBytes = fixture.installedTree?.bytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+    corruptStore(fixture)
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
+    expect(fixture.p1VerificationCount).toBe(1)
+    expect(fixture.quarantineSnapshot).toBeNull()
+    expect(fixture.installCommands).toEqual([])
+    expect(fixture.installedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+  })
+
+  // Authority: §12 permits no setup write when the proposed command target
+  // differs from the validated task store, even if both paths are in scope.
+  it('stops before quarantine when the independently modeled command target differs', () => {
+    const fixture = createRecoveryFixture(true)
+    fixture.actualInstallStorePath = '/checkout/.bemoat/issue-675-other-pnpm-store'
+    const oldTreeBytes = fixture.installedTree?.bytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({
+      outcome: 'STOP',
+      reason: 'INSTALL_TARGET_MISMATCH',
+      writes: 0,
+      attempts: 0,
+    })
+    expect(fixture.p1VerificationCount).toBe(1)
+    expect(fixture.quarantineSnapshot).toBeNull()
+    expect(fixture.installCommands).toEqual([])
+    expect(fixture.installedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+  })
+
+  // Authority: §12 makes any post-install store identity drift terminal. The
+  // P1-equivalent check must compare against the pre-write validated identity.
+  it.each([
+    ['path', (f: RecoveryFixture) => {
+      f.postInstallStorePathDrift = '/checkout/.bemoat/issue-675-drifted-store'
+    }, 'store-path-mismatch'],
+    ['realpath', (f: RecoveryFixture) => {
+      f.postInstallStoreRealpathDrift = '/checkout/.bemoat/issue-675-drifted-store'
+    }, 'store-realpath-mismatch'],
+  ] as const)('stops terminally on post-install store %s drift', (_name, tamper, expectedFailure) => {
+    const fixture = createRecoveryFixture(true)
+    const oldTreeBytes = fixture.installedTree?.bytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+    tamper(fixture)
+
+    const first = runDependencyTransition(fixture)
+
+    expect(first).toMatchObject({
+      outcome: 'STOP',
+      reason: 'POST_INSTALL_P1_OR_PRESERVATION_PROOF_FAILED',
+      attempts: 1,
+      setupEmitsCommand: false,
+    })
+    expect(fixture.lastP1Proof?.failures).toContain(expectedFailure)
+    expect(fixture.p1VerificationCount).toBe(2)
+    expect(fixture.quarantinedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+    expect(quarantinePreservedByteForByte(fixture)).toBe(true)
+    const writesAfterFirst = fixture.writeCount
+    expect(runDependencyTransition(fixture)).toMatchObject({ outcome: 'STOP', reason: 'RECOVERY_ALREADY_USED' })
+    expect(fixture.attemptCount).toBe(1)
+    expect(fixture.writeCount).toBe(writesAfterFirst)
+    expect(fixture.installCommands).toHaveLength(1)
   })
 
   // Authority: §12 fails closed before mutation for dirty state, uncertain
