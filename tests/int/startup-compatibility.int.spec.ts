@@ -346,6 +346,7 @@ const decideStaleDependencySetup = (evidence: StaleDependencyEvidence) => {
     && evidence.trackedAndUntrackedClean
     && evidence.ignoredArtifactsKnownAndNonSecret
     && evidence.staleInstalledTreeAgainstCommittedLock
+    && evidence.installedArtifactsCompleteAndFingerprinted
     && evidence.existingStoreUniqueAndBounded
     && evidence.dependencyRootsHaveNoAmbiguousSymlinks
     && writerExclusion
