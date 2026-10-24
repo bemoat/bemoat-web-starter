@@ -303,3 +303,170 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
     )
   })
 })
+
+type StaleDependencyEvidence = {
+  repositoryIssueBranchBaseHeadExact: boolean
+  supportedRuntimeAndLock: boolean
+  trackedAndUntrackedClean: boolean
+  ignoredArtifactsKnownAndNonSecret: boolean
+  staleInstalledTreeAgainstCommittedLock: boolean
+  p1DependenciesValid: boolean
+  existingStoreUniqueAndBounded: boolean
+  dependencyRootsHaveNoAmbiguousSymlinks: boolean
+  writerOwnershipProven: boolean
+  processListDenied: boolean
+  enforceableExclusiveLease: boolean
+  noCompetingWriter: boolean
+  hostWriteScopeProven: boolean
+  noDriftSinceEvidenceCapture: boolean
+  noPriorRecoveryAttempt: boolean
+  quarantinePreservesOriginalTreeAndStore: boolean
+  installSucceeded: boolean
+  p1EquivalentPostInstallProof: boolean
+}
+
+const decideStaleDependencySetup = (evidence: StaleDependencyEvidence) => {
+  if (evidence.p1DependenciesValid) {
+    return {
+      outcome: 'P1_REUSE',
+      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+      writes: 0,
+      setupEmitsCommand: false,
+    } as const
+  }
+
+  const writerExclusion = evidence.writerOwnershipProven
+    && evidence.noCompetingWriter
+    && (!evidence.processListDenied || evidence.enforceableExclusiveLease)
+
+  const eligible = evidence.repositoryIssueBranchBaseHeadExact
+    && evidence.supportedRuntimeAndLock
+    && evidence.trackedAndUntrackedClean
+    && evidence.ignoredArtifactsKnownAndNonSecret
+    && evidence.staleInstalledTreeAgainstCommittedLock
+    && evidence.existingStoreUniqueAndBounded
+    && evidence.dependencyRootsHaveNoAmbiguousSymlinks
+    && writerExclusion
+    && evidence.hostWriteScopeProven
+    && evidence.noDriftSinceEvidenceCapture
+    && evidence.noPriorRecoveryAttempt
+    && evidence.quarantinePreservesOriginalTreeAndStore
+
+  if (!eligible || !evidence.installSucceeded || !evidence.p1EquivalentPostInstallProof) {
+    return { outcome: 'STOP', next: 'STOP', setupEmitsCommand: false } as const
+  }
+
+  return {
+    outcome: 'SETUP_COMPLETE',
+    next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+    setupEmitsCommand: false,
+  } as const
+}
+
+const staleDependencyEvidence = (): StaleDependencyEvidence => ({
+  repositoryIssueBranchBaseHeadExact: true,
+  supportedRuntimeAndLock: true,
+  trackedAndUntrackedClean: true,
+  ignoredArtifactsKnownAndNonSecret: true,
+  staleInstalledTreeAgainstCommittedLock: true,
+  p1DependenciesValid: false,
+  existingStoreUniqueAndBounded: true,
+  dependencyRootsHaveNoAmbiguousSymlinks: true,
+  writerOwnershipProven: true,
+  processListDenied: false,
+  enforceableExclusiveLease: false,
+  noCompetingWriter: true,
+  hostWriteScopeProven: true,
+  noDriftSinceEvidenceCapture: true,
+  noPriorRecoveryAttempt: true,
+  quarantinePreservesOriginalTreeAndStore: true,
+  installSucceeded: true,
+  p1EquivalentPostInstallProof: true,
+})
+
+describe('Issue #675 one-shot stale installed-dependency recovery stories', () => {
+  const recoveryAuthority = preparation
+    .split('**One-shot stale installed-dependency recovery — Issue #675.')[1]
+    ?.split('No in-place retry of `pnpm install` in the failed checkout is permitted;')[0] ?? ''
+
+  // Authority: #675's approved bounded objective and §12's P1/P2/P3 gates
+  // define a single clean same-Issue stale-tree recovery; it must preserve old
+  // artifacts, prove P1-equivalent dependencies, and route only to Discovery
+  // then fresh Context. Setup never emits objective COMMAND.
+  it('allows one exact stale-tree recovery only after post-install P1 proof', () => {
+    const result = decideStaleDependencySetup(staleDependencyEvidence())
+
+    expect(result).toEqual({
+      outcome: 'SETUP_COMPLETE',
+      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+      setupEmitsCommand: false,
+    })
+    expect(recoveryAuthority).toMatch(/same-Issue.*exact live head.*approved-base/i)
+    expect(recoveryAuthority).toMatch(/quarantine.*preserve.*byte-for-byte/i)
+    expect(recoveryAuthority).toMatch(/one exact frozen\/ignore-scripts install/i)
+    expect(recoveryAuthority).toMatch(/P1-equivalent.*proof/i)
+    expect(recoveryAuthority).toMatch(/registered CLI Discovery.*fresh Context/i)
+    expect(recoveryAuthority).toMatch(/never.*`COMMAND`|no `COMMAND`/i)
+  })
+
+  // Authority: canonical §12 P1 remains read-only reuse when its full proof
+  // succeeds. This fixture ensures that valid dependencies do not enter the
+  // recovery install path.
+  it('retains P1 reuse without writes when installed dependencies already match', () => {
+    const evidence = staleDependencyEvidence()
+    evidence.p1DependenciesValid = true
+    const result = decideStaleDependencySetup(evidence)
+    expect(result).toEqual({
+      outcome: 'P1_REUSE',
+      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+      writes: 0,
+      setupEmitsCommand: false,
+    })
+    expect(preparation).toMatch(/\*\*P1 — read-only reuse\*\*/)
+  })
+
+  // Authority: #675 explicitly keeps dirty state, unknown artifacts, weak
+  // writer ownership, ambiguous dependency paths, drift, and replay fail
+  // closed. If process enumeration is denied, only an enforceable exclusive
+  // lease can substitute; otherwise the authority does not select a fallback.
+  it('stops on every unresolved identity, preservation, ownership, or retry gate', () => {
+    const blocked: Array<keyof StaleDependencyEvidence> = [
+      'repositoryIssueBranchBaseHeadExact',
+      'trackedAndUntrackedClean',
+      'ignoredArtifactsKnownAndNonSecret',
+      'existingStoreUniqueAndBounded',
+      'dependencyRootsHaveNoAmbiguousSymlinks',
+      'writerOwnershipProven',
+      'noCompetingWriter',
+      'hostWriteScopeProven',
+      'noDriftSinceEvidenceCapture',
+      'noPriorRecoveryAttempt',
+      'quarantinePreservesOriginalTreeAndStore',
+      'installSucceeded',
+      'p1EquivalentPostInstallProof',
+    ]
+
+    for (const key of blocked) {
+      const evidence = staleDependencyEvidence()
+      evidence[key] = false
+      expect(decideStaleDependencySetup(evidence), key).toEqual({
+        outcome: 'STOP',
+        next: 'STOP',
+        setupEmitsCommand: false,
+      })
+    }
+  })
+
+  // Authority: §12 makes denied process enumeration a STOP unless another
+  // mechanism actually enforces exclusive writer ownership. An advisory
+  // assertion or lease that competing writers may ignore is not proof.
+  it('requires enforced writer exclusion when process listing is unavailable', () => {
+    const evidence = staleDependencyEvidence()
+    evidence.processListDenied = true
+    evidence.enforceableExclusiveLease = false
+    expect(decideStaleDependencySetup(evidence).outcome).toBe('STOP')
+
+    evidence.enforceableExclusiveLease = true
+    expect(decideStaleDependencySetup(evidence).outcome).toBe('SETUP_COMPLETE')
+  })
+})
