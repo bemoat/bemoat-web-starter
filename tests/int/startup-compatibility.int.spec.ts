@@ -304,176 +304,638 @@ describe('Issue #655 pre-Context startup compatibility oracle', () => {
   })
 })
 
-type StaleDependencyEvidence = {
-  repositoryIssueBranchBaseHeadExact: boolean
-  supportedRuntimeAndLock: boolean
-  trackedAndUntrackedClean: boolean
-  ignoredArtifactsKnownAndNonSecret: boolean
-  staleInstalledTreeAgainstCommittedLock: boolean
-  installedArtifactsCompleteAndFingerprinted: boolean
-  p1DependenciesValid: boolean
-  existingStoreUniqueAndBounded: boolean
-  dependencyRootsHaveNoAmbiguousSymlinks: boolean
-  writerOwnershipProven: boolean
-  processListDenied: boolean
-  enforceableExclusiveLease: boolean
-  noCompetingWriter: boolean
-  hostWriteScopeProven: boolean
-  noDriftSinceEvidenceCapture: boolean
-  noPriorRecoveryAttempt: boolean
-  quarantinePreservesOriginalTreeAndStore: boolean
-  installSucceeded: boolean
-  installInterrupted: boolean
-  p1EquivalentPostInstallProof: boolean
+
+type FixtureIdentity = {
+  repository: string
+  issue: number
+  branch: string
+  upstream: string
+  approvedBaseSha: string
+  headSha: string
+  liveRemoteHeadSha: string
+  origin: string
+  attached: boolean
+  durable: boolean
 }
 
-const decideStaleDependencySetup = (evidence: StaleDependencyEvidence) => {
-  if (evidence.p1DependenciesValid) {
+type FixtureSymlink = {
+  path: string
+  realpath: string
+  approvedRoot: string
+  exists: boolean
+  ambiguous: boolean
+}
+
+type FixtureStore = {
+  path: string
+  ownerIssue: number
+  ownerCheckout: string
+  unique: boolean
+  bytesHex: string
+  fingerprint: string
+  initiallyEmpty: boolean
+  insideWriteScope: boolean
+}
+
+type FixtureDependencyTree = {
+  ownerIssue: number
+  ownerCheckout: string
+  unique: boolean
+  complete: boolean
+  manifestSha: string
+  installedNextVersion: string
+  lockSemanticId: string
+  bytesHex: string
+  modulesYamlBytesHex: string
+  virtualStoreLockBytesHex: string
+  virtualStoreLockSemanticId: string
+  virtualStorePath: string
+  storeDir: string
+  linkerCompatible: boolean
+  pnpmMetadataCompatible: boolean
+  storeFingerprint: string
+  artifactFingerprint: string
+  cliEntrypointResolved: boolean
+  symlinks: FixtureSymlink[]
+}
+
+type RecoveryFixture = {
+  expectedIdentity: FixtureIdentity
+  observedIdentity: FixtureIdentity
+  committed: {
+    manifestSha: string
+    nextVersion: string
+    lockSha: string
+    lockSemanticId: string
+    upgradeFromVersion: string
+    legitimateUpgradeCommitted: boolean
+  }
+  installedTree: FixtureDependencyTree | null
+  originalStore: FixtureStore
+  taskLocalStore: FixtureStore
+  trackedClean: boolean
+  indexClean: boolean
+  untrackedClean: boolean
+  ignoredInventoryComplete: boolean
+  ignoredArtifacts: Array<{
+    path: string
+    ownerIssue: number
+    ownerCheckout: string
+    ignored: boolean
+    known: boolean
+    secret: boolean
+  }>
+  runtimeAndLockSupported: boolean
+  writeScopeProven: boolean
+  driftDetected: boolean
+  writer: {
+    ownershipProven: boolean
+    processList: 'available' | 'denied'
+    activeCompetingWriters: number | null
+    lease: {
+      held: boolean
+      hostEnforced: boolean
+      preventsAllCompetingWriters: boolean
+      repository: string
+      issue: number
+      branch: string
+    }
+  }
+  installResult: 'success' | 'failure' | 'interrupted'
+  postInstallProofTampered: boolean
+  attemptCount: number
+  recoveryConsumed: boolean
+  installCommands: string[]
+  writeCount: number
+  p1VerificationCount: number
+  quarantinedTree: FixtureDependencyTree | null
+  quarantineSnapshot: null | {
+    treeSnapshot: FixtureDependencyTree
+    storeSnapshot: FixtureStore
+  }
+  partialNewArtifacts: null | { treeBytesHex: string; storeBytesHex: string }
+  lastP1Proof: null | { passed: boolean; failures: string[] }
+}
+
+const fixtureIdentity = (): FixtureIdentity => ({
+  repository: 'bemoat/bemoat-web-starter',
+  issue: 675,
+  branch: 'fix/675-preflight-recovery',
+  upstream: 'origin/fix/675-preflight-recovery',
+  approvedBaseSha: 'd7362350faf61664f08f5e6e0dd6b53869252c99',
+  headSha: '0123456789abcdef0123456789abcdef01234567',
+  liveRemoteHeadSha: '0123456789abcdef0123456789abcdef01234567',
+  origin: 'https://github.com/bemoat/bemoat-web-starter.git',
+  attached: true,
+  durable: true,
+})
+
+const fixtureSymlinks = (): FixtureSymlink[] => [{
+  path: '/checkout/node_modules/next',
+  realpath: '/checkout/node_modules/.pnpm/next@16.4.2/node_modules/next',
+  approvedRoot: '/checkout/node_modules/.pnpm',
+  exists: true,
+  ambiguous: false,
+}]
+
+const createRecoveryFixture = (stale = true): RecoveryFixture => {
+  const expectedIdentity = fixtureIdentity()
+  const committed = {
+    manifestSha: 'sha256:manifest-675-v2',
+    nextVersion: '16.4.2',
+    lockSha: 'sha256:lock-675-v2',
+    lockSemanticId: 'pnpm-lock-semantic-v2',
+    upgradeFromVersion: '15.4.11',
+    legitimateUpgradeCommitted: true,
+  }
+  const originalStore: FixtureStore = {
+    path: '/checkout/node_modules/.pnpm-store',
+    ownerIssue: 675,
+    ownerCheckout: '/checkout',
+    unique: true,
+    bytesHex: '0x73746f72652d6f6c642d6279746573',
+    fingerprint: 'sha256:old-store',
+    initiallyEmpty: false,
+    insideWriteScope: true,
+  }
+  const installedTree: FixtureDependencyTree = {
+    ownerIssue: 675,
+    ownerCheckout: '/checkout',
+    unique: true,
+    complete: true,
+    manifestSha: stale ? 'sha256:manifest-675-v1' : committed.manifestSha,
+    installedNextVersion: stale ? '15.4.11' : committed.nextVersion,
+    lockSemanticId: stale ? 'pnpm-lock-semantic-v1' : committed.lockSemanticId,
+    bytesHex: stale ? '0x6e6f64656d6f64756c65732d6f6c642d6279746573' : '0x6e6f64656d6f64756c65732d76322d6279746573',
+    modulesYamlBytesHex: stale ? '0x6d6f64756c65732d6f6c64' : '0x6d6f64756c65732d7632',
+    virtualStoreLockBytesHex: stale ? '0x6c6f636b2d6f6c64' : '0x6c6f636b2d7632',
+    virtualStoreLockSemanticId: stale ? 'pnpm-lock-semantic-v1' : committed.lockSemanticId,
+    virtualStorePath: '/checkout/node_modules/.pnpm',
+    storeDir: originalStore.path,
+    linkerCompatible: true,
+    pnpmMetadataCompatible: true,
+    storeFingerprint: originalStore.fingerprint,
+    artifactFingerprint: stale ? 'sha256:artifacts-v1' : 'sha256:artifacts-v2',
+    cliEntrypointResolved: true,
+    symlinks: fixtureSymlinks(),
+  }
+  return {
+    expectedIdentity,
+    observedIdentity: { ...expectedIdentity },
+    committed,
+    installedTree,
+    originalStore,
+    taskLocalStore: {
+      path: '/checkout/.bemoat/issue-675-pnpm-store',
+      ownerIssue: 675,
+      ownerCheckout: '/checkout',
+      unique: true,
+      bytesHex: '',
+      fingerprint: '',
+      initiallyEmpty: true,
+      insideWriteScope: true,
+    },
+    trackedClean: true,
+    indexClean: true,
+    untrackedClean: true,
+    ignoredInventoryComplete: true,
+    ignoredArtifacts: [
+      { path: '/checkout/node_modules', ownerIssue: 675, ownerCheckout: '/checkout', ignored: true, known: true, secret: false },
+      { path: '/checkout/.bemoat/issue-675-pnpm-store', ownerIssue: 675, ownerCheckout: '/checkout', ignored: true, known: true, secret: false },
+    ],
+    runtimeAndLockSupported: true,
+    writeScopeProven: true,
+    driftDetected: false,
+    writer: {
+      ownershipProven: true,
+      processList: 'available',
+      activeCompetingWriters: 0,
+      lease: {
+        held: true,
+        hostEnforced: true,
+        preventsAllCompetingWriters: true,
+        repository: expectedIdentity.repository,
+        issue: expectedIdentity.issue,
+        branch: expectedIdentity.branch,
+      },
+    },
+    installResult: 'success',
+    postInstallProofTampered: false,
+    attemptCount: 0,
+    recoveryConsumed: false,
+    installCommands: [],
+    writeCount: 0,
+    p1VerificationCount: 0,
+    quarantinedTree: null,
+    quarantineSnapshot: null,
+    partialNewArtifacts: null,
+    lastP1Proof: null,
+  }
+}
+
+const identityMatches = (fixture: RecoveryFixture) => {
+  const expected = fixture.expectedIdentity
+  const observed = fixture.observedIdentity
+  return observed.repository === expected.repository
+    && observed.issue === expected.issue
+    && observed.branch === expected.branch
+    && observed.upstream === expected.upstream
+    && observed.approvedBaseSha === expected.approvedBaseSha
+    && observed.headSha === expected.headSha
+    && observed.liveRemoteHeadSha === expected.headSha
+    && observed.origin === expected.origin
+    && observed.attached
+    && observed.durable
+}
+
+const writerExclusionProven = (fixture: RecoveryFixture) => {
+  const writer = fixture.writer
+  if (!writer.ownershipProven) return false
+  if (writer.processList === 'available') {
+    return writer.activeCompetingWriters === 0
+  }
+  return writer.lease.held
+    && writer.lease.hostEnforced
+    && writer.lease.preventsAllCompetingWriters
+    && writer.lease.repository === fixture.expectedIdentity.repository
+    && writer.lease.issue === fixture.expectedIdentity.issue
+    && writer.lease.branch === fixture.expectedIdentity.branch
+}
+
+const safeDependencyInputs = (fixture: RecoveryFixture) => {
+  const tree = fixture.installedTree
+  if (!identityMatches(fixture)) return false
+  if (!fixture.trackedClean || !fixture.indexClean || !fixture.untrackedClean) return false
+  if (!fixture.ignoredInventoryComplete || fixture.ignoredArtifacts.length === 0) return false
+  if (new Set(fixture.ignoredArtifacts.map((artifact) => artifact.path)).size !== fixture.ignoredArtifacts.length) return false
+  if (!fixture.ignoredArtifacts.every((artifact) =>
+    artifact.ignored && artifact.known && !artifact.secret
+      && artifact.ownerIssue === fixture.expectedIdentity.issue
+      && artifact.ownerCheckout === '/checkout'
+      && artifact.path.startsWith('/checkout/'))) return false
+  if (!fixture.runtimeAndLockSupported || !fixture.writeScopeProven || fixture.driftDetected) return false
+  if (tree && (!tree.complete || !tree.unique || tree.ownerIssue !== fixture.expectedIdentity.issue
+    || tree.ownerCheckout !== '/checkout')) return false
+  if (!fixture.originalStore.unique
+    || fixture.originalStore.ownerIssue !== fixture.expectedIdentity.issue
+    || fixture.originalStore.ownerCheckout !== '/checkout'
+    || !fixture.originalStore.path.startsWith('/checkout/')) return false
+  if (tree && !tree.symlinks.every((link) =>
+    link.exists && !link.ambiguous && link.realpath.startsWith(`${link.approvedRoot}/`))) return false
+  if (!writerExclusionProven(fixture)) return false
+  return true
+}
+
+const verifyP1InMemory = (
+  fixture: RecoveryFixture,
+  tree: FixtureDependencyTree,
+  store: FixtureStore,
+) => {
+  fixture.p1VerificationCount += 1
+  const failures: string[] = []
+  if (tree.manifestSha !== fixture.committed.manifestSha) failures.push('manifest-mismatch')
+  if (tree.lockSemanticId !== fixture.committed.lockSemanticId) failures.push('root-lock-mismatch')
+  if (tree.virtualStoreLockSemanticId !== fixture.committed.lockSemanticId) failures.push('virtual-store-lock-mismatch')
+  if (tree.installedNextVersion !== fixture.committed.nextVersion) failures.push('dependency-version-mismatch')
+  if (!tree.linkerCompatible || !tree.pnpmMetadataCompatible) failures.push('incompatible-module-metadata')
+  if (tree.virtualStorePath !== '/checkout/node_modules/.pnpm') failures.push('virtual-store-path-mismatch')
+  if (tree.storeDir !== store.path) failures.push('store-path-mismatch')
+  if (!store.unique || store.ownerIssue !== fixture.expectedIdentity.issue
+    || store.ownerCheckout !== '/checkout') failures.push('ambiguous-store-ownership')
+  if (!store.bytesHex || !store.fingerprint || tree.storeFingerprint !== store.fingerprint) failures.push('store-fingerprint-mismatch')
+  if (tree.artifactFingerprint !== `sha256:artifacts-v2`) failures.push('artifact-fingerprint-mismatch')
+  if (!tree.complete || !tree.cliEntrypointResolved) failures.push('required-artifact-or-cli-resolution-failed')
+  if (!tree.symlinks.every((link) =>
+    link.exists && !link.ambiguous && link.realpath.startsWith(`${link.approvedRoot}/`))) failures.push('symlink-proof-failed')
+  return { passed: failures.length === 0, failures }
+}
+
+const quarantinePreservedByteForByte = (fixture: RecoveryFixture) => {
+  const snapshot = fixture.quarantineSnapshot
+  const tree = fixture.quarantinedTree
+  return Boolean(snapshot && tree
+    && JSON.stringify(snapshot.treeSnapshot) === JSON.stringify(tree)
+    && JSON.stringify(snapshot.storeSnapshot) === JSON.stringify(fixture.originalStore))
+}
+
+const stopFixture = (reason: string, fixture: RecoveryFixture) => ({
+  outcome: 'STOP' as const,
+  reason,
+  next: 'STOP' as const,
+  setupEmitsCommand: false,
+  writes: fixture.writeCount,
+  attempts: fixture.attemptCount,
+})
+
+const runDependencyTransition = (fixture: RecoveryFixture) => {
+  // Identity, clean state, provenance, dependency ownership, and writer gates
+  // precede P1. A matching tree in the wrong checkout is never reusable.
+  if (!identityMatches(fixture)) return stopFixture('IDENTITY_MISMATCH', fixture)
+  if (!safeDependencyInputs(fixture)) return stopFixture('PREPARATION_GATE_FAILED', fixture)
+  if (fixture.recoveryConsumed || fixture.attemptCount !== 0) return stopFixture('RECOVERY_ALREADY_USED', fixture)
+
+  const oldTree = fixture.installedTree
+  if (!oldTree) return stopFixture('DEPENDENCY_TREE_MISSING', fixture)
+  const oldP1 = verifyP1InMemory(fixture, oldTree, fixture.originalStore)
+  if (oldP1.passed) {
     return {
-      outcome: 'P1_REUSE',
-      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
-      writes: 0,
+      outcome: 'P1_REUSE' as const,
+      reason: 'EXACT_P1_PROOF',
+      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT' as const,
       setupEmitsCommand: false,
-    } as const
+      writes: 0,
+      attempts: 0,
+    }
   }
 
-  const writerExclusion = evidence.writerOwnershipProven
-    && evidence.noCompetingWriter
-    && (!evidence.processListDenied || evidence.enforceableExclusiveLease)
+  const staleMismatchKinds = new Set<string>([
+    'manifest-mismatch',
+    'root-lock-mismatch',
+    'virtual-store-lock-mismatch',
+    'dependency-version-mismatch',
+    'artifact-fingerprint-mismatch',
+  ])
+  const staleOnlyForCommittedUpgrade = fixture.committed.legitimateUpgradeCommitted
+    && fixture.committed.upgradeFromVersion === oldTree.installedNextVersion
+    && oldTree.manifestSha !== fixture.committed.manifestSha
+    && oldTree.lockSemanticId !== fixture.committed.lockSemanticId
+    && oldP1.failures.length > 0
+    && oldP1.failures.every((failure) => staleMismatchKinds.has(failure))
+  const freshTaskStore = fixture.taskLocalStore.path.startsWith('/checkout/')
+    && fixture.taskLocalStore.initiallyEmpty
+    && fixture.taskLocalStore.bytesHex === ''
+    && fixture.taskLocalStore.unique
+    && fixture.taskLocalStore.ownerIssue === fixture.expectedIdentity.issue
+    && fixture.taskLocalStore.ownerCheckout === '/checkout'
+    && fixture.taskLocalStore.insideWriteScope
+    && fixture.taskLocalStore.path !== fixture.originalStore.path
+  if (!staleOnlyForCommittedUpgrade || !freshTaskStore) {
+    return stopFixture('NOT_EXACT_STALE_UPGRADE_OR_UNSAFE_TASK_STORE', fixture)
+  }
 
-  const eligible = evidence.repositoryIssueBranchBaseHeadExact
-    && evidence.supportedRuntimeAndLock
-    && evidence.trackedAndUntrackedClean
-    && evidence.ignoredArtifactsKnownAndNonSecret
-    && evidence.staleInstalledTreeAgainstCommittedLock
-    && evidence.installedArtifactsCompleteAndFingerprinted
-    && evidence.existingStoreUniqueAndBounded
-    && evidence.dependencyRootsHaveNoAmbiguousSymlinks
-    && writerExclusion
-    && evidence.hostWriteScopeProven
-    && evidence.noDriftSinceEvidenceCapture
-    && evidence.noPriorRecoveryAttempt
-    && evidence.quarantinePreservesOriginalTreeAndStore
+  fixture.quarantinedTree = oldTree
+  fixture.quarantineSnapshot = {
+    treeSnapshot: { ...oldTree, symlinks: oldTree.symlinks.map((link) => ({ ...link })) },
+    storeSnapshot: { ...fixture.originalStore },
+  }
+  fixture.installedTree = null
+  fixture.recoveryConsumed = true
+  fixture.attemptCount += 1
+  fixture.writeCount += 1
+  const installCommand = 'pnpm install --frozen-lockfile --ignore-scripts --store-dir /checkout/.bemoat/issue-675-pnpm-store'
+  fixture.installCommands.push(installCommand)
+  fixture.writeCount += 1
 
-  if (!eligible || !evidence.installSucceeded || evidence.installInterrupted || !evidence.p1EquivalentPostInstallProof) {
-    return { outcome: 'STOP', next: 'STOP', setupEmitsCommand: false } as const
+  if (fixture.installResult !== 'success') {
+    fixture.partialNewArtifacts = {
+      treeBytesHex: '0x7061727469616c2d696e7374616c6c',
+      storeBytesHex: '0x7061727469616c2d73746f7265',
+    }
+    fixture.taskLocalStore.bytesHex = fixture.partialNewArtifacts.storeBytesHex
+    return stopFixture(fixture.installResult === 'interrupted' ? 'INSTALL_INTERRUPTED' : 'INSTALL_FAILED', fixture)
+  }
+
+  fixture.taskLocalStore.bytesHex = '0x66726573682d7461736b2d73746f7265'
+  fixture.taskLocalStore.fingerprint = 'sha256:fresh-task-store'
+  fixture.taskLocalStore.initiallyEmpty = false
+  fixture.installedTree = {
+    ownerIssue: 675,
+    ownerCheckout: '/checkout',
+    unique: true,
+    complete: true,
+    manifestSha: fixture.committed.manifestSha,
+    installedNextVersion: fixture.committed.nextVersion,
+    lockSemanticId: fixture.committed.lockSemanticId,
+    bytesHex: '0x6e65772d646570656e64656e63792d74726565',
+    modulesYamlBytesHex: '0x6d6f64756c65732d7632',
+    virtualStoreLockBytesHex: '0x6c6f636b2d7632',
+    virtualStoreLockSemanticId: fixture.committed.lockSemanticId,
+    virtualStorePath: '/checkout/node_modules/.pnpm',
+    storeDir: fixture.taskLocalStore.path,
+    linkerCompatible: true,
+    pnpmMetadataCompatible: true,
+    storeFingerprint: fixture.taskLocalStore.fingerprint,
+    artifactFingerprint: 'sha256:artifacts-v2',
+    cliEntrypointResolved: !fixture.postInstallProofTampered,
+    symlinks: fixtureSymlinks(),
+  }
+  const postInstallProof = verifyP1InMemory(fixture, fixture.installedTree, fixture.taskLocalStore)
+  fixture.lastP1Proof = postInstallProof
+  if (!postInstallProof.passed || !quarantinePreservedByteForByte(fixture)) {
+    return stopFixture('POST_INSTALL_P1_OR_PRESERVATION_PROOF_FAILED', fixture)
   }
 
   return {
-    outcome: 'SETUP_COMPLETE',
-    next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+    outcome: 'SETUP_COMPLETE' as const,
+    reason: 'ONE_STALE_TREE_RECOVERY_PROVED',
+    next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT' as const,
     setupEmitsCommand: false,
-  } as const
+    writes: fixture.writeCount,
+    attempts: fixture.attemptCount,
+  }
 }
-
-const staleDependencyEvidence = (): StaleDependencyEvidence => ({
-  repositoryIssueBranchBaseHeadExact: true,
-  supportedRuntimeAndLock: true,
-  trackedAndUntrackedClean: true,
-  ignoredArtifactsKnownAndNonSecret: true,
-  staleInstalledTreeAgainstCommittedLock: true,
-  installedArtifactsCompleteAndFingerprinted: true,
-  p1DependenciesValid: false,
-  existingStoreUniqueAndBounded: true,
-  dependencyRootsHaveNoAmbiguousSymlinks: true,
-  writerOwnershipProven: true,
-  processListDenied: false,
-  enforceableExclusiveLease: false,
-  noCompetingWriter: true,
-  hostWriteScopeProven: true,
-  noDriftSinceEvidenceCapture: true,
-  noPriorRecoveryAttempt: true,
-  quarantinePreservesOriginalTreeAndStore: true,
-  installSucceeded: true,
-  installInterrupted: false,
-  p1EquivalentPostInstallProof: true,
-})
 
 describe('Issue #675 one-shot stale installed-dependency recovery stories', () => {
   const recoveryAuthority = preparation
     .split('**One-shot stale installed-dependency recovery — Issue #675.')[1]
     ?.split('No in-place retry of `pnpm install` in the failed checkout is permitted;')[0] ?? ''
 
-  // Authority: #675's approved bounded objective and §12's P1/P2/P3 gates
-  // define a single clean same-Issue stale-tree recovery; it must preserve old
-  // artifacts, prove P1-equivalent dependencies, and route only to Discovery
-  // then fresh Context. Setup never emits objective COMMAND.
-  it('allows one exact stale-tree recovery only after post-install P1 proof', () => {
-    const result = decideStaleDependencySetup(staleDependencyEvidence())
+  // Authority: §12 P1 permits only positive read-only proof after exact
+  // repository/Issue/branch/base/head, clean-state, artifact-provenance,
+  // ownership, and writer gates. A matching tree cannot bypass identity.
+  it.each([
+    ['repository', (f: RecoveryFixture) => { f.observedIdentity.repository = 'bemoat/other' }],
+    ['Issue', (f: RecoveryFixture) => { f.observedIdentity.issue = 674 }],
+    ['branch', (f: RecoveryFixture) => { f.observedIdentity.branch = 'fix/other' }],
+    ['upstream', (f: RecoveryFixture) => { f.observedIdentity.upstream = 'origin/fix/other' }],
+    ['approved base', (f: RecoveryFixture) => { f.observedIdentity.approvedBaseSha = 'ffffffffffffffffffffffffffffffffffffffff' }],
+    ['head', (f: RecoveryFixture) => { f.observedIdentity.headSha = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' }],
+    ['live remote head', (f: RecoveryFixture) => { f.observedIdentity.liveRemoteHeadSha = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' }],
+    ['origin', (f: RecoveryFixture) => { f.observedIdentity.origin = 'https://github.com/other/repo.git' }],
+    ['detached checkout', (f: RecoveryFixture) => { f.observedIdentity.attached = false }],
+    ['non-durable branch', (f: RecoveryFixture) => { f.observedIdentity.durable = false }],
+  ] as const)('checks exact %s identity before permitting matching dependencies through P1', (_name, corruptIdentity) => {
+    const fixture = createRecoveryFixture(false)
+    corruptIdentity(fixture)
 
-    expect(result).toEqual({
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({
+      outcome: 'STOP',
+      reason: 'IDENTITY_MISMATCH',
+      writes: 0,
+      attempts: 0,
+    })
+    expect(fixture.p1VerificationCount).toBe(0)
+    expect(fixture.installCommands).toEqual([])
+  })
+
+  // Authority: §12 P1 is read-only reuse only after every positive artifact
+  // and identity proof succeeds. It performs no install or setup write.
+  it('uses P1 for exact matching dependencies with exact identity and no writes', () => {
+    const fixture = createRecoveryFixture(false)
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({
+      outcome: 'P1_REUSE',
+      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
+      setupEmitsCommand: false,
+      writes: 0,
+      attempts: 0,
+    })
+    expect(fixture.installCommands).toEqual([])
+    expect(fixture.p1VerificationCount).toBe(1)
+  })
+
+  // Authority: #675 permits only the proven stale committed-lock upgrade
+  // class. The old installed tree and bound store remain byte-for-byte
+  // preserved; one frozen install must pass independent P1-equivalent proof.
+  it('quarantines the stale tree, installs once into a fresh task store, and routes only after P1-equivalent proof', () => {
+    const fixture = createRecoveryFixture(true)
+    const oldTree = fixture.installedTree
+    const oldTreeBytes = oldTree?.bytesHex
+    const oldModulesBytes = oldTree?.modulesYamlBytesHex
+    const oldVirtualLockBytes = oldTree?.virtualStoreLockBytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+    const oldStoreFingerprint = fixture.originalStore.fingerprint
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({
       outcome: 'SETUP_COMPLETE',
       next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
       setupEmitsCommand: false,
+      attempts: 1,
     })
+    expect(fixture.installCommands).toEqual([
+      'pnpm install --frozen-lockfile --ignore-scripts --store-dir /checkout/.bemoat/issue-675-pnpm-store',
+    ])
+    expect(fixture.quarantinedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.quarantinedTree?.modulesYamlBytesHex).toBe(oldModulesBytes)
+    expect(fixture.quarantinedTree?.virtualStoreLockBytesHex).toBe(oldVirtualLockBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+    expect(fixture.originalStore.fingerprint).toBe(oldStoreFingerprint)
+    expect(quarantinePreservedByteForByte(fixture)).toBe(true)
+    expect(fixture.taskLocalStore.bytesHex).not.toBe('')
+    expect(fixture.lastP1Proof).toEqual({ passed: true, failures: [] })
+    expect(fixture.p1VerificationCount).toBe(2)
+  })
+
+  // Authority: §12 fails closed before mutation for dirty state, uncertain
+  // provenance, unowned stores/links, unsupported runtime, drift, or missing
+  // writer enforcement. Each story preserves all original in-memory bytes.
+  it('stops before mutation for dirty, unknown, ambiguous, drifting, or competing-writer evidence', () => {
+    const cases: Array<[string, (fixture: RecoveryFixture) => void]> = [
+      ['tracked dirty', (f) => { f.trackedClean = false }],
+      ['index dirty', (f) => { f.indexClean = false }],
+      ['untracked dirty', (f) => { f.untrackedClean = false }],
+      ['unknown ignored artifact', (f) => { f.ignoredArtifacts[0].known = false }],
+      ['secret ignored artifact', (f) => { f.ignoredArtifacts[0].secret = true }],
+      ['incomplete ignored inventory', (f) => { f.ignoredInventoryComplete = false }],
+      ['ambiguous symlink', (f) => { f.installedTree!.symlinks[0].ambiguous = true }],
+      ['escaping symlink realpath', (f) => { f.installedTree!.symlinks[0].realpath = '/outside/store/next' }],
+      ['ambiguous original store', (f) => { f.originalStore.unique = false }],
+      ['task store already populated', (f) => { f.taskLocalStore.bytesHex = '0xexisting' }],
+      ['task store not unique', (f) => { f.taskLocalStore.unique = false }],
+      ['task store outside write scope', (f) => { f.taskLocalStore.insideWriteScope = false }],
+      ['task store outside checkout', (f) => { f.taskLocalStore.path = '/shared/task-store' }],
+      ['active competing writer', (f) => { f.writer.activeCompetingWriters = 1 }],
+      ['unproven writer owner', (f) => { f.writer.ownershipProven = false }],
+      ['process list denied without lease', (f) => { f.writer.processList = 'denied'; f.writer.lease.hostEnforced = false }],
+      ['lease not held', (f) => { f.writer.processList = 'denied'; f.writer.lease.held = false }],
+      ['lease does not block other writers', (f) => { f.writer.processList = 'denied'; f.writer.lease.preventsAllCompetingWriters = false }],
+      ['lease bound to another repository', (f) => { f.writer.processList = 'denied'; f.writer.lease.repository = 'bemoat/other' }],
+      ['lease bound to another branch', (f) => { f.writer.processList = 'denied'; f.writer.lease.branch = 'fix/other' }],
+      ['runtime or lock unsupported', (f) => { f.runtimeAndLockSupported = false }],
+      ['write scope unknown', (f) => { f.writeScopeProven = false }],
+      ['evidence drift', (f) => { f.driftDetected = true }],
+    ]
+
+    for (const [name, mutate] of cases) {
+      const fixture = createRecoveryFixture(true)
+      const oldTreeBytes = fixture.installedTree?.bytesHex
+      const oldStoreBytes = fixture.originalStore.bytesHex
+      mutate(fixture)
+
+      const result = runDependencyTransition(fixture)
+
+      expect(result, name).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
+      expect(fixture.installedTree?.bytesHex).toBe(oldTreeBytes)
+      expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+      expect(fixture.quarantineSnapshot).toBeNull()
+      expect(fixture.installCommands).toEqual([])
+    }
+  })
+
+  // Authority: recovery applies only to the exact authorized committed
+  // upgrade. P1 denial for another cause does not select a fallback outcome.
+  it('stops without installation when P1 failure is not solely the committed stale-lock upgrade', () => {
+    const fixture = createRecoveryFixture(true)
+    fixture.committed.legitimateUpgradeCommitted = false
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
+    expect(fixture.installCommands).toEqual([])
+  })
+
+  // Authority: §12 makes recovery terminal after one attempt. Install failure,
+  // interruption, post-install proof failure, or replay cannot start again;
+  // the quarantined original tree and old store remain byte-for-byte intact.
+  it.each([
+    ['failed install', 'failure', false, 'INSTALL_FAILED'],
+    ['interrupted install', 'interrupted', false, 'INSTALL_INTERRUPTED'],
+    ['failed post-install proof', 'success', true, 'POST_INSTALL_P1_OR_PRESERVATION_PROOF_FAILED'],
+  ] as const)('%s is terminal and preserves the original artifacts', (_name, installResult, tamperedProof, expectedReason) => {
+    const fixture = createRecoveryFixture(true)
+    fixture.installResult = installResult
+    fixture.postInstallProofTampered = tamperedProof
+    const oldTreeBytes = fixture.installedTree?.bytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+
+    const first = runDependencyTransition(fixture)
+
+    expect(first).toMatchObject({ outcome: 'STOP', reason: expectedReason, attempts: 1 })
+    expect(quarantinePreservedByteForByte(fixture)).toBe(true)
+    expect(fixture.quarantinedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
+    const attemptsAfterFirst = fixture.attemptCount
+    const writesAfterFirst = fixture.writeCount
+
+    const replay = runDependencyTransition(fixture)
+
+    expect(replay).toMatchObject({ outcome: 'STOP', reason: 'RECOVERY_ALREADY_USED' })
+    expect(fixture.attemptCount).toBe(attemptsAfterFirst)
+    expect(fixture.writeCount).toBe(writesAfterFirst)
+    expect(fixture.installCommands).toHaveLength(1)
+  })
+
+  // Authority: §12 requires a real Host-enforced exclusive lease when process
+  // enumeration is denied; advisory state cannot admit recovery.
+  it('allows denied process listing only with a scoped enforced lease', () => {
+    const blocked = createRecoveryFixture(true)
+    blocked.writer.processList = 'denied'
+    blocked.writer.lease.hostEnforced = false
+    expect(runDependencyTransition(blocked)).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
+
+    const enforced = createRecoveryFixture(true)
+    enforced.writer.processList = 'denied'
+    expect(runDependencyTransition(enforced)).toMatchObject({
+      outcome: 'SETUP_COMPLETE',
+      attempts: 1,
+      setupEmitsCommand: false,
+    })
+  })
+
+  // Supplemental policy guard. Behavioral transition assertions above are the
+  // primary oracle; these checks retain the exact §12 command and route terms.
+  it('keeps setup-only command and route wording aligned with §12', () => {
     expect(recoveryAuthority).toMatch(/same-Issue.*exact live head.*approved-base/i)
     expect(recoveryAuthority).toMatch(/quarantine.*preserve.*byte-for-byte/i)
     expect(recoveryAuthority).toMatch(/one exact frozen\/ignore-scripts install/i)
     expect(recoveryAuthority).toMatch(/P1-equivalent.*proof/i)
     expect(recoveryAuthority).toMatch(/registered CLI Discovery.*fresh Context/i)
-    expect(recoveryAuthority).toMatch(/never.*`COMMAND`|no `COMMAND`/i)
-  })
-
-  // Authority: canonical §12 P1 remains read-only reuse when its full proof
-  // succeeds. This fixture ensures that valid dependencies do not enter the
-  // recovery install path.
-  it('retains P1 reuse without writes when installed dependencies already match', () => {
-    const evidence = staleDependencyEvidence()
-    evidence.p1DependenciesValid = true
-    const result = decideStaleDependencySetup(evidence)
-    expect(result).toEqual({
-      outcome: 'P1_REUSE',
-      next: 'REGISTERED_CLI_DISCOVERY_THEN_FRESH_CONTEXT',
-      writes: 0,
-      setupEmitsCommand: false,
-    })
-    expect(preparation).toMatch(/\*\*P1 — read-only reuse\.\*\*/)
-  })
-
-  // Authority: #675 explicitly keeps dirty state, unknown artifacts, weak
-  // writer ownership, ambiguous dependency paths, drift, and replay fail
-  // closed. If process enumeration is denied, only an enforceable exclusive
-  // lease can substitute; otherwise the authority does not select a fallback.
-  it('stops on every unresolved identity, preservation, ownership, or retry gate', () => {
-    const blocked: Array<keyof StaleDependencyEvidence> = [
-      'repositoryIssueBranchBaseHeadExact',
-      'trackedAndUntrackedClean',
-      'ignoredArtifactsKnownAndNonSecret',
-      'installedArtifactsCompleteAndFingerprinted',
-      'existingStoreUniqueAndBounded',
-      'dependencyRootsHaveNoAmbiguousSymlinks',
-      'writerOwnershipProven',
-      'noCompetingWriter',
-      'hostWriteScopeProven',
-      'noDriftSinceEvidenceCapture',
-      'noPriorRecoveryAttempt',
-      'quarantinePreservesOriginalTreeAndStore',
-      'installSucceeded',
-      'installInterrupted',
-      'p1EquivalentPostInstallProof',
-    ]
-
-    for (const key of blocked) {
-      const evidence = staleDependencyEvidence()
-      evidence[key] = key === 'installInterrupted'
-      expect(decideStaleDependencySetup(evidence), key).toEqual({
-        outcome: 'STOP',
-        next: 'STOP',
-        setupEmitsCommand: false,
-      })
-    }
-  })
-
-  // Authority: §12 makes denied process enumeration a STOP unless another
-  // mechanism actually enforces exclusive writer ownership. An advisory
-  // assertion or lease that competing writers may ignore is not proof.
-  it('requires enforced writer exclusion when process listing is unavailable', () => {
-    const evidence = staleDependencyEvidence()
-    evidence.processListDenied = true
-    evidence.enforceableExclusiveLease = false
-    expect(decideStaleDependencySetup(evidence).outcome).toBe('STOP')
-
-    evidence.enforceableExclusiveLease = true
-    expect(decideStaleDependencySetup(evidence).outcome).toBe('SETUP_COMPLETE')
+    expect(recoveryAuthority).toMatch(/never.*COMMAND|no COMMAND/i)
   })
 })
