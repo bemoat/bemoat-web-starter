@@ -433,7 +433,7 @@ describe('Bemoat PStack execution cutover contract', () => {
       /The only pre-COMMAND exceptions are an exact existing-branch recovery prescribed by fresh Context, canonical wrong-Issue workspace acquisition below, and the single pre-Context dependency preparation in section 12/i,
     )
     expect(continuation).toMatch(
-      /this preparation is setup-only and occurs before CLI Discovery, followed only by registered CLI Discovery and fresh Context; it grants no objective-work authority/i,
+      /dependency preparation is setup-only and occurs before CLI Discovery, followed only by registered CLI Discovery and fresh Context; it grants no objective-work authority.*Successful setup grants no `COMMAND` or first-edit authority; fresh Context must independently authorize `COMMAND` through `next_action\.type: COMMAND` before objective mutation, and the separately required first-edit trigger remains a separate one-time gate/i,
     )
     expect(continuation).toMatch(/Neither recovery exception authorizes objective work/i)
     expect(continuation).toMatch(
