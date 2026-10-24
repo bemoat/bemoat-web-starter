@@ -310,6 +310,7 @@ type StaleDependencyEvidence = {
   trackedAndUntrackedClean: boolean
   ignoredArtifactsKnownAndNonSecret: boolean
   staleInstalledTreeAgainstCommittedLock: boolean
+  installedArtifactsCompleteAndFingerprinted: boolean
   p1DependenciesValid: boolean
   existingStoreUniqueAndBounded: boolean
   dependencyRootsHaveNoAmbiguousSymlinks: boolean
@@ -322,6 +323,7 @@ type StaleDependencyEvidence = {
   noPriorRecoveryAttempt: boolean
   quarantinePreservesOriginalTreeAndStore: boolean
   installSucceeded: boolean
+  installInterrupted: boolean
   p1EquivalentPostInstallProof: boolean
 }
 
@@ -352,7 +354,7 @@ const decideStaleDependencySetup = (evidence: StaleDependencyEvidence) => {
     && evidence.noPriorRecoveryAttempt
     && evidence.quarantinePreservesOriginalTreeAndStore
 
-  if (!eligible || !evidence.installSucceeded || !evidence.p1EquivalentPostInstallProof) {
+  if (!eligible || !evidence.installSucceeded || evidence.installInterrupted || !evidence.p1EquivalentPostInstallProof) {
     return { outcome: 'STOP', next: 'STOP', setupEmitsCommand: false } as const
   }
 
@@ -369,6 +371,7 @@ const staleDependencyEvidence = (): StaleDependencyEvidence => ({
   trackedAndUntrackedClean: true,
   ignoredArtifactsKnownAndNonSecret: true,
   staleInstalledTreeAgainstCommittedLock: true,
+  installedArtifactsCompleteAndFingerprinted: true,
   p1DependenciesValid: false,
   existingStoreUniqueAndBounded: true,
   dependencyRootsHaveNoAmbiguousSymlinks: true,
@@ -381,6 +384,7 @@ const staleDependencyEvidence = (): StaleDependencyEvidence => ({
   noPriorRecoveryAttempt: true,
   quarantinePreservesOriginalTreeAndStore: true,
   installSucceeded: true,
+  installInterrupted: false,
   p1EquivalentPostInstallProof: true,
 })
 
@@ -422,7 +426,7 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
       writes: 0,
       setupEmitsCommand: false,
     })
-    expect(preparation).toMatch(/\*\*P1 — read-only reuse\*\*/)
+    expect(preparation).toMatch(/\*\*P1 — read-only reuse\.\*\*/)
   })
 
   // Authority: #675 explicitly keeps dirty state, unknown artifacts, weak
@@ -434,6 +438,7 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
       'repositoryIssueBranchBaseHeadExact',
       'trackedAndUntrackedClean',
       'ignoredArtifactsKnownAndNonSecret',
+      'installedArtifactsCompleteAndFingerprinted',
       'existingStoreUniqueAndBounded',
       'dependencyRootsHaveNoAmbiguousSymlinks',
       'writerOwnershipProven',
@@ -443,12 +448,13 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
       'noPriorRecoveryAttempt',
       'quarantinePreservesOriginalTreeAndStore',
       'installSucceeded',
+      'installInterrupted',
       'p1EquivalentPostInstallProof',
     ]
 
     for (const key of blocked) {
       const evidence = staleDependencyEvidence()
-      evidence[key] = false
+      evidence[key] = key === 'installInterrupted'
       expect(decideStaleDependencySetup(evidence), key).toEqual({
         outcome: 'STOP',
         next: 'STOP',
