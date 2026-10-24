@@ -461,19 +461,20 @@ const selectedTaskStoreIdentity = (fixture: RecoveryFixture) => {
     || !store.unique || store.ownerIssue !== fixture.expectedIdentity.issue
     || store.ownerCheckout !== '/checkout') return null
 
+  const taskStoreRealpath = store.realpath
   const roots = fixture.approvedTaskStoreWriteRoots
   if (roots.length === 0 || !roots.every(isCanonicalAbsolutePath)) return null
   const matchingRoots = roots.filter((root) =>
-    store.path !== root && store.realpath !== root
+    store.path !== root && taskStoreRealpath !== root
       && isWithinPathRoot(store.path, root)
-      && isWithinPathRoot(store.realpath, root))
+      && isWithinPathRoot(taskStoreRealpath, root))
   if (matchingRoots.length !== 1
     || !isWithinPathRoot(store.path, '/checkout')
-    || !isWithinPathRoot(store.realpath, '/checkout')
-    || store.realpath === old.realpath
+    || !isWithinPathRoot(taskStoreRealpath, '/checkout')
+    || taskStoreRealpath === old.realpath
     || store.path === old.path || store.path === old.realpath
-    || store.realpath === old.path) return null
-  return { path: store.path, realpath: store.realpath }
+    || taskStoreRealpath === old.path) return null
+  return { path: store.path, realpath: taskStoreRealpath }
 }
 
 const fixtureIdentity = (): FixtureIdentity => ({
