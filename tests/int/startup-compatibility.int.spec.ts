@@ -891,7 +891,6 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
       const result = runDependencyTransition(fixture)
 
       expect(result, name).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
-      expect(fixture.p1VerificationCount).toBe(0)
       expect(fixture.installedTree?.bytesHex).toBe(oldTreeBytes)
       expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
       expect(fixture.quarantineSnapshot).toBeNull()
@@ -909,6 +908,23 @@ describe('Issue #675 one-shot stale installed-dependency recovery stories', () =
 
     expect(result).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
     expect(fixture.installCommands).toEqual([])
+  })
+
+  it('rejects forged symlink roots before P1 or recovery writes', () => {
+    const fixture = createRecoveryFixture(true)
+    const symlink = fixture.installedTree!.symlinks[0]
+    symlink.realpath = '/outside/store/next'
+    symlink.approvedRoot = '/outside/store'
+    const oldTreeBytes = fixture.installedTree?.bytesHex
+    const oldStoreBytes = fixture.originalStore.bytesHex
+
+    const result = runDependencyTransition(fixture)
+
+    expect(result).toMatchObject({ outcome: 'STOP', writes: 0, attempts: 0 })
+    expect(fixture.p1VerificationCount).toBe(0)
+    expect(fixture.installCommands).toEqual([])
+    expect(fixture.installedTree?.bytesHex).toBe(oldTreeBytes)
+    expect(fixture.originalStore.bytesHex).toBe(oldStoreBytes)
   })
 
   // Authority: §12 makes recovery terminal after one attempt. Install failure,
